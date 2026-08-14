@@ -1,11 +1,12 @@
 # BLK-V1-03 Codex Runtime, Threads, And Events
 
-Owns the selected Codex boundary: dedicated app-server process, private Unix transport, normalized adapter, real session/turn/control/approval/event behavior, TUI resume, and restart.
+Owns the selected Codex boundary: exact 0.147.0 standard shared app-server broker, normalized adapter, automatic loaded-thread enrollment, real session/turn/control/approval/event behavior, ordinary TUI continuity, and restart.
 
 ## Outcome
 
 - HostDeck controls supported Codex through generated, version-checked app-server contracts rather than TUI text.
-- One dedicated runtime supports multiple new or non-destructively adopted managed threads plus a normal laptop TUI client.
+- One standard broker supports ordinary laptop TUI clients and HostDeck over the same native thread identities.
+- Loaded top-level interactive sessions enroll automatically, including loaded-before-connect and created/resumed-after-connect cases; no discover/adopt/unmanage ceremony is selected.
 - Real events drive durable projections, attention, controls, approvals, and replay.
 - HostDeck/app-server restart and uncertain outcomes are honest and recoverable.
 - The executable legacy tmux runtime is removed after structured-path acceptance; published legacy data remains inert and explicitly administrable.
@@ -16,12 +17,12 @@ Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-021`, `NFR-002
 
 | Part | Responsibility | Failure state |
 | --- | --- | --- |
-| Runtime supervisor | Start/await dedicated app-server and private socket according to foreground/service ownership. | Missing/incompatible binary, socket collision, crash loop, wrong owner/mode. |
+| Runtime supervisor | Attach/start the standard app-server broker with independent HostDeck lifecycle. | Missing/incompatible binary, insecure/stale socket, collision, crash loop, ambiguous ownership. |
 | IPC adapter | `ws+unix:` connection, initialize handshake, request broker, frame/message validation, reconnect. | Timeout, malformed/unknown required message, overload, disconnect/incomplete mutation. |
-| Thread service port | Start/discover/adopt/unmanage/list/read/archive and stable id mapping. | Duplicate alias, uncertain partial start/adoption, ineligible or changed native thread, active unmanage, missing/archived thread. |
+| Thread enrollment/service port | Reconcile loaded roots, auto-enroll, start/list/read/archive, native/internal id lookup. | Duplicate identity/alias, pending race overflow, ineligible/changed/missing/archived thread. |
 | Turn/control port | Prompt/steer/interrupt/model/goal/plan/usage/compact/skills. | Unsupported capability, active-turn conflict, unknown outcome. |
 | Approval router | Pending server request registration and exact response. | Duplicate/expired/superseded/connection-generation mismatch. |
-| Event pipeline | Identity-gate unmanaged TUI notifications, normalize managed runtime events, and serialize durable projection/publication. | Unknown required semantic, malformed managed payload/order, mapping race, bounded-capacity exhaustion, storage/publication failure. |
+| Event pipeline | Route unknown roots through bounded enrollment, normalize tracked runtime events, and serialize durable projection/catalog publication. | Unknown required semantic, malformed payload/order, unresolved mapping race, bounded-capacity exhaustion, storage/publication failure. |
 
 ## Required Real Proof
 
@@ -30,8 +31,8 @@ Requirement refs: `FR-001`, `FR-003` to `FR-009`, `FR-013` to `FR-021`, `NFR-002
 - Model, goal, plan, usage, compact, and skills behavior for the pinned runtime.
 - Safe approval approve/deny/duplicate/expiry.
 - Interrupt distinct from completion/archive.
-- TUI resume of the exact thread on the same Unix socket while HostDeck is connected.
-- Native CLI thread discovery, closed-client adoption by unchanged id, bounded history boundary, HostDeck prompt/stream, restart, shared TUI resume, and non-destructive unmanage/read-back.
+- Plain `codex` start and `codex resume <native-uuid>` use the same standard socket while HostDeck is connected.
+- Loaded-before and created/resumed-after automatic enrollment, bounded history boundary, HostDeck prompt/stream, restart, and bidirectional ordinary-TUI visibility.
 - HostDeck-only restart, app-server crash/restart, event gap/boundary, and persisted-thread recovery.
 - Bounded request/frame/in-flight/reconnect behavior.
 
@@ -58,6 +59,7 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Legacy tmux disposition | `INT-V1-008` | Done: package/runtime/CLI reachability is removed, migration data stays inert, and bounded confirmed local reset is proven. |
 | Reopened runtime hardening | `INT-V1-091` | Done: fixed deterministic and exact structured/lifecycle evidence is commit-bound, privacy-bounded, no-retry, and cleanup-complete. |
 | Native thread interoperability | `INT-V1-106` to `INT-V1-109` | Reopened: exact spike, adapter, service, and end-to-end hardening are required. |
+| Shared ordinary-Codex runtime | `INT-V1-110` to `INT-V1-114` | Required: exact 0.147.0 proof/binding, standard broker, automatic enrollment, plain TUI continuity, race/failure/resource hardening. Prior adoption path becomes historical. |
 
 Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to preserve historical links; title/scope are rebaselined).
 
@@ -67,6 +69,6 @@ Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to pre
 - Real required operations and approval semantics pass with no terminal-text fallback.
 - HostDeck and TUI share the runtime/thread safely.
 - Restart/disconnect marks stale, interrupted, boundary, and incomplete outcomes truthfully.
-- App-server remains private to the user and has one process owner per mode.
+- App-server remains private to the user, has unambiguous ownership, and survives HostDeck-only stop/restart.
 - Legacy tmux path has one explicit disposition and is absent from the selected production path.
 - `INT-V1-091` passes and the block matrix links L2/L3 current evidence.

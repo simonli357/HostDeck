@@ -12,7 +12,7 @@ Execution map for the rebaselined V1. Detailed leaf tasks live in group files; r
 | Interface / API And CLI | `BLK-V1-04` | `api-cli-control-plane.md` | Loopback Fastify/SSE; Tailscale profile/Serve ingress; app auth; fanout/health; selected operations; resource bounds; package/services | `IFC-V1-*` |
 | Frontend / Mobile Dashboard | `BLK-V1-05` | `web-dashboard.md` | Mobile remote-state rebaseline; replacement visual gate; screens/controls/approval; responsive/fidelity | `FE-V1-*` |
 | Release / Hardening | `BLK-V1-06` | `hardening-release.md` | System/remote rebaseline; module gates; security/privacy; clean remote-phone release; go/no-go | `REL-V1-*` |
-| Cross-Platform Distribution | `BLK-V1-07` | `cross-platform-distribution.md` | Platform contracts; native paths/locks/runtime/Tailscale; Linux/Windows packages/lifecycle; signing/CI/publication/clean hosts | `FND/DAT/INT/IFC/REL-V1-100+` |
+| Ubuntu Distribution | `BLK-V1-07` | `cross-platform-distribution.md` | Standard shared broker; native Ubuntu package/lifecycle; Tailscale; signature policy/CI/publication/clean host; retained Windows V2 groundwork | `FND/DAT/INT/IFC/REL-V1-100+` |
 
 The `tmux-output.md` filename is retained temporarily so historical artifact links remain stable. Its active scope is Codex app-server runtime integration.
 
@@ -78,6 +78,12 @@ The `tmux-output.md` filename is retained temporarily so historical artifact lin
 | `FND-V1-102` adoption contracts | `DAT-V1-105`, `INT-V1-107` | Storage and adapter consume one strict non-destructive membership model. |
 | `DAT-V1-105`, `INT-V1-107` | `INT-V1-108`, then `IFC-V1-110` | Atomic state and exact adapter behavior precede service orchestration and local control-plane exposure. |
 | `IFC-V1-110` complete local adoption path | `INT-V1-109` | End-to-end hardening consumes implemented contracts, persistence, runtime, API, CLI, and production composition. |
+| `REL-V1-109` shared-runtime rebaseline | `INT-V1-110`, then `FND-V1-103` | Exact 0.147.0 standard-socket behavior is frozen before new contracts. |
+| `FND-V1-103` | `INT-V1-111`, `DAT-V1-106`, then `INT-V1-112` | Binding and storage consume one native/public identity, broker, enrollment, pending-buffer, and catalog contract. |
+| `INT-V1-112` shared broker | `INT-V1-113`, then `IFC-V1-111` | Automatic enrollment and the selected control plane require one proven standard-socket lifecycle. |
+| `IFC-V1-111` selected API/CLI | `IFC-V1-112`, then `FE-V1-107` | Mission Control consumes the selected catalog route after legacy administration is removed. |
+| `FE-V1-107` live catalog | `INT-V1-114`, then `IFC-V1-113` | Runtime hardening includes the actual browser consumer before packaging. |
+| `IFC-V1-113` Ubuntu package | `FE-V1-108`, then `REL-V1-110` | Physical phone acceptance and clean-host release use one immutable installed candidate. |
 
 ## Requirement Trace Ownership
 

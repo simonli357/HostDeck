@@ -52,7 +52,7 @@ Owning backlog: `docs/tracking/backlog/foundation.md`.
 | Layer | Evidence |
 | --- | --- |
 | L1 | Core and contract tests for every invariant and fixture category. |
-| L2 | Cross-package fixtures/public exports consume normalized contracts, and an executable boundary guard prevents generated Codex protocol imports outside the adapter. Production consumer adoption is owned by Blocks 02 to 05. |
+| L2 | Cross-package fixtures/public exports consume normalized contracts, and an executable boundary guard prevents generated Codex protocol imports outside the adapter. Production consumer integration is owned by Blocks 02 to 05. |
 | Manual | Fixture review confirms unknown, stale, unsupported, and incomplete never appear healthy/successful. |
 
 ## Done Criteria

@@ -4,11 +4,11 @@ Owns the active-version architecture, process and trust boundaries, selected dep
 
 ## Architecture Status
 
-- Direction: app-server-first runtime under `DEC-018`, Tailscale-first remote ingress under `DEC-027`, and native Ubuntu/Windows distribution under `DEC-029`.
+- Direction: app-server-first runtime under `DEC-018`, Tailscale-first remote ingress under `DEC-027`, and a shared ordinary-Codex Ubuntu runtime under `DEC-031` and `DEC-032`.
 - Release state: no-go. Existing packages prove reusable foundations, not the selected production vertical.
 - Legacy state: `INT-V1-008` removed the tmux adapter and executable runtime after structured acceptance. Published migration data remains inert as `legacy_unmigrated`; tmux is test-only for exact Codex TUI evidence.
-- Remote boundary: the phone reaches HostDeck only through private Tailscale Serve HTTPS. HostDeck remains loopback-only; Codex app-server uses a user-private Unix socket on Linux or authenticated loopback WebSocket on Windows.
-- Compatibility baseline: exact `codex-cli 0.144.0`, reviewed experimental binding identity, and `DEC-021`; upgrades fail closed pending regeneration and review.
+- Remote boundary: the phone reaches HostDeck only through private Tailscale Serve HTTPS. HostDeck remains loopback-only; Codex app-server uses the standard current-user Unix control socket and is never browser-facing.
+- Compatibility baseline: exact `codex-cli 0.147.0`, reviewed binding identity, standard-socket behavior, and `DEC-031`; upgrades fail closed pending regeneration and review.
 
 ## Hard Requirements
 
@@ -16,16 +16,16 @@ The architecture is acceptable for V1 only when all of the following are true:
 
 - One typed adapter owns every Codex protocol request, response, notification, server request, timeout, capability, and compatibility error.
 - Codex is the source of truth for threads, turns, approvals, goals, model state, and full history; HostDeck stores a bounded projection, not a competing transcript.
-- Eligible persisted root Codex CLI threads can become HostDeck-managed by durable identity reference only. Discovery/adoption/unmanage are local-admin operations, and adoption cannot overlap an independently running Codex client.
-- Foreground and user-service modes have explicit process ownership and can restart HostDeck without killing the dedicated app-server process in service mode.
-- Browser replay plus live subscription has a tested no-gap handoff, bounded queues, disconnect cleanup, heartbeat, and shutdown behavior.
+- Eligible loaded top-level interactive Codex CLI threads are enrolled automatically by durable native identity. Discovery/adoption/unmanage/handoff are not selected operations, and an already-running independent client cannot be attached mid-connection.
+- Foreground and user-service modes have explicit process ownership and can restart or stop HostDeck without killing a healthy shared app-server broker.
+- Per-session and Mission Control catalog replay plus live subscription have tested no-gap handoffs, bounded queues, disconnect cleanup, heartbeat, and shutdown behavior.
 - A phone on an unrelated network reaches a trusted HTTPS origin without a public HostDeck listener, router change, or manually installed CA; remote reads and writes still require HostDeck pairing and authorization.
 - HostDeck observes one explicitly selected saved personal Tailscale profile, never switches profiles automatically, and cannot mutate unrelated company-profile or Serve configuration.
 - V1 is a single-user-host design: processes able to access the host loopback namespace are inside the existing local-admin trust boundary. Proxy metadata never turns that local trust into paired remote authority, and V1 does not claim protection from malicious code already running as that OS user.
 - App-server schema/version drift, state-directory conflicts, invalid permissions, failed retention, and impossible lifecycle transitions fail visibly.
 - Phone Mission Control and Session Detail can be built entirely from typed API contracts without parsing terminal text.
-- Ubuntu 24.04 x64 and Windows 11 x64 packages bundle the pinned Node runtime and target-built native modules, run as the interactive user, and pass native install/upgrade/rollback/uninstall evidence without requiring a source checkout or development toolchain.
-- Public artifacts are versioned and integrity-bound; Windows MSIX is signed, release metadata includes checksums/SBOM/provenance, and publication fails closed when platform, version, commit, test, or signing identity disagrees.
+- The Ubuntu 24.04 x64 package bundles the pinned Node runtime and target-built native modules, runs as the interactive user, and passes install/upgrade/rollback/uninstall evidence without requiring a source checkout or development toolchain.
+- Public Ubuntu artifacts are versioned and integrity-bound; release metadata includes checksums/SBOM/provenance and the selected signature policy, and publication fails closed when platform, version, commit, test, or identity disagrees.
 
 ## System Architecture
 
@@ -33,7 +33,7 @@ The architecture is acceptable for V1 only when all of the following are true:
 | --- | --- | --- |
 | Domain/core | HostDeck ids and aliases, normalized lifecycle/status/attention, write eligibility, event cursor, approval intent, audit action/outcome, bounded errors. | Pure TypeScript. No process, network, storage, Codex, or UI imports. |
 | Contracts | Zod schemas for HostDeck API, persistence, config, event projection, trust, runtime compatibility, and UI fixtures. | HostDeck-owned stable contract. It does not expose raw app-server unions directly. |
-| Codex adapter | App-server process discovery, initialize/capability handshake, generated protocol bindings, request correlation, private Unix or authenticated-loopback WebSocket client, thread/turn/control/approval operations, notifications, reconnect. | Only package allowed to import generated Codex protocol types or `ws`; endpoint credentials never cross the adapter/supervisor boundary. |
+| Codex adapter | Standard-socket app-server attachment, initialize/capability handshake, generated protocol bindings, request correlation, thread/turn/control/approval operations, loaded-thread enumeration, notifications, reconnect. | Only package allowed to import generated Codex protocol types or `ws`; raw endpoint details never cross the adapter/supervisor boundary. |
 | Application services | Session mapping, event projection, attention, write/control dispatch, approval routing, replay/fanout, runtime health, pairing, lock/remote-ingress policy, audit orchestration. | Depends on ports for Codex, storage, clock, ids, Tailscale observation/configuration, and process supervision. |
 | Storage | SQLite migrations and repositories for mappings/projections, compatibility, auth, settings, audit, retention boundaries, plus platform path-security and daemon-lease ports. | No Codex process or HTTP imports. Full Codex history is not copied. |
 | Host interface | Loopback Fastify HTTP API/SSE/static dashboard, exact Tailscale Serve proxy admission, CLI client/admin commands, lifecycle and service install commands. | Browser-facing application trust boundary behind private HTTPS. App-server is not proxied raw. |
@@ -48,17 +48,16 @@ The architecture is acceptable for V1 only when all of the following are true:
 | Host API | Exact `fastify` 5.10.0 and `zod` 4.4.3 with HostDeck-owned local type-provider/validator/serializer compilers. | Lifecycle hooks, limits, injection, stable errors, and controlled shutdown replace the current ad hoc listener without pulling Swagger/OpenAPI peers into V1. |
 | Browser stream | Exact `@fastify/sse` 0.5.0 with SSE-only routes and Readable-backed event sources. | Negotiation, headers, heartbeat, and `Last-Event-ID` are reused; HostDeck owns replay, bounds, abort, and source health. Direct async-iterable sends are forbidden because the pinned plugin does not settle a backpressured drain wait on socket close. |
 | Static dashboard | Exact `@fastify/static` 9.3.0 with a validated asset root, explicit browser routes, and deny-by-policy dotfile/path filtering. | Hashed asset caching and MIME/HEAD behavior are reused without allowing API-to-HTML fallback or implicit index exposure. |
-| Codex transport | Exact `ws` 8.21.0 client using app-server's Unix-socket endpoint on Linux or authenticated random-port loopback WebSocket on Windows. | HostDeck owns frame, queue, heartbeat, timeout, platform-match, loopback-only, and credential-redaction policy. Windows token material is current-user protected and never enters argv/output; there is no unauthenticated TCP fallback. |
-| Windows process ownership | Exact `koffi` 3.1.4 bindings over Windows Job Objects plus the shared native file-lock port. | One current-user HostDeck owner starts fixed-argv Codex, proves authenticated readiness, rotates ephemeral authority, and kills only its assigned process tree on stop or owner-process death. |
+| Codex transport | Exact `ws` 8.21.0 client using `$CODEX_HOME/app-server-control/app-server-control.sock`. | HostDeck owns frame, queue, heartbeat, timeout, owner/mode checks, and errors. No TCP or private alternate-socket fallback is selected. |
 | CLI | Existing strict parser/client shell pending a packaged `bin` entry; exact `qrcode` 1.5.4 renders terminal pairing QR codes. | The current shell remains acceptable only while its help, exit, bounds, privacy, and packaging contracts pass; QR encoding is delegated to a maintained MIT implementation. |
 | UI | Exact React 19.2.8, React Router 8.2.0, Radix Dialog 1.1.20, Lucide React 1.25.0, Vite 8.1.4, `zod` 4.4.3, `eventsource-parser` 3.1.0, and `@playwright/test` 1.61.1 after the visual-selection gate. | The Focus Rail two-route phone shell plus exact bounded JSON, selected-route SSE, and page-memory CSRF clients are implemented. `FE-V1-025` now owns access-first host/session coordination and removal of implicit loopback browser authority before real screens/actions, packaged assets, responsive/accessibility coverage, and final fidelity. |
 | Storage | `better-sqlite3` with first-party migrations. | Existing `DEC-014` evidence remains valid. |
 | Daemon lease | One platform file-lock port over exact `fs-native-extensions` 1.3.4 descriptor locks on Linux and Windows. | Native CI proves nonblocking one-owner contention, process-crash recovery, idempotent release, bounded non-reflecting failures, and shared daemon/lifecycle use without PID-only authority. |
-| Service mode | Unprivileged systemd user units on Ubuntu; interactive-user startup agent on Windows. | Both preserve the user's Codex auth/project context and independent Codex/HostDeck ownership. A Session 0 Windows service is rejected. |
-| Remote ingress | Supported system Tailscale client plus private Tailscale Serve HTTPS on one human-selected saved personal profile. | One shared platform adapter accepts only `/usr/bin/tailscale` on Linux or `C:\Program Files\Tailscale\tailscale.exe` on Windows after read-only native-binary inspection, then owns fixed argv and bounded direct execution. Cross-network NAT traversal and trusted `.ts.net` HTTPS remain delegated to Tailscale while HostDeck stays loopback-only; the current exact version is 1.98.8. |
+| Service mode | Separate unprivileged systemd user units for the shared Codex broker and HostDeck API/dashboard on Ubuntu. | The broker preserves the user's Codex auth/project context and outlives HostDeck-only stop/restart; neither unit owns `tailscaled`. |
+| Remote ingress | Supported system Tailscale client plus private Tailscale Serve HTTPS on one human-selected saved personal profile. | The Ubuntu adapter accepts only `/usr/bin/tailscale` after read-only native-binary inspection, then owns fixed argv and bounded direct execution. Cross-network NAT traversal and trusted `.ts.net` HTTPS remain delegated to Tailscale while HostDeck stays loopback-only; the current exact version is 1.98.8. |
 | App authorization | Existing HostDeck one-time pairing, Secure/HttpOnly cookie, in-memory CSRF, lock, and device revoke. | Tailnet connectivity is necessary but not sufficient application authority. QR/link enrollment removes manual code and CA ceremony without granting all tailnet members access. |
-| Native distribution | Linux versioned native archive/package; signed per-user Windows MSIX; portable Windows tree is internal-test only. | Native builds bundle Node/native modules and retain verified releases for rollback. Node SEA is rejected for V1 because native addons require extraction/loading machinery and add a second runtime path. |
-| Release automation | Pinned native Ubuntu/Windows CI, tag-driven draft releases, SHA-256, SBOM, provenance, release-only signing, and explicit promotion. | Cross-compilation cannot prove native modules, ACLs, lifecycle, installer, or exact Codex/Tailscale behavior. PR jobs receive no signing secret. |
+| Native distribution | Ubuntu versioned native archive/package. | The build bundles Node/native modules and retains verified releases for rollback. Node SEA is rejected for V1 because native addons require extraction/loading machinery and add a second runtime path. |
+| Release automation | Pinned native Ubuntu CI, tag-driven draft releases, SHA-256, SBOM, provenance, selected signing policy, and explicit promotion. | Cross-compilation cannot prove native modules, filesystem security, lifecycle, installer, or exact Codex/Tailscale behavior. PR jobs receive no signing secret. |
 
 All dependencies are pinned in the lockfile, license-checked when added, and recorded in the owning task. No dependency is considered selected solely because it appears in this plan.
 
@@ -96,7 +95,7 @@ The runtime tree carries rewritten exact package manifests and the production de
 
 A dependency-free schema-5 verifier rejects manifest, artifact/target/runtime, source commit, command/bin/shebang/mode/content, service-host lifecycle, web-asset, native-module version/target/ABI, or link drift before load. The current internal Linux `runtime_tree` truthfully declares a host-provided Node runtime with no bundle; bundled native-tree/archive/portable/MSIX profiles require one target-specific runtime descriptor. Package acceptance copies the tree to an unrelated path, makes it read-only, imports all six roots plus the inert service host and pure unit generator without a TypeScript loader, proves the 22-registration/35-route descriptor, and exercises five command layouts including safe uninstall. Exact process smokes separately prove direct foreground ownership, external service ownership, runtime-only exact systemd unit behavior, persistent install/upgrade/uninstall, packaged browser behavior, and clean pinned-Noble ordinary-user parity.
 
-`IFC-V1-101` establishes the native-target manifest contract before native trees exist. It binds target OS/architecture, Node/ABI and delivery, native modules, launchers, lifecycle descriptors, version/clean source commit, Codex, source/output/web identities, and artifact kind; mixed or unknown profiles fail closed. `IFC-V1-102` next emits bundled Linux/Windows native trees on their pinned runners. Linux retains the reviewed package and systemd semantics. Windows adds a verified package tree, current-user lifecycle registration, and signed MSIX. Shared source/web identity may match across targets; native output/content identity is intentionally target-specific.
+`IFC-V1-101` establishes the native-target manifest contract. `IFC-V1-113` emits the selected bundled Ubuntu tree and migrates its units to the standard shared broker. Completed Windows manifest and adapter groundwork remains historical input for V2 and is not V1 release evidence.
 
 ## Process Topology
 
@@ -106,15 +105,15 @@ This is the accepted foreground sequence. `IFC-V1-054` connects the compiled com
 
 1. `codexdeck serve` acquires the state-directory lease, prepares owner-only paths, and opens guarded storage.
 2. It runs one bounded `codex --version` probe against the configured canonical executable before runtime start or socket attachment.
-3. Exact reviewed version starts a dedicated `codex app-server --listen unix://<socket>` child, completes compatibility/reconciliation, and then starts Fastify.
+3. Exact reviewed version attaches to the compatible standard broker or starts `codex app-server --listen unix://$CODEX_HOME/app-server-control/app-server-control.sock`, then completes compatibility/reconciliation before Fastify starts.
 4. A valid unsupported semver starts no app-server. HostDeck persists incompatibility, seals durable sessions disconnected, and starts a loopback/private-Serve diagnostic listener with readiness and mutation admission closed. Malformed probes and all non-compatibility startup failures remain fatal.
-5. On shutdown it stops accepting requests, drains SSE and storage, closes the Codex client, closes the started or skipped supervisor owner, releases the lease, and removes only owned runtime files.
+5. On shutdown it stops accepting requests, drains SSE and storage, closes only HostDeck's Codex client, releases the HostDeck lease, and leaves the healthy shared broker running. `broker stop` is a separate explicit operation.
 
 ### Linux Long-Running User Service
 
 | Unit | Ownership | Restart behavior |
 | --- | --- | --- |
-| `hostdeck-codex.service` | Dedicated app-server process and private Unix socket. | Restarts independently; an unexpected restart marks active projections interrupted/unknown until reconciliation. |
+| `hostdeck-codex.service` | Shared app-server broker and standard Unix control socket. | Restarts independently; ordinary Codex TUI clients and HostDeck reconnect through the same endpoint. An unexpected restart marks active projections interrupted/unknown until reconciliation. |
 | `hostdeck.service` | HostDeck storage, Codex client, loopback API/SSE, built dashboard, remote-ingress observation, and audit. | Exact-version admission waits for app-server readiness; proven version drift serves only diagnostics without attaching. A HostDeck-only restart leaves Codex running; `tailscaled` is external and never restarted by HostDeck. |
 
 The service-mode HostDeck process is distinct from `codexdeck serve`. It starts the same selected resource, application, listener, and shutdown graph with the runtime supervisor fixed to `service_owned`. It boundedly probes the configured executable used by the generated sibling unit before socket attachment. Exact reviewed version may await the external socket; a valid mismatch does not attach and may publish only diagnostic-ready state. It has no child-process port, process-exit observer, socket-unlink path, or fallback to foreground ownership. After successful admission, app-server disconnect/restart drives the accepted reconnect/reconciliation state while the HostDeck process remains alive. HostDeck shutdown releases only its listener, application resources, storage, and state lease.
@@ -123,9 +122,9 @@ The packaged CLI library generates and verifies deterministic versioned user-uni
 
 `IFC-V1-056` installs verified versioned releases under the invoking user's XDG data root. One atomic `current` symlink selects a release; the persistent unit, command, and owner-manifest anchors all traverse that selector so upgrade cannot mix release identities. A strict owner-only schema-1 manifest binds package, executable, generated-unit, environment, stable-anchor, and enablement identities. The installer writes only a non-secret allowlisted environment file, serializes mutations with an advisory lock, and journals selector/manager transitions for deterministic rollback or visible recovery-required state. Install enables HostDeck without starting it. Upgrade preserves state/config and restarts only an already-active HostDeck process, never Codex. Start/restart require exact unit state plus loopback API readiness; stop ends HostDeck then Codex; status is read-only and never equates `active` with ready. Exact criteria are `SLC-01` to `SLC-24` in `artifacts/ifc-v1-056-service-lifecycle-install.md`.
 
-### Windows Per-User Agent
+### Deferred Windows Per-User Agent
 
-The Windows package runs HostDeck and its dedicated Codex app-server in the interactive user's session. A HostDeck-owned startup registration launches only the verified current release after sign-in; it is not a machine service and does not run in Session 0. Foreground and background modes share the same application graph, readiness endpoint, state lease, authenticated Codex endpoint, shutdown order, and Tailscale observation contract.
+The completed authenticated-WebSocket and per-user-agent groundwork is retained for V2. It is not a V1 production topology because Codex 0.147.0 does not provide Windows implicit standard-socket reuse for ordinary TUI clients.
 
 The Windows supervisor holds one current-user-secured endpoint-file lock, stages a fresh token only long enough for fixed-argv app-server startup, admits readiness only after an authenticated loopback handshake, and then removes the staging file. Each generation binds its in-memory credential source to one random port; crash or restart revokes the prior generation. Exact `koffi` bindings place the child in a kill-on-close Job Object, so explicit shutdown and abrupt owner-process death terminate the owned tree without PID-based or global process cleanup.
 
@@ -133,19 +132,17 @@ Install registers but does not silently start work. Explicit start creates a fre
 
 ### Host TUI
 
-`codexdeck resume <session>` resolves the stable thread id and executes:
+The primary path is ordinary `codex resume <native-uuid>`. Exact Codex 0.147.0 probes the standard control socket and connects to the same broker as HostDeck. `codexdeck resume <native-uuid-or-internal-id>` may resolve an internal id and launch the same normal command as a compatibility convenience; it does not pass a private endpoint.
 
-Linux uses `codex resume --remote unix://PATH THREAD_ID`. Windows uses the exact authenticated loopback WebSocket endpoint and passes its token only through the reviewed `HOSTDECK_CODEX_REMOTE_AUTH` environment variable.
-
-The TUI and HostDeck may connect to the same app-server. Multi-client correctness is a blocking integration test, not an assumption.
+The TUI and HostDeck connect to the same app-server. Multi-client correctness, plain-command socket use, and bidirectional event visibility are release-gating integration tests.
 
 ## Source Of Truth
 
 | Fact | Owner | HostDeck persistence |
 | --- | --- | --- |
 | Full conversation, turns, items, active runtime status, goal, model, approvals | Codex/app-server | Stable thread id plus bounded projection only. |
-| Unapplied next-turn model/Plan intent | HostDeck process | Revisioned ephemeral control state only; restart drops unapplied intent and never replays it. Model has a read-back path; exact 0.144.0 has no read-only collaboration-mode endpoint, so Plan mode is `unknown` until committed settings state is rehydrated by restart reconciliation. |
-| Session alias and HostDeck-managed membership, whether started or adopted | HostDeck | `managed_sessions`; membership never changes the Codex thread identity or transcript. |
+| Unapplied next-turn model/Plan intent | HostDeck process | Revisioned ephemeral control state only; restart drops unapplied intent and never replays it. Model has a read-back path; collaboration mode remains `unknown` until committed settings state is rehydrated by restart reconciliation. |
+| Session alias and automatic tracked membership | HostDeck | `managed_sessions`; native Codex UUID is public, internal HostDeck id remains storage/API compatibility, and membership never changes Codex identity or transcript. |
 | Attention, recent summary, last HostDeck cursor | HostDeck projection derived from Codex events | `session_projection`. Recomputable and marked stale when disconnected. |
 | Device trust, lock, selected remote origin/profile comparison identity and desired ingress mode | HostDeck | Auth/settings repositories. Raw Tailscale login, company profile details, and node keys are not retained. |
 | Active Tailscale profile/device state, Serve configuration, HTTPS certificate and network path | Tailscale | Observed through bounded adapter snapshots only; Tailscale remains authoritative. |
@@ -158,10 +155,10 @@ HostDeck never edits Codex rollout files or app-server state databases directly.
 
 ### Compatibility Handshake
 
-1. Resolve one configured canonical absolute `codex` path and run a bounded no-shell `--version` probe. Strictly parse `codex-cli <semver>`; exact 0.144.0 may proceed to runtime admission, while a valid mismatch is retained as diagnostic truth without runtime start or attachment.
+1. Resolve one configured canonical absolute `codex` path and run a bounded no-shell `--version` probe. Strictly parse `codex-cli <semver>`; exact 0.147.0 may proceed to runtime admission, while a valid mismatch is retained as diagnostic truth without runtime start or attachment.
 2. Regenerate the experimental TypeScript binding to a temporary directory and compare the reviewed whole-tree identity in build/validation paths.
-3. Connect through the platform-selected private endpoint and send one `initialize` with HostDeck client identity and `experimentalApi: true`; `/plan` requires this pinned opt-in. Windows first proves endpoint authentication before any protocol payload.
-4. Require the exact expected Linux/Unix or Windows platform fields and validate the returned user agent against HostDeck's sent client identity. The user agent is not independent app-server-version evidence; the bounded local binary probe is authoritative for the selected topology.
+3. Validate `$CODEX_HOME/app-server-control` and its socket as current-user controlled, connect to the standard endpoint, and send one `initialize` with HostDeck client identity and `experimentalApi: true`; `/plan` requires this pinned opt-in.
+4. Require the exact expected Linux/Unix fields and validate the returned user agent against HostDeck's sent client identity. The bounded local binary probe remains authoritative for the selected topology.
 5. Validate required product capability evidence against private generated methods, events, fields, approval responses, and the live `Plan`/`Default` collaboration catalog. The initialize response does not enumerate product methods.
 6. Persist observed version, generated binding identity, capability states, and check result.
 7. Expose `ready`, `degraded`, `incompatible`, or `disconnected`; incompatible never degrades to terminal injection. Proven initial incompatibility may publish only the mutation-closed diagnostic listener and sanitized host-status projection.
@@ -218,7 +215,7 @@ Same-origin route families:
 | Family | Operations | Authorization |
 | --- | --- | --- |
 | Health/runtime | Liveness, readiness, bounded host/runtime status. | Liveness reveals no sensitive state; detailed status is loopback local or paired. |
-| Sessions | Start, local discover/adopt/unmanage, list, detail, projected events, stream, resume metadata, interrupt, archive. | Discovery/adoption/unmanage require loopback local-admin authority and an unlocked/ready host. Remote reads require admitted Serve ingress plus pairing; other mutations require write permission and unlocked host. |
+| Sessions | Automatic tracked-session list, detail, projected events, per-session stream, catalog stream, start, resume metadata, interrupt, and archive. | Native UUID and internal compatibility id resolve to one target. Remote reads require admitted Serve ingress plus pairing; mutations require write permission and unlocked host. No selected discovery/adoption/unmanage routes exist. |
 | Controls | Prompt, model, goal, plan, usage, compact, skills. | One thread, write permission where mutating, capability check, audit. |
 | Approvals | Read pending projected approval and approve/deny exact request. | Write permission, unlocked host, pending request, confirmation policy, audit. |
 | Access | Pair claim, CSRF bootstrap/rotate, security state, device list/revoke, lock. | Rate-limited; local-admin restrictions for unlock and broad device administration as specified. |
@@ -246,7 +243,7 @@ The same pinned plugin also leaves a real raw response open after natural finite
 | Remote ready | The same loopback listener behind one exact private Tailscale Serve HTTPS origin on the selected active personal profile. | Every remote data read requires a paired device; writes additionally require permission, current CSRF, unlocked host, exact target, and audit. |
 | Remote unavailable | Tailscale stopped/signed out, wrong profile, unsupported version, Serve missing/drifted, or external origin not proven. | Local Codex/HostDeck continue; remote readiness is false and HostDeck never auto-switches or silently repairs ambiguous external state. |
 
-App-server remains on a `0600` socket in a `0700` runtime directory on Linux or on authenticated random-port `127.0.0.1` with current-user-protected token state on Windows. It is never reverse-proxied or bound to LAN. Only the HostDeck loopback HTTP service is a Serve target.
+App-server remains on the current-user standard Unix socket below an owner-only `$CODEX_HOME/app-server-control` directory. It is never reverse-proxied or bound to LAN. Only the HostDeck loopback HTTP service is a Serve target.
 
 ### Browser Trust
 
@@ -312,10 +309,10 @@ The lease prevents cooperating HostDeck daemons from sharing one state directory
 4. Validate/create owner-only config/runtime/database-parent paths and hold a path-identity guard across SQLite open.
 5. Verify SQLite integrity/version and run migrations transactionally.
 6. Load settings; validate loopback listener policy and remote-ingress configuration shape without switching or mutating Tailscale.
-7. Start or await the mode-owned app-server process/private endpoint; Windows creates and protects fresh endpoint authentication before spawn.
+7. Attach to or start the exact shared app-server on the standard current-user socket without unlinking or terminating an externally owned compatible broker.
 8. Complete Codex compatibility handshake.
-9. Reconcile managed session mappings and mark uncertain active projections stale/interrupted.
-10. Subscribe/rebuild bounded projections without starting turns.
+9. Reconcile `thread/loaded/list` with durable mappings, enroll eligible roots idempotently, and mark uncertain active projections stale/interrupted.
+10. Subscribe/rebuild bounded projections without starting turns; hold notification-before-mapping races in the bounded observable enrollment buffer.
 11. Run bounded retention maintenance.
 12. Bind Fastify on loopback, register routes/SSE/static assets, then observe active Tailscale profile/Serve state without mutation. Report local readiness independently and remote readiness only when the exact external ingress is proven; Serve changes require an explicit local command.
 
@@ -327,8 +324,8 @@ The lease prevents cooperating HostDeck daemons from sharing one state directory
 4. Cancel/fail pending HostDeck protocol requests without claiming Codex outcome.
 5. Flush audit/projection work and close repositories.
 6. Close the Codex client.
-7. Foreground mode terminates only the app-server child it owns; service mode leaves the sibling unit running on HostDeck-only stop.
-8. Remove owned runtime files and release daemon lease.
+7. Leave the healthy shared app-server running; only explicit `broker stop` may terminate the broker process HostDeck can prove it owns.
+8. Remove only HostDeck-owned runtime files and release the HostDeck daemon lease.
 
 ## Failure Policy
 
@@ -343,9 +340,9 @@ The lease prevents cooperating HostDeck daemons from sharing one state directory
 | Unsupported/stopped Tailscale, wrong profile, or missing/drifted Serve entry | Keep local work available, mark remote ingress unavailable, reject remote-readiness claims, and never auto-switch or mutate an unowned profile/configuration. |
 | Proxy/origin/permission failure | Reject the request before data, credential, audit success, or dispatch. Never trust generic forwarding headers or downgrade to direct LAN/plaintext. |
 | Partial session start | Reconcile returned thread id if created; persist a recoverable failed mapping or archive the created empty thread according to tested compensation. |
-| Adoption identity/version/cwd changes during bounded read | Reject before mapping; retain no copied content or success audit. |
-| Adoption resume fails after mapping commit | Keep one explicit stale/recovery-required managed mapping and terminal failed/incomplete audit; never create, fork, archive, delete, or auto-retry a Codex thread. |
-| Unmanage conflicts with active/uncertain work | Reject without deleting HostDeck or Codex state. Quiet confirmed unmanage atomically removes only HostDeck mapping/projection/events. |
+| Loaded-thread eligibility or identity changes during enrollment | Reject or mark the mapping stale before write admission; retain no copied full transcript or fabricated readiness. |
+| Notification arrives before enrollment mapping | Buffer only within the explicit per-thread/count/byte/deadline limits, resolve metadata once, then replay in order or emit a boundary/failure; never drop silently. |
+| Standard socket exists but is insecure, stale, or incompatible | Refuse attachment and preserve bounded diagnostics. Never unlink, replace, kill, or fall back unless ownership is proven by the broker lifecycle contract. |
 | Response serialization failure after mutation | Record unknown client delivery with operation id; do not repeat mutation automatically. |
 
 ## Migration From Current Code
@@ -371,6 +368,7 @@ No stored tmux session is silently converted to a Codex thread. Existing rows re
 | `SPK-NET-001` / `IFC-V1-070` | What exact supported Tailscale version/profile/Serve behavior, request metadata, non-root control, config coexistence, SSE behavior, and switch persistence can V1 depend on? | Redacted real-client/profile-switch/Serve/phone spike with exact commands, config diffs, header captures, failure cases, and no company-profile mutation. | Remote contracts, storage, adapter, ingress trust, CLI, UI states, and release matrix. |
 | `SPK-PLAT-001` / `INT-V1-100` | Does exact Codex 0.144.0 on Windows satisfy authenticated loopback WebSocket, required capabilities, multi-client, TUI resume, and secret-boundary requirements? | No-model Windows-native capture with auth rejection/acceptance, handshake, resume, process/listener/token inspection, and cleanup. | Windows transport, supervisor, lifecycle, package, and release evidence. |
 | `INT-V1-107` | Can exact 0.144.0 expose and resume an eligible persisted native CLI thread without changing identity/history or overlapping an independently running client? | Deterministic protocol capture plus real no-model closed-client handoff, bounded turn page, exact resume, unchanged read-back, and cleanup. | Adoption adapter, service, API/CLI, and hardening. |
+| `INT-V1-110` | Does exact Codex 0.147.0 make ordinary Unix `codex` start/resume reuse the standard app-server socket, and do loaded-list/new-thread notifications support automatic enrollment? | Source/binding review plus controlled no-model process/socket trace proving plain commands, two clients, loaded-before/created-after cases, and cleanup. | Shared broker, automatic enrollment, API/UI, package, and release evidence. |
 
 ## External References
 

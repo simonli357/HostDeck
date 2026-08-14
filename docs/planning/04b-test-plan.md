@@ -20,13 +20,14 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | `pnpm check:scaffold` | Foundation | Workspace/package/export skeleton. | Pass. |
 | `pnpm check:planning` | `FND-V1-014` | Task/requirement/dependency/current-queue integrity. | Pass. |
 | `pnpm check:runtime-boundary` | `INT-V1-008` | Reject tmux package/dependency/export/source/CLI reachability while requiring the bounded legacy reset repository. | Pass. |
-| `pnpm check:codex-bindings` | `INT-V1-003` | Regenerate the pinned experimental binding and reject identity or method-catalog drift. | Pass with the reviewed Codex version installed. |
-| `pnpm smoke:codex-compatibility` | `INT-V1-003` | Prove the pinned runtime initialize/platform/Plan catalog over stdio without a model call. | Pass on the supported development/release host. |
-| `pnpm smoke:codex-ipc` | `INT-V1-004` | Prove the production private Unix transport, broker, and handshake against the pinned runtime without a model call. | Pass on the supported development/release host. |
-| `pnpm smoke:codex-model` | `INT-V1-019` | In an isolated authenticated runtime, select one visible non-current catalog model, send it through `turn/start`, confirm settings plus later resume read-back, archive, and clean up. | Pass against exact reviewed Codex 0.144.0; terminal prompt failure remains distinct from setting confirmation. |
-| `pnpm smoke:codex-goal` | `INT-V1-020` | In an isolated authenticated runtime, prove paused set causes no turn, active resume autonomously starts one bounded turn, explicit pause plus interrupt prevents continuation, then complete/clear/read-back and cleanup. | Pass against exact reviewed Codex 0.144.0 with at most one observed goal turn. |
-| `pnpm smoke:codex-plan` | `INT-V1-021` | In an isolated authenticated runtime, compose one visible non-current model into a Plan turn, require matching settings plus plan-specific item/delta evidence, then exit through a later explicit Default turn; reject top-level settings, zero-turn update, slash fallback, excess turns, or incomplete cleanup. | Pass against exact reviewed Codex 0.144.0 with exactly two bounded turns. |
-| `pnpm smoke:codex-usage` | `INT-V1-022` | In an isolated authenticated no-model runtime, read exact account usage, validate bounded summary/daily shape, prove no turn/token/message work, record no account values, then close and remove private runtime state. Existing redacted real-turn captures own exact token/rate notification evidence; the no-model read does not require or invent a rate update. | Pass against exact reviewed Codex 0.144.0 without retaining token totals, account identity, paths, credentials, or claiming monetary/per-thread cost. |
+| `pnpm check:codex-bindings` | `INT-V1-111` | Regenerate exact 0.147.0 bindings and reject identity or selected-method drift. | Pass with exact Codex 0.147.0 installed. |
+| `pnpm smoke:codex-compatibility` | `INT-V1-110`, `INT-V1-111` | Prove exact initialize/platform/Plan catalog and standard-socket contract without a model call. | Pass on Ubuntu 24.04 x64. |
+| `pnpm smoke:codex-ipc` | `INT-V1-112` | Prove standard-socket attach/start ownership, broker handshake, independent HostDeck close, and explicit broker stop without a model call. | Pass on Ubuntu 24.04 x64 with zero alternate-socket/process residue. |
+| `pnpm smoke:codex-shared-sessions` | `INT-V1-113`, `INT-V1-114` | Prove loaded-before and created/resumed-after enrollment, plain `codex` socket use, bounded history, two-client bidirectional events, reconnect, races, and cleanup. | Pass against exact reviewed Codex 0.147.0 with no discover/adopt/handoff command. |
+| `pnpm smoke:codex-model` | `INT-V1-019` | Select one visible non-current model, send it through `turn/start`, confirm settings plus later resume read-back, archive, and clean up. | Pass against exact reviewed Codex 0.147.0; terminal prompt failure remains distinct from setting confirmation. |
+| `pnpm smoke:codex-goal` | `INT-V1-020` | Prove paused set causes no turn, active resume starts one bounded turn, explicit pause plus interrupt prevents continuation, then complete/clear/read-back and cleanup. | Pass against exact reviewed Codex 0.147.0 with at most one observed goal turn. |
+| `pnpm smoke:codex-plan` | `INT-V1-021` | Compose one visible non-current model into a Plan turn, require matching settings plus plan-specific evidence, then exit through a later explicit Default turn. | Pass against exact reviewed Codex 0.147.0 with exactly two bounded turns. |
+| `pnpm smoke:codex-usage` | `INT-V1-022` | Read exact account usage, validate bounded summary/daily shape, prove no turn work, record no account values, then close the client. | Pass against exact reviewed Codex 0.147.0 without retaining account values or claiming monetary/per-thread cost. |
 | `pnpm typecheck` | Foundation | Strict workspace TypeScript. | Pass. |
 | `pnpm lint` | Foundation | Formatting/lint/package-export checks. | Pass. |
 | `pnpm test:unit` | All modules | L1 pure behavior. | Pass. |
@@ -34,9 +35,9 @@ Task and block evidence names its level. "Complete for package scope" cannot sat
 | `pnpm test:integration` | Storage/runtime/server | L2 SQLite/process/IPC/Fastify/SSE/auth/concurrency. | Pass. |
 | `pnpm test:web` | Web | Component/state/API-client tests. | Pass. |
 | `pnpm test:package` | `IFC-V1-021`, `IFC-V1-053`, `IFC-V1-054`, `IFC-V1-086` | Build twice, inspect and verify the complete code/web production tree, then run unrelated-path read-only import/native/static lifecycle, five-layout command invocation, package/web/command/service-host/verifier mutations, rollback, and failure injection. | Pass on the exact supported Node/pnpm Linux build target without network, source TypeScript execution, stale web output, or synthetic assets; retain exactly one executable HostDeck command. |
-| `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:executable-serve` | `IFC-V1-053`, `IFC-V1-054` | Run the direct packaged command twice from a read-only relocation against the manifest-verified packaged dashboard; verify loopback readiness/static policy, exact runtime, signal shutdown, same-port reuse, no model turn, and zero residue. | Pass only with the exact reviewed executable and already-built verified package; no synthetic web fixture or Tailscale/profile/phone mutation. |
-| `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:service-host` | `IFC-V1-086` | Run an externally owned exact app-server plus the non-executable packaged service-host from a read-only relocation; replace app-server while HostDeck stays alive, then replace HostDeck twice while app-server stays alive. | Local health/static recover without Tailscale, no model turn occurs, ownership never crosses, and every test-owned process/socket/temp path is removed. |
-| `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:systemd-user-units` | `IFC-V1-055` | Verify and runtime-link the exact generated user units, then exercise pull-in, repeated start, HostDeck-only restart, Codex-only restart/stop/recovery, shared-lease exclusion, and exact cleanup against the real user manager. | Pass on supported systemd with the pre-existing failed-unit set preserved, exact ownership/PID/socket/readiness transitions, unchanged pre-existing Tailscale profile/Serve state, no model turn, and no persistent unit/runtime/temp residue. |
+| `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:executable-serve` | `IFC-V1-113` | Run the packaged command twice from a read-only relocation; verify loopback readiness/static policy, standard-broker attach, signal shutdown, same-port reuse, and no broker termination. | Pass only with exact reviewed executable and verified package. |
+| `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:service-host` | `IFC-V1-113` | Run the standard shared broker plus packaged service host; replace HostDeck while broker and ordinary TUI remain usable, then restart broker and reconcile. | Local health/static/catalog recover, ownership never crosses, and every test-owned HostDeck resource is removed. |
+| `HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:systemd-user-units` | `IFC-V1-113` | Verify/install exact broker and HostDeck user units, then exercise repeated start, HostDeck-only stop/restart, broker stop/recovery, login lifecycle, and cleanup. | Pass with standard socket, exact ownership transitions, unchanged Tailscale state, and no package-owned residue after uninstall. |
 | `pnpm test:codex` | `INT-V1-091` | From a clean commit and exact binary, run the frozen deterministic runtime inventory plus strict structured-control and lifecycle/restart/TUI scenarios, then publish one machine-validated private aggregate. | Pass on release host with exact commit/version, five bounded model turns, no skip/retry/fallback, and zero process/socket/temp residue; may be excluded from ordinary CI because credentials/model use are required. |
 | `pnpm test:e2e` | `FE-V1-040` | Build and independently verify one production package, preflight exact managed Chromium/Firefox identities, run the strict phone/desktop interaction matrix against isolated same-origin and HTTPS fixtures, validate sanitized evidence, and prove teardown. | Pass all 76 no-retry cases on pinned Linux x64 browser revisions with four complete reports and no source-page, live Tailscale, custom-CA, physical-device, Safari/iOS, or `REL-V1-007` aggregate claim. |
 | `pnpm build` | `IFC-V1-021`, `IFC-V1-053`, `IFC-V1-054` | Emit one deterministic self-contained compiled server/CLI package, fresh manifest-verified Vite dashboard, and verified runnable CLI entry as a single atomic identity. | Pass after frozen install; no network, source TypeScript runtime, ambient env/config discovery, stale output, synthetic asset, or partial publication. |
@@ -56,8 +57,8 @@ Unavailable commands fail loudly with owning task id. No placeholder command may
 
 ## Codex Compatibility Matrix
 
-- Existing-thread discovery validates exact source, root/parent/ephemeral/archive/cwd/version metadata, pagination bounds, and malformed/additive responses without exposing transcript content.
-- Bounded `thread/turns/list` plus before/after `thread/read` proves one stable adoption snapshot; exact `thread/resume` activates only the selected id.
+- Loaded-thread enrollment validates exact source, root/parent/ephemeral/archive/cwd/version metadata, pagination bounds, and malformed/additive responses without exposing full transcript content.
+- Bounded recent turns plus exact `thread/read` prove one stable enrollment snapshot; metadata-only `thread/resume` subscribes only the selected native UUID and starts no turn.
 
 | Case | Required assertion |
 | --- | --- |
@@ -70,21 +71,23 @@ Unavailable commands fail loudly with owning task id. No placeholder command may
 | Request timeout/disconnect | Read may retry by policy; mutation becomes incomplete/unknown unless proven idempotent. |
 | Max in-flight/frame/queue | New work rejects with overload; process remains healthy. |
 | Multi-client | HostDeck and TUI connect to one runtime and address the same thread without corruption. |
+| Standard socket | Plain `codex` start and `codex resume <uuid>` connect to the expected inode; known config/profile/strict-mode bypasses fail compatibility or are documented unsupported. |
+| Automatic enrollment | Loaded-before-connect and created/resumed-after-connect roots appear once; child/ephemeral/archived/invalid candidates do not; notification-before-mapping replays or fails visibly within bounds. |
 | Usage read/observations | Exact no-param account response keys, safe integer and calendar/bucket bounds, target before/after race, generation change, absent/current token and rate snapshots, monotonic token/context updates, malformed/oversize response, unsupported/disconnected runtime, abort/timeout, and two-thread isolation all remain read-only. |
 
 ## Real Codex Vertical
 
 The release host records Codex version, HostDeck commit, commands, thread ids in redacted form, and cleanup result. Required sequence:
 
-1. Start dedicated app-server on private Unix socket and complete handshake.
-2. Start two managed threads in separate temporary repositories without alias collision. For the pinned legacy store, prove loaded-thread recovery before id persistence, id-first recovery persistence, no-model rollout materialization, final empty goals, and stored list/read identity before either start is reported successful.
+1. Start or attach exact 0.147.0 app-server on the standard Unix control socket and complete handshake.
+2. Start one ordinary TUI thread and resume one existing persisted thread with plain Codex commands. Prove both automatically enroll once by native UUID, import only bounded recent history, and appear in the live catalog.
 3. Start one bounded real turn, treat the response as accepted, wait for matching `turn/started`, and verify ordered item/status events through HostDeck projection and SSE.
 4. Steer only that event-proven active turn with `expectedTurnId`; prove no second `turn/started` and no change to the other thread. Early/stale steer rejects.
 5. Exercise model catalog plus next-turn model read-back, paused and agentic goal behavior, Plan/Default next-turn settings, usage read, accepted/incomplete compact, and skills list according to supported capabilities.
 6. Trigger a safe approval request in an isolated temporary repository; approve once, deny once, reject duplicate/expired response.
 7. Interrupt an event-proven active turn and verify `turn/completed: interrupted` is not normal completion or archive.
-8. Resume the exact thread in the normal TUI through the same Unix socket.
-9. Restart HostDeck only and prove app-server/thread work remains; restart app-server and prove honest interruption/boundary/reconciliation.
+8. Resume the exact thread with plain `codex resume <native-uuid>` and prove laptop activity appears on phone and phone activity appears in the same TUI.
+9. Restart/stop HostDeck only and prove broker/TUI work remains; restart the broker explicitly and prove honest interruption/boundary/reconciliation.
 10. Archive/clean temporary threads and remove temporary repositories/runtime state.
 
 If a safe deterministic approval trigger cannot be created, the approval feature remains blocked; a fake-only approval is not release evidence.
@@ -97,15 +100,15 @@ Skills contract/adapter/control tests require one exact selected-cwd `skills/lis
 
 ## Storage And Audit Matrix
 
-- Adoption atomically commits one mapping, initial projection, visible adoption boundary, bounded recent events, and accepted/terminal audit; every injected boundary failure leaves either no mapping or one explicit recovery-required mapping.
-- Unmanage rejects active/uncertain sessions and atomically removes only HostDeck-owned mapping/projection/events for quiet sessions while the Codex thread remains readable.
+- Enrollment atomically commits or reuses one native-UUID mapping, initial projection, visible history boundary, bounded recent events, and enrollment audit; every injected boundary failure leaves either no mapping or one explicit recovery-required mapping.
+- Historical adoption/unmanage rows remain readable, but selected CLI/API manifests expose neither operation.
 
 | Area | Cases |
 | --- | --- |
 | Migration | Empty DB, current DB, prior tmux-shaped DB, remote-ingress settings/audit/admission-proof upgrade, interrupted migration, checksum/version drift, incompatible future schema. |
-| Session mapping | Start saga success; Codex failure; thread created/DB failure; duplicate alias/id/thread; missing/archived thread; pre-release legacy record. |
+| Session mapping | Automatic enrollment success; notification-before-mapping; loaded/create race; DB failure; duplicate native/internal id/alias; missing/archived/ineligible thread; historical adoption row. |
 | Projection | Storage-owned cursor/counters, ordered append, malformed/caller-addressed event, stale full revision, metadata/event writer race, duplicate upstream id, corrupt counters/rows, forced transaction rollback with zero publication, post-commit publisher throw/reject with durable read-back and no automatic republish, restart freshness. |
-| Codex event normalization | Every selected exact method and observed item kind; strict ids/timestamps/statuses/bounds; clock, turn/item, archive, retained-identity, and pending-queue capacity invariants; two managed threads isolate; valid unmanaged TUI payloads become bounded identity-only observations before deep parsing; classification/mapping disagreement is fatal; generated optional flood stays bounded/content-free; unknown and deprecated compact cannot project; runtime rate limit remains unscoped; approval resolution carries no invented decision; raw normalization cannot run ahead of append/publication and stops after queue/managed malformed/order/storage/publication failure. |
+| Codex event normalization | Every selected exact method and observed item kind; strict ids/timestamps/statuses/bounds; clock, turn/item, archive, retained-identity, enrollment-pending and protocol-queue capacity invariants; two tracked threads isolate; unknown eligible TUI payloads route through enrollment before deep parsing; classification/mapping disagreement is fatal; optional flood stays bounded/content-free; unknown semantics cannot project; raw normalization cannot run ahead of append/publication. |
 | Retention | Event-count cap, byte cap, audit-count cap, age cap, newest item larger than byte cap, cleanup on production append/startup, boundary persistence. |
 | Audit | Accepted/succeeded/failed/rejected/incomplete, remote enable/disable with ownership/profile conflicts, atomic prior-proof invalidation on accepted remote mutation, post-terminal generation proof, read-only status with no mutation audit, crash between accepted/result/proof, emergency lock under audit degradation, sanitization, retention. |
 | Auth | Pair create/consume/expire/revoke, device read/write permission, raw-secret absence, CSRF rotate/reload/revoke race, last-used update. |
@@ -115,7 +118,7 @@ Permission/lease evidence also proves pure path validation before mutation, mini
 
 ## HTTP, SSE, And Security Matrix
 
-- Discover/adopt/unmanage accept only explicit loopback local-admin requests; paired remote cookies, spoofed local headers, locked/not-ready hosts, duplicate aliases/threads, malformed ids, and response loss cannot dispatch twice or disclose unmanaged metadata.
+- Selected route/grammar manifests contain no discover/adopt/unmanage endpoint. Native UUID and internal-id aliases resolve to one target; malformed, conflicting, locked, or not-ready writes cannot dispatch twice.
 
 | Dimension | Required cases |
 | --- | --- |
@@ -209,9 +212,9 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 
 | Gate | Evidence |
 | --- | --- |
-| Clean checkout/install | Exact Node/pnpm/Codex plus pinned Ubuntu/Windows runner versions, frozen developer install, native builds/tests, and end-user install without source/runtime toolchain. |
+| Clean checkout/install | Exact Node/pnpm/Codex plus pinned Ubuntu runner versions, frozen developer install, native build/tests, and end-user install without source/runtime toolchain. |
 | Package/CLI | Native runnable `codexdeck`, bundled Node/native modules/web assets, help/exit codes, no source-only invocation dependency. |
-| Per-user lifecycle | Linux systemd-user and Windows interactive-user agent: install, start, status/readiness, login recovery, restart, app-server crash, upgrade/rollback, stop, repeated uninstall/reinstall, log inspection. |
+| Per-user lifecycle | Ubuntu systemd user units: install, broker start/status, HostDeck start/status, login recovery, independent restart/stop, broker crash, upgrade/rollback, repeated uninstall/reinstall, log inspection. |
 | Data/privacy | Path/file/socket permissions, no raw HostDeck/Tailscale secrets or transcript copy, retention, no public HostDeck listener or HostDeck telemetry. |
 | Network | Loopback-only HostDeck listener inventory; dedicated saved Tailscale profile; Serve HTTPS; exact host/origin/proxy/rate/cookie tests; wrong/company profile is untouched. |
 | Browser/device | Supported desktop browser and real phone workflow over cellular or unrelated Wi-Fi, including profile switching and no custom CA. |
@@ -222,26 +225,26 @@ Every row is tested at 390 x 844; marked stress states also run at 360 x 800 and
 
 ## Native Platform Matrix
 
-| Boundary | Ubuntu 24.04 x64 | Windows 11 x64 |
-| --- | --- | --- |
-| Paths/security | XDG roots, UID/modes, no-follow/link/path identity | AppData roots, current-user ACL, canonical/case/reparse/link/stream identity |
-| Daemon/lifecycle locks | Kernel `flock`, process death, contention | Native reviewed lock, contention, crash/stale recovery, exact object identity |
-| Codex | Unix endpoint, exact runtime vertical, TUI resume | Authenticated loopback WebSocket, token secrecy/rotation, exact runtime vertical, TUI resume |
-| Lifecycle | systemd user units, login/restart/upgrade/uninstall | Interactive-user startup registration, login/restart/upgrade/uninstall; no Session 0 service |
-| Tailscale | `tailscale` profile/Serve/noninterference | `tailscale.exe` profile/Serve/noninterference |
-| Distribution | Verified versioned native artifact | Verified signed per-user MSIX; unsigned portable tree is test-only |
-| Clean acceptance | Ordinary-user no-retry install-to-uninstall | Ordinary-user no-retry install-to-uninstall |
+| Boundary | Ubuntu 24.04 x64 V1 |
+| --- | --- |
+| Paths/security | XDG roots, UID/modes, no-follow/link/path identity, owner-only `$CODEX_HOME/app-server-control` |
+| Daemon/lifecycle locks | Kernel lock, Codex startup lock, process death, contention, stale/insecure socket refusal |
+| Codex | Exact 0.147.0 standard Unix endpoint, ordinary TUI implicit reuse, shared-session vertical |
+| Lifecycle | Independent broker and HostDeck systemd user units, login/restart/upgrade/uninstall |
+| Tailscale | `/usr/bin/tailscale` profile/Serve/noninterference |
+| Distribution | Verified versioned Ubuntu x64 artifact with bundled Node/native modules |
+| Clean acceptance | Ordinary-user no-retry install-to-uninstall plus unrelated-network phone |
 
-Every cell requires native evidence. Shared contract tests may run on both runners, but Linux success, WSL, Wine, mocks, or cross-compilation cannot close a Windows cell.
+Windows rows are deferred to V2 and cannot block or satisfy this matrix.
 
 ## Production Package Matrix
 
 | Case | Required assertion |
 | --- | --- |
-| Exact closure | Each native target contains only selected server/CLI roots, bundled Node/native runtime dependencies, one fresh Vite `web/` tree, platform launchers/lifecycle metadata, verifier/licenses, and manifest; source/tests/smokes/maps/dev dependencies/build tools are absent. |
-| Determinism | Two unchanged native builds per target have identical source/output/content/artifact identities except approved signature/timestamp envelopes; stale sentinels are removed. |
+| Exact closure | The Ubuntu artifact contains only selected server/CLI roots, bundled Node/native runtime dependencies, one fresh Vite `web/` tree, launchers/lifecycle metadata, verifier/licenses, and manifest; source/tests/smokes/maps/dev dependencies/build tools are absent. |
+| Determinism | Two unchanged Ubuntu builds have identical source/output/content/artifact identities except approved signature/timestamp envelopes; stale sentinels are removed. |
 | Metadata/dependencies | Manifest records target OS/arch, bundled Node/ABI, package version/commit, Codex binding, native modules, launchers, lifecycle, artifact kind, source/output/web identities, and deferrals without time/private paths. |
-| Permissions/links | Linux retains frozen modes/contained relative links; Windows package/ACL/reparse/link rules are explicit. Launchers and lifecycle targets resolve only inside the verified release after relocation/install. |
+| Permissions/links | Ubuntu retains frozen modes and contained relative links; launchers and lifecycle targets resolve only inside the verified release after relocation/install. |
 | Executable invocation | Native launcher/help/version/foreground/background commands run without Node/pnpm from unrelated cwd, read-only program roots, spaces and supported user-path characters; malformed config/lifecycle/Serve failures preserve bounded output and side-effect order. |
 | Integrity/runtime drift | Missing/modified output, manifest drift, wrong Node/platform/architecture/ABI, missing native binary, or escaping link fails nonzero before load. |
 | Relocation/read-only | From unrelated cwd and immutable program root, all production roots import, native SQLite/lease operations pass, route/web identity holds, and loopback static/lifecycle restart succeeds on each target. |
@@ -258,7 +261,7 @@ Every cell requires native evidence. Shared contract tests may run on both runne
 | `NFR-001` to `NFR-014` | Architecture inspection, negative/resource/lifecycle/supply-chain tests, native clean release smoke. |
 | `IR-001` to `IR-012` | State/component/API tests, approved mockups, Playwright screenshots, accessibility, real phone. |
 | `DR-001` to `DR-011` | Migration/repository/transaction/retention/restart/raw-storage evidence. |
-| `PR-001` to `PR-018` | Native Ubuntu/Windows Codex/browser/package/lifecycle/network/distribution evidence. |
+| `PR-001` to `PR-018` | Native Ubuntu Codex/browser/package/lifecycle/network/distribution evidence. |
 | `SFR-001` to `SFR-018` | Security matrix, side-effect assertions, privacy review, device proof. |
 | `BLK-V1-01` | Rebased runtime and remote-ingress contracts/fixtures/planning checker plus module hardening. |
 | `BLK-V1-02` | Migrated secure state, remote configuration/audit, production retention/auth/lease plus hardening. |
@@ -266,7 +269,7 @@ Every cell requires native evidence. Shared contract tests may run on both runne
 | `BLK-V1-04` | Fastify/SSE loopback host, Tailscale Serve HTTPS, app auth, CLI/package/service production path plus hardening. |
 | `BLK-V1-05` | Mobile-first selected design, complete remote-access states, screenshot/device/fidelity hardening. |
 | `BLK-V1-06` | L1-L4 aggregate, clean setup, remote-phone/profile noninterference, docs, privacy/security, explicit go/no-go. |
-| `BLK-V1-07` | Native platform contracts, path/ACL/lease security, exact Codex, Tailscale parity, packages/lifecycle, signing/CI/publication, clean Ubuntu/Windows, and release-candidate evidence. |
+| `BLK-V1-07` | Ubuntu platform contracts, path/lease/socket security, exact Codex, Tailscale, package/lifecycle, signature policy, CI/publication, clean host, and release-candidate evidence. |
 
 ## Evidence Policy
 

@@ -16,19 +16,16 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-090` Mobile dashboard physical hardening | blocked | phone unavailable | Diagnose physical touch delivery and run one distinct immutable candidate when the phone returns; retain only a complete no-retry pass. |
-| 2 | `INT-V1-104` Complete Windows Codex vertical | blocked | authenticated Windows Codex host | Production composition and secret-free native recovery pass; run the committed no-retry model-backed launcher on an authenticated Windows host and retain its strict report. |
-| 3 | `DAT-V1-104` Native state/security hardening | in_progress | none | Audit the completed native state slice across failure, tamper, repair, upgrade, privacy, and platform-specific security evidence. |
-| 4 | `IFC-V1-102` Deterministic native package tree | ready | none | Bundle the exact runtime closure and target-native modules into verified Linux and Windows package trees. |
+| 1 | `INT-V1-110` Exact 0.147.0 shared-runtime spike | ready | none | Freeze standard-socket, ordinary TUI reuse, loaded-thread, notification, subscription, and ownership semantics before contracts or code rely on them. |
 
-`REL-V1-102` is complete through `0dd98f3` and native run `31513897607`; `DAT-V1-103` is complete through `42fd03c` and run `31509712124`. `INT-V1-104` implementation is pushed through `25f45b1`; native Windows harness/preflight and no-model recovery passed run `31502834945`, and the model-backed Linux aggregate passed locally, but neither substitutes for the outstanding authenticated Windows report. `INT-V1-103` is complete through `040c133` and native run `31494425909`; `INT-V1-102` remains complete through run `31490136692`, `INT-V1-101` through run `31481942844`, `IFC-V1-100` through run `31474471365`, and `IFC-V1-101` through run `31471194169`. The latest `FE-V1-090` branch candidate `6829bd2` reached a stable first continuation target but delivered no request after the tap; no acceptance evidence was retained. The next phone run must use a distinct commit after touch-delivery diagnosis.
+`REL-V1-109` records the approved shared-session/Ubuntu rebaseline. The dependency chain then proceeds through contracts, binding/state, broker, automatic enrollment, selected API/CLI, live catalog UI, hardening, Ubuntu packaging, physical phone acceptance, and clean release acceptance. Completed adoption and Windows work remains historical; unfinished Windows and superseded aggregate tasks are deferred rather than release blockers.
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
-| Release | `REL-V1-010` | All module hardening, clean package/service/remote-phone/profile/security evidence, human acceptance | V1 release and V2 planning. |
-| Native distribution | `REL-V1-108` | Native Ubuntu/Windows packages, lifecycle, signing, clean-host acceptance, docs, and aggregate Android evidence | First distributable V1 release candidate. |
+| Release | `REL-V1-010` | `REL-V1-110` Ubuntu candidate evidence and human acceptance | V1 release and V2 planning. |
+| Physical device | `FE-V1-108` | Connected unlocked Android phone after the installed candidate exists | Clean Ubuntu release acceptance. |
 
 ## Status Vocabulary
 

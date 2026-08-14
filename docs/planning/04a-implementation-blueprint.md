@@ -13,7 +13,7 @@ This blueprint is implementation-ready only when:
 - storage migration and legacy tmux disposition are explicit;
 - the production Fastify/SSE/auth path has one lifecycle owner and bounded resources;
 - replacement mobile mockups pass the screen/state gate and receive human selection before React screen work;
-- native Ubuntu/Windows platform, package, lifecycle, signing, update, rollback, and clean-host contracts resolve to `BLK-V1-07` leaves;
+- native Ubuntu package, lifecycle, signature-policy, update, rollback, and clean-host contracts resolve to `BLK-V1-07` leaves;
 - no task must decide product scope, architecture, security policy, or validation while implementing.
 
 ## Maturity Truth
@@ -24,11 +24,11 @@ This blueprint is implementation-ready only when:
 | Core/contracts | Selected thread/turn/event/approval/runtime/security/mobile schemas, strict invariants, fixtures, and hardened remote-ingress/access/proxy/audit contracts. | V1 foundation contract block complete. | Downstream storage, adapters, routes, and UI remain owned by Blocks 02, 04, and 05. |
 | Storage | Historical repositories plus selected mapping/projection/event/compatibility/recovery, durable remote-ingress configuration/observation, versioned remote enable/disable audit with preserved LAN/certificate history, and phased owner-only path/daemon-lease startup. | V1 storage block complete after combined remote aggregate hardening. | Production consumers remain owned by Block 04. |
 | Tmux adapter | Real target/start/send/capture/reconcile tests with fake Codex producer. | Legacy integration evidence. | Not the selected V1 runtime. Disposition waits for structured vertical. |
-| Codex adapter | Exact 0.144.0 experimental binding, structural method-catalog drift check, bounded Unix IPC/broker/handshake/reconnect, hostile fake-protocol matrix, and real private-socket no-model smoke. | Transport and compatibility foundation implemented. | Real session/turn/control/approval, supervision, multi-client, and restart proof. |
+| Codex adapter | Historical exact 0.144.0 private-runtime vertical plus source/runtime proof that exact 0.147.0 ordinary Unix TUI clients probe the standard control socket. | Rebaseline in progress. | Regenerated 0.147.0 binding, shared-broker ownership, loaded-thread enrollment, plain TUI coexistence, and restart proof. |
 | API/CLI | Selected Fastify/API/SSE/static composition, app auth and bounded command clients, exact Tailscale observation/Serve/proxy boundaries, deterministic server/CLI plus real manifest-verified Vite package, accepted foreground/service lifecycles, one verified compiled `codexdeck` entry, and exact generated systemd user units. | Runnable packaged two-process foundation with real dashboard assets and runtime-proven user-manager evidence. | Persistent service lifecycle/install, clean parity, and aggregate interface hardening. |
 | Web | Structured phone fixtures, selected Focus Rail targets, a real packaged React/Vite two-route dashboard, exact bounded JSON/SSE/CSRF clients, the access-first host/session coordinator, and complete production screens/actions/trust/recovery states. | Dashboard behavior, page-memory authority, coordinated browser state, responsive layout, semantic accessibility, focused physical Android evidence, and exact Chromium/Firefox phone/desktop package coverage are implemented. | Visual fidelity, copy/workflow review, aggregate phone module acceptance, and release-device evidence. |
 | Release | Baseline commands pass; developer/command docs record gaps. | No-go. | Clean package/service/phone/security/aggregate evidence. |
-| Cross-platform distribution | Linux package/systemd behavior is a proven baseline; `DEC-029` selects native Ubuntu/Windows delivery and the exact platform boundaries. | Planning complete; implementation not release-ready. | Windows path/lock/Codex/Tailscale/lifecycle/MSIX evidence, native CI, signing/publication, and clean-host acceptance on both targets. |
+| Native distribution | Linux package/systemd behavior is a proven baseline; `DEC-032` selects Ubuntu 24.04 x64 for V1. | Rebaseline in progress; not release-ready. | Standard-broker package migration, Ubuntu artifact/signature policy, clean-host acceptance, and physical phone proof. Windows groundwork is deferred to V2. |
 
 Done task records remain historical evidence for their stated scope. They do not imply the selected V1 block is complete.
 
@@ -36,8 +36,8 @@ Done task records remain historical evidence for their stated scope. They do not
 
 | Contract | Required shape/invariant | Owner |
 | --- | --- | --- |
-| `ManagedSession` | HostDeck id, alias, Codex thread id, cwd/project, optional branch, runtime version/source, archived state. Ids are immutable and distinct. | core/contracts |
-| `CodexAdoptionCandidate` | Exact thread id, bounded name/preview/project cue, cwd, exact source kind, runtime version, timestamps/status, eligibility and one bounded rejection reason. No transcript or rollout path. | contracts/codex adapter/server/CLI |
+| `TrackedSession` | Native Codex UUID, internal HostDeck id, alias, cwd/project, optional branch, runtime version/source, archived state. Native UUID is the user-facing target; ids are immutable and distinct. | core/contracts/storage |
+| `LoadedThreadCandidate` | Exact native UUID, bounded name/project cue, cwd, source/root/ephemeral/archive metadata, runtime version, timestamps/status, eligibility and one bounded rejection reason. No transcript or rollout path. | contracts/codex adapter/server |
 | `SessionProjection` | Lifecycle, turn state, attention, summary, last activity, model/goal cue, last HostDeck cursor, freshness/degraded reason. | core/contracts |
 | `ProjectedEvent` | Session id, safe integer cursor, normalized kind, Codex event id/type when available, timestamp, bounded payload, redaction/truncation/boundary metadata. | contracts/storage |
 | `RuntimeCompatibility` | Codex version, generated binding identity, negotiated capabilities, check result/time, bounded incompatibility reason. | contracts/codex adapter/storage |
@@ -49,7 +49,8 @@ Done task records remain historical evidence for their stated scope. They do not
 | `TrustContext` | Loopback/local-admin or paired device identity, ingress provenance, read/write permission, expiry/revocation, CSRF generation, external origin, and bounded remote source identity where verified. | contracts/server |
 | `AuditOutcome` | `accepted`, `succeeded`, `failed`, `rejected`, or `incomplete`; accepted is never treated as terminal success. | core/contracts/storage |
 | `HostPlatformCapability` | Exact OS/arch, path family, private Codex endpoint kind, lifecycle kind, executable suffix, package kind, and native-runtime identity. Unsupported or mixed states are invalid. | contracts/platform adapters |
-| `PrivateCodexEndpoint` | Linux Unix path or Windows loopback host/port plus opaque credential source. Public projections contain only endpoint kind/readiness/generation, never path/token. | contracts/codex adapter/server ephemeral runtime |
+| `SharedCodexEndpoint` | Resolved standard Unix path below `$CODEX_HOME/app-server-control`; public projections contain only endpoint kind/readiness/generation, never the path. | contracts/codex adapter/server ephemeral runtime |
+| `SessionCatalogEvent` | Monotonic catalog cursor plus `catalog_reset`, `session_upsert`, `session_remove`, `catalog_ready`, or explicit boundary. Payload is one bounded public session or reset metadata. | contracts/server/web |
 
 Timestamps use strict RFC 3339/ISO 8601 parsing with round-trip calendar validation. Cursors and counts are non-negative safe integers. Lifecycle transitions use explicit normal and reconciliation transition tables.
 
@@ -61,6 +62,7 @@ interface CodexRuntimeAdapter {
   reconnect(signal: AbortSignal): Promise<RuntimeCompatibility>;
   close(reason: string): Promise<void>;
   listThreads(input: ListThreadsInput): Promise<ThreadPage>;
+  listLoadedThreads(input: ListLoadedThreadsInput): Promise<LoadedThreadPage>;
   startThread(input: StartThreadInput): Promise<ThreadSnapshot>;
   readThread(threadId: string): Promise<ThreadSnapshot>;
   archiveThread(threadId: string): Promise<void>;
@@ -80,7 +82,7 @@ The adapter implementation contains:
 | Component | Responsibility | Failure rule |
 | --- | --- | --- |
 | Binding loader | Generated app-server types/schema identity for the pinned compatibility policy. | Missing/drifted required type blocks build/startup. |
-| Private transport | Linux `ws+unix:` or Windows authenticated loopback WebSocket, open/close/ping, bounded frame/buffer, endpoint-generation and error mapping. | No platform mismatch, non-loopback address, credential output, or unauthenticated TCP fallback. |
+| Shared transport | Standard Unix `ws+unix:` socket, open/close/ping, bounded frame/buffer, endpoint-generation and error mapping. | Insecure parent/socket, alternate endpoint, TCP fallback, or ambiguous ownership fails before attachment. |
 | Handshake | `initialize`/`initialized`, client identity, capabilities. | Pre-initialize message or repeat initialize is fatal to connection. |
 | Request broker | Id assignment, pending map, deadlines, cancellation, response validation, max in-flight. | Timeout/disconnect yields typed unknown outcome for mutations. |
 | Notification decoder | Validate and normalize required events. | Unknown optional events counted; unknown required semantics degrade compatibility. |
@@ -140,18 +142,18 @@ This foundation exposes compiled library entrypoints only. `FE-V1-010` provides 
 
 | Service | Inputs | Outputs | Key invariant |
 | --- | --- | --- | --- |
-| Runtime supervisor | Mode, Codex path, socket path, process port, clock. | Process/socket readiness and ownership. | Kills only processes it owns; service mode keeps app-server independent of HostDeck restart. |
+| Runtime supervisor | Mode, Codex path, standard socket, process port, clock. | Shared broker readiness and ownership. | Attaches to a compatible broker without killing/unlinking it; starts one broker only when absent; HostDeck stop leaves it running; explicit broker stop kills only a proven owned process. |
 | Compatibility service | Bounded configured-binary probe, adapter handshake/policy, durable record, and sanitized public projection. | Supported/degraded/incompatible/unknown/disconnected/version-drift truth. | Mutation readiness requires a current exact successful compatibility result; only proven incompatibility may serve diagnostic-ready state. |
-| Session service | Codex adapter, mapping repo, projection repo. | Start/discover/adopt/unmanage/list/detail/resume/archive. | Never creates a second thread to hide an uncertain first start; adoption/unmanage never mutate Codex history. |
+| Session service | Codex adapter, mapping repo, projection repo, enrollment coordinator. | Automatic enroll/start/list/detail/archive and dual-id lookup. | Never creates a second thread to hide uncertainty; enrollment references one native UUID and never copies or mutates history. |
 | Turn/control dispatcher | Trust, lock, compatibility, target, audit, adapter. | Accepted/rejected/terminal result. | Validation -> auth/origin/CSRF -> lock -> target/capability -> audit accepted -> dispatch -> audit terminal outcome. |
 | Approval service | Pending server requests, trust, lock, audit, adapter. | Exact approve/deny response. | At most one terminal response per request id. |
 | Projection service | Normalized runtime events, transaction, classifier. | Committed event plus updated session projection. | Publish only after durable commit and retention. |
-| Replay/fanout hub | Projection repo, per-session queues, abort signals. | Ordered replay/live SSE source. | No gap/duplicate at handoff; bounded slow-client queue. |
+| Replay/fanout hub | Projection repo, per-session and catalog queues, abort signals. | Ordered replay/live SSE sources. | No gap/duplicate at handoff; bounded slow-client queue; Mission Control updates without polling/manual refresh. |
 | Trust service | Pairing/device repos, cookie/CSRF/origin/rate policy. | Read/write trust context. | Raw device token never enters JS-readable durable storage or database. |
 | Remote ingress service | Tailscale observer, persisted selected profile/external origin/Serve descriptor, bounded command runner, audit. | Disabled, ready, or unavailable remote state. | Wrong/unknown profile is observation-only; local HostDeck remains available and no company profile is changed. |
 | Host health | Storage, runtime, compatibility, projector, fanout, listener, remote ingress, lease. | Bounded local readiness plus separately generated remote-access state and a generation-bound mutation proof. | Every required local source must be explicitly ready; remote degradation cannot alter local truth or local mutation admission. |
 
-Session membership has four explicit operations. `start` creates and materializes a Codex thread. `discover` exposes only bounded metadata for eligible unmanaged persisted top-level user-facing CLI threads to local admin; ordinary top-level fork provenance is retained and is not itself disqualifying. `adopt` validates exact identity around one bounded recent-turn page, atomically persists mapping/projection/adoption boundary, then resumes the exact thread through the dedicated app-server. The projection retains a contiguous bounded suffix and marks omitted history explicitly. `unmanage` accepts only a quiet, certain session and removes HostDeck-owned state without a Codex request. Archived, ephemeral, parent-linked/subagent, incompatible, invalid-cwd, already-managed, changed-between-reads, or unconfirmed-handoff candidates reject. A separately running native client must be closed before adoption; subsequent laptop use goes through `codexdeck resume`.
+Session membership is runtime-derived. At connection startup, HostDeck pages `thread/loaded/list`, validates each loaded candidate, creates or reuses one mapping by native UUID, performs metadata-only `thread/resume` when needed to subscribe, and bootstraps a bounded recent suffix with an explicit history boundary. After initialization, thread-created notifications trigger the same idempotent enrollment path. Archived, ephemeral, parent-linked/subagent, incompatible, invalid-cwd, missing, or contradictory candidates reject. Notifications that race mapping creation enter a bounded per-thread pending buffer and are replayed only after mapping commit; overflow or unresolved metadata creates an explicit failure/boundary and closes mutation admission. An independently running pre-broker client cannot be attached; the user closes it once and runs normal `codex resume <native-uuid>` after broker readiness.
 
 ### Mutable Host Health Boundary
 
@@ -172,8 +174,8 @@ Session membership has four explicit operations. `start` creates and materialize
 
 ### Exact Event Normalization Boundary
 
-- `@hostdeck/codex-adapter` owns strict 0.144.0 required-notification parsing and exports only a normalized discriminated union; generated app-server payload types remain private.
-- The production consumer first extracts a bounded selected-notification thread identity. A valid unmanaged TUI thread becomes a content-free identity/method observation before deep payload or lifecycle parsing; runtime-scoped events bypass thread routing. A managed classification that no longer matches durable mapping is fatal and requires reconciliation.
+- `@hostdeck/codex-adapter` owns strict 0.147.0 required-notification parsing and exports only a normalized discriminated union; generated app-server payload types remain private.
+- The production consumer first extracts a bounded thread identity. An unknown eligible root enters the enrollment coordinator; runtime-scoped events bypass thread routing. A tracked classification that no longer matches durable mapping is fatal and requires reconciliation.
 - One stateful decoder assigns a monotonic connection-local sequence, rejects clock regression, and validates managed thread/turn/item lifecycle order. Exact repeated thread-state snapshots for status, name, settings, or goal become bounded content-free redundant observations and do not reach projection or control observers. Stable transition thread/turn/item/goal/request identities remain retained until bounded capacity exhaustion; capacity, true transition duplicate, malformed, post-archive, and order failures latch the decoder stopped.
 - Generated-but-unselected notifications produce bounded content-free method/count diagnostics. Unknown methods fail compatibility. Deprecated `thread/compacted` is unselected and cannot prove compaction; authoritative context-compaction item and terminal turn events remain required.
 - `@hostdeck/server` admits raw notifications through the registry-owned `protocol_max_pending_notifications` gate, then serializes identity gating, managed normalization, durable mapping, one next-session reduction, `ProductionProjectionAppendPort`, and post-commit publication. A later frame is not normalized until earlier publication settles. Queue capacity or one normalization/projection/storage/publication failure stops the whole connection-generation pipeline until reconciliation.
@@ -205,23 +207,15 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 
 ## Critical Sequences
 
-### Discover And Adopt Existing Codex Thread
+### Automatic Enrollment And Shared Use
 
-1. Local CLI calls the loopback-only discovery route under explicit local-admin authority.
-2. Adapter paginates a bounded recent candidate set and returns no transcript content or rollout path.
-3. User selects one exact thread id and unique HostDeck alias, then confirms the standalone client is closed.
-4. Service reads exact identity, reads one bounded recent full-turn page, and reads identity again; any id/cwd/version/archive/parent/ephemeral change rejects before persistence.
-5. Storage atomically inserts mapping, initial projection, one adoption replay boundary, and bounded normalized recent events; audit records accepted then terminal truth.
-6. Adapter resumes the exact thread through HostDeck's dedicated app-server after identity is managed, so later notifications enter the normal ordered pipeline.
-7. Activation failure after commit leaves one visible stale/recovery-required mapping and is never retried automatically.
-8. Existing Mission Control, Session Detail, and `codexdeck resume` consume that same thread id.
-
-### Unmanage Existing Codex Thread
-
-1. Local CLI targets one HostDeck session and explicitly confirms unmanage.
-2. Service rejects active, approval-pending, reconnecting, stale, or otherwise uncertain state.
-3. Storage atomically removes HostDeck projected events, projection, mapping, and owned recovery metadata with accepted/terminal audit truth.
-4. No Codex protocol mutation runs; exact read-back proves the persisted Codex thread remains available.
+1. Broker readiness precedes HostDeck and ordinary TUI clients. HostDeck connects, initializes, and pages bounded `thread/loaded/list`.
+2. For each eligible top-level interactive thread, HostDeck reads exact metadata, creates or reuses the durable mapping by native UUID, subscribes without starting a turn, and imports only a bounded recent suffix with a visible boundary.
+3. New thread-created/resumed notifications execute the same idempotent path. Concurrent notifications are serialized per native UUID; duplicate enrollment returns the existing mapping.
+4. Events arriving before mapping resolution enter the bounded pending buffer. Mapping success replays them in order; ineligibility, overflow, timeout, or storage failure rejects visibly and never publishes invented state.
+5. Mission Control catalog publication follows mapping/projection commit. A catalog subscriber receives reset/upsert/remove/ready/boundary events with a no-gap replay/live handoff.
+6. Phone writes and ordinary laptop TUI writes target the same native UUID and broker. Each side observes the other's resulting structured events.
+7. Historical discover/adopt/unmanage routes and CLI commands are absent from the selected route/grammar manifests. Existing database rows and audit types remain readable for migration compatibility.
 
 ### Startup
 
@@ -231,8 +225,8 @@ Session start uses a recoverable saga because Codex thread creation and SQLite c
 4. The lease owner creates/repairs current-user config, runtime, and database-parent directories, then holds a validated database identity guard across SQLite open/migration and rechecks it before release.
 5. Validate local settings and durable remote-ingress configuration without contacting or mutating Tailscale.
 6. Run one bounded no-shell `codex --version` probe against the configured canonical executable. Malformed output or process failure is fatal and reverse-cleaned; a valid unsupported semver is retained as current diagnostic truth.
-7. For the exact reviewed version, start or await the mode-owned app-server and private endpoint. Linux retains the owner-only Unix-socket behavior. Windows creates a fresh protected token and random loopback endpoint, starts one exact interactive-user child, and requires authenticated readiness; token/endpoint rotation invalidates stale generations. For valid version drift, create neither and retain an explicit skipped/incompatible state.
-8. Exact-version startup completes the compatibility handshake, adapter reader, managed mapping reconciliation, uncertain-state interruption, event subscriptions, and bounded projection rebuild before admission.
+7. For exact 0.147.0, validate or create the owner-only standard control directory, attach to a compatible active socket or start one broker on that socket, and never unlink/kill an unproven owner. Valid version drift creates neither and retains explicit incompatibility.
+8. Exact-version startup completes compatibility, adapter reader, loaded-thread reconciliation, automatic enrollment, uncertain-state interruption, event subscriptions, and bounded projection rebuild before admission.
 9. Proven initial incompatibility persists the current compatibility record and runs one local-only restart-gap reconciliation that marks every non-archived durable projection disconnected without a Codex request. Any other reconnect/startup failure remains fatal.
 10. Capture one startup cutoff, reconcile accepted-only audit orphans, then run due retention. Initialize storage health from both bounded results; degraded or incomplete maintenance cannot claim runtime or diagnostic readiness.
 11. Start the Fastify loopback HTTP listener, selected routes, SSE boundary, and static assets only after exact runtime readiness or the proven diagnostic boundary. Diagnostic mode keeps readiness 503, runtime/compatibility failed, SSE/runtime admission absent, and every mutation gate closed.
@@ -411,11 +405,11 @@ The Fastify runtime owner therefore exposes exact `beginDrain`, `closeSse`, `clo
 | --- | --- | --- |
 | `BLK-V1-01` | Normalized contracts, events, approvals, compatibility, remote-ingress/access state, fixtures, planning validation. | Remote rebaseline tests and `FND-V1-092`; earlier structured-runtime completion is insufficient. |
 | `BLK-V1-02` | App-server mapping/projection migration, auth/CSRF, audit outcomes, remote-ingress configuration/audit, production retention, permissions/lease. | Integration/storage evidence and `DAT-V1-092`. |
-| `BLK-V1-03` | Codex adapter, private runtime, real thread/turn/control/approval/event/restart/TUI path. | Real vertical plus `INT-V1-091`; no fake producer. |
-| `BLK-V1-04` | Fastify API/SSE/static, loopback listener, Tailscale profile/Serve ingress, app authorization, CLI/build/service packaging, and resource controls. | Packaged remote path, cellular/profile-switch evidence, and `IFC-V1-091`. |
-| `BLK-V1-05` | Remote-access state rebaseline, replacement visual options/selection, phone-first dashboard, approvals, controls, fidelity/device evidence. | `FE-V1-090`. |
+| `BLK-V1-03` | Exact 0.147.0 shared broker, automatic enrollment, real thread/turn/control/approval/event/restart/ordinary-TUI path. | `INT-V1-110` to `INT-V1-114`; no fake producer. |
+| `BLK-V1-04` | Fastify API/SSE/static, live catalog, loopback listener, Tailscale profile/Serve ingress, app authorization, selected CLI/build/service packaging, and resource controls. | `IFC-V1-111`, `IFC-V1-112`, `IFC-V1-113`. |
+| `BLK-V1-05` | Selected Focus Rail phone dashboard, approvals, controls, live catalog, fidelity/device evidence. | `FE-V1-107`, `FE-V1-108`. |
 | `BLK-V1-06` | Security/privacy, clean install/service/browser/remote phone, company-profile noninterference, aggregate validation, completion matrix, go/no-go. | Release-readiness artifact and human acceptance. |
-| `BLK-V1-07` | Native Ubuntu/Windows platform adapters, local Codex transport, package/lifecycle, signing, updates, rollback, CI/publication, and clean-host proof. | `REL-V1-108` release-candidate artifact plus native L1-L4 evidence; no cross-compiled substitute. |
+| `BLK-V1-07` | Native Ubuntu standard Codex transport, package/lifecycle, signature policy, updates, rollback, CI/publication, and clean-host proof. | `IFC-V1-113`, `REL-V1-110` plus native L1-L4 evidence; no cross-compiled substitute. |
 
 ## Delivery Order
 
@@ -433,10 +427,10 @@ The Fastify runtime owner therefore exposes exact `beginDrain`, `closeSse`, `clo
 | 10 | Mobile state and visual gate | `FE-V1-004`, reopened `FE-V1-002`, human `FE-V1-003`. This precedes React screen implementation. |
 | 11 | Dashboard implementation | `FE-V1-010` to `FE-V1-040`; typed clients, screens/actions/trust states, responsive, accessibility, browser, fidelity, and copy evidence. |
 | 12 | Aggregate Android acceptance | `FE-V1-090`; retain/deploy one complete no-retry physical candidate. |
-| 13 | Platform contracts and native state/runtime | `REL-V1-100`, `FND-V1-100` to `FND-V1-101`, `DAT-V1-100` to `DAT-V1-104`, `INT-V1-100` to `INT-V1-105`. Linux behavior remains green while Windows-native evidence is added. |
-| 14 | Native packages, lifecycle, and remote parity | `IFC-V1-100` to `IFC-V1-109`; verified Linux artifact and signed Windows MSIX. |
-| 15 | Native CI, publication, and clean-host acceptance | `REL-V1-101` to `REL-V1-108`; checksums/SBOM/provenance, clean Ubuntu/Windows, docs, aggregate release candidate. |
-| 16 | Human acceptance | `REL-V1-010`; explicit go/no-go. |
+| 13 | Shared-runtime rebaseline | `REL-V1-109`, `INT-V1-110`, `FND-V1-103`, `INT-V1-111`, `DAT-V1-106`; exact 0.147.0 standard-socket contracts and compatible state. |
+| 14 | Broker, enrollment, API, and live catalog | `INT-V1-112`, `INT-V1-113`, `IFC-V1-111`, `IFC-V1-112`, `FE-V1-107`; ordinary TUI continuity and automatic phone updates. |
+| 15 | Hardening, Ubuntu package, and physical acceptance | `INT-V1-114`, `IFC-V1-113`, `FE-V1-108`, `REL-V1-110`; exact package, clean host, Tailscale phone, bidirectional activity, and release evidence. |
+| 16 | Human acceptance | `REL-V1-010`; explicit go/no-go after the Ubuntu candidate. |
 
 Tasks may overlap only when dependencies and shared contracts make the work independent. No UI screen implementation starts before order 9 is complete.
 
@@ -446,8 +440,8 @@ Tasks may overlap only when dependencies and shared contracts make the work inde
 - Historical tmux implementation evidence remains in artifacts and Git history; current tmux use is limited to isolated exact-Codex TUI test harnesses.
 - If the real structured vertical fails a required semantic, V1 returns to planning. It does not silently ship both runtimes or resume TUI scraping.
 - If Tailscale ingress cannot meet the pinned remote/security/profile-isolation contract, V1 returns to planning. It does not fall back to a LAN listener, custom CA, public port forwarding, or silent company-profile mutation.
-- If exact Windows Codex authenticated transport, current-user path/lock security, lifecycle, or signed package cannot meet `BLK-V1-07`, Windows remains a visible V1 release blocker. HostDeck does not ship an unsigned public MSIX, unauthenticated loopback Codex endpoint, administrator-only daemon, or Linux-emulation claim.
-- Native artifacts are promoted independently only after both targets bind the same source/version/commit and pass their own package/lifecycle gates. A failed target leaves the release draft and cannot silently publish the other as full V1.
+- Windows shared-session and packaging work remains deferred to V2; completed groundwork cannot block or satisfy Ubuntu V1.
+- The Ubuntu artifact is promoted only after its exact source/version/commit, shared-broker behavior, package/lifecycle, phone, and clean-host gates pass.
 - Database migrations are forward-only and tested on a copy; destructive pre-release legacy reset requires explicit CLI confirmation and preserves bounded global audit history while removing only inert legacy session state.
 - Dependency additions are committed separately from UI work and include license/version rationale in the owning task.
 - A completed block is reopened whenever its production outcome changes, even if historical package tests still pass.

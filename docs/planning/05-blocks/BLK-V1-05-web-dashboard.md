@@ -4,7 +4,7 @@ Owns the phone-first dashboard, visual gate, structured controls/approvals, resp
 
 ## Outcome
 
-- Mission Control is the default phone route and surfaces the highest-attention session immediately.
+- Mission Control is the default phone route, surfaces the highest-attention session immediately, and updates its catalog without manual refresh.
 - Session Detail is conversation/event-first with a sticky prompt composer, `/model`, `/goal`, `/plan`, utilities, and inline structured approvals.
 - Trust, lock, Tailscale/profile/Serve availability, incompatibility, stale/boundary, and failure states are visible before action.
 - No phone raw-shell input, terminal emulator, editor, file tree, or desktop-only required workflow exists.
@@ -48,6 +48,7 @@ Requirement refs: `FR-002`, `FR-005` to `FR-010`, `FR-016`, `NFR-004`, `IR-001` 
 | Cross-screen failure and continuity matrix | `FE-V1-015` | Complete across both production routes and every required control admission state. |
 | Responsive, accessibility, and browser matrices | `FE-V1-016`, `FE-V1-039`, `FE-V1-040` | Responsive and semantic-accessibility hardening are complete; the supported second-engine browser interaction matrix remains `FE-V1-040`. |
 | Fidelity, copy/workflow review, and module hardening | `FE-V1-017`, `FE-V1-018`, `FE-V1-090` | Fidelity and copy/workflow review are complete. `FE-V1-090` is in progress under frozen `MDH-01` to `MDH-24` aggregate package/browser/physical criteria. |
+| Live shared-session catalog | `FE-V1-107`, `FE-V1-108` | Required: consume catalog SSE, preserve stable mobile layout/selection, show native UUID cues where useful, and prove laptop/phone bidirectional updates on the physical phone. |
 
 Owning backlog: `docs/tracking/backlog/web-dashboard.md`.
 

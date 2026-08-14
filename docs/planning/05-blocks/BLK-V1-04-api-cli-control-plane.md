@@ -7,7 +7,7 @@ Owns the production browser/operator boundary: loopback Fastify/SSE, Tailscale S
 - One loopback-only Fastify HTTP service exposes typed HostDeck routes, SSE, and built dashboard assets; Tailscale Serve owns private remote HTTPS.
 - Remote browser reads and mutations require HostDeck pairing plus exact origin/host/proxy checks, rate limits, and audit; tailnet membership alone grants no app access.
 - A dedicated saved HostDeck Tailscale profile coexists with a saved company profile one at a time. HostDeck never switches profiles or mutates an unrecognized profile.
-- SSE replay/live handoff, backpressure, heartbeat, disconnect, revocation, and shutdown are bounded.
+- Per-session and Mission Control catalog SSE replay/live handoff, backpressure, heartbeat, disconnect, revocation, and shutdown are bounded.
 - `codexdeck` is runnable after build/install and manages foreground plus unprivileged service mode.
 - Runtime/storage/stream health changes after startup and blocks unsafe mutations; proven initial Codex incompatibility remains reachable only through a mutation-closed diagnostic listener.
 
@@ -64,6 +64,7 @@ Local-admin CLI calls use an explicit loopback/admin authority, not a magic miss
 | Built assets, CLI binary, service-owned process, user units, lifecycle commands, uninstall, and clean parity | `IFC-V1-053` to `IFC-V1-058`, `IFC-V1-086` | Complete: the real manifest-verified dashboard assets, CLI binary, independently restartable packaged service process, exact runtime-proven user units, persistent lifecycle, safe uninstall/retention, and one no-retry clean Noble ordinary-user acceptance pass. Evidence: `artifacts/ifc-v1-058-clean-environment-parity.md`. |
 | Reopened interface hardening | `IFC-V1-091` | Complete: all `PIH-01` to `PIH-24` criteria pass with executable aggregate traceability, current L2/L3 package and service proof, accepted unchanged L4 clean-user/phone evidence, live profile noninterference, privacy inspection, and zero residue. Evidence: `artifacts/ifc-v1-091-selected-production-interface-hardening.md` and directory. Formal block-matrix completion remains owned by `REL-V1-008`. |
 | Local native session administration | `IFC-V1-110` | Complete: loopback-only discover/adopt/unmanage routes and CLI commands use exact local authority, health/lock/write/audit/deadline gates, one-request clients, stable errors, the 38-route/23-registration production composition, and the 638-source package closure. Existing browser contracts remain unchanged and expose no adoption UI. Evidence: `artifacts/ifc-v1-110-local-native-session-administration.md`. |
+| Shared-session API/CLI rebaseline | `IFC-V1-111`, `IFC-V1-112` | Required: remove selected discover/adopt/unmanage routes/commands, accept native UUID targets, add broker commands, and stream the Mission Control catalog without manual refresh. Historical contracts remain migration-readable only. |
 
 Owning backlog: `docs/tracking/backlog/api-cli-control-plane.md`.
 
@@ -73,7 +74,7 @@ Owning backlog: `docs/tracking/backlog/api-cli-control-plane.md`.
 - No empty/test-only live source exists in the production composition root.
 - No HostDeck listener is reachable through LAN/public interfaces; wrong profile, foreign Serve ownership, unknown/contradictory proxy context, foreign Host/Origin, unpaired remote read, invalid CSRF, revoked/expired device, overload, and duplicate write all reject or degrade without dispatch/leak.
 - Browser reload regains CSRF posture without exposing bearer token in durable JS storage.
-- Active SSE cannot leak subscribers or hang shutdown.
+- Active per-session or catalog SSE cannot leak subscribers or hang shutdown.
 - Runtime/storage/projector failures update readiness and visible health after startup.
 - Tailscale stop/profile switch/Serve drift updates remote state without stopping local HostDeck or changing the active company profile.
 - Built `codexdeck` and user-service install/restart/uninstall pass on clean Ubuntu.
