@@ -147,6 +147,7 @@ pnpm exec vitest run --config vitest.integration.config.ts tests/codex-runtime-s
 pnpm smoke:remote-control
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
+HOSTDECK_CODEX_BIN="$(readlink -f "$(command -v codex)")" pnpm smoke:codex-shared-broker
 pnpm smoke:codex-threads
 ```
 

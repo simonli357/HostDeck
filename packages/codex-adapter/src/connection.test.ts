@@ -117,6 +117,21 @@ describe("Codex app-server connection handshake", () => {
     expect(transport.state).toBe("closed");
   });
 
+  it("rejects a broker whose initialized Codex home differs from the selected endpoint", async () => {
+    const transport = respondingTransport();
+    const connection = createCodexAppServerConnection({
+      transport,
+      observed_version: "0.147.0",
+      expected_codex_home: "/tmp/other-codex-home",
+      now: () => checkedAt,
+      handshake_timeout_ms: 1_000
+    });
+
+    await expectAdapterError(connection.connect(), "handshake_failed");
+    expect(connection.state).toBe("disconnected");
+    expect(transport.state).toBe("closed");
+  });
+
   it("preserves the close reason when transport dies after the initialize response", async () => {
     const transport = new ScriptedCodexTransport({
       on_send(text, current) {

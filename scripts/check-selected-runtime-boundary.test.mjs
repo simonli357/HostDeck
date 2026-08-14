@@ -75,6 +75,18 @@ test("keeps direct host APIs inside exact reviewed platform adapter and edge own
     ),
     true
   );
+  assert.equal(
+    directHostApiOwnerPaths.includes(
+      "packages/server/src/shared-codex-broker-lifecycle.ts"
+    ),
+    true
+  );
+  assert.equal(
+    directHostApiOwnerPaths.includes(
+      "packages/server/src/shared-codex-broker-node.ts"
+    ),
+    true
+  );
   assert.equal(new Set(directHostApiOwnerPaths).size, directHostApiOwnerPaths.length);
 });
 

@@ -71,6 +71,8 @@ export * from "./selected-write-gate.js";
 export * from "./session-archive-routes.js";
 export * from "./session-read-routes.js";
 export * from "./session-start-routes.js";
+export * from "./shared-codex-broker-lifecycle.js";
+export * from "./shared-codex-broker-node.js";
 export * from "./skills-routes.js";
 export * from "./tailscale-observer.js";
 export * from "./tailscale-serve-manager.js";

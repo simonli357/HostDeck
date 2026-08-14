@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { isAbsolute } from "node:path";
+import { isAbsolute, normalize } from "node:path";
 import {
   defaultResourceBudget,
   type RuntimeCompatibility,
@@ -34,6 +34,7 @@ export type CodexConnectionServerRequest = Extract<DecodedCodexInboundMessage, {
 export interface CodexAppServerConnectionOptions {
   readonly transport: CodexTextTransport;
   readonly observed_version: string | null;
+  readonly expected_codex_home?: string;
   readonly host_target?: SupportedHostTarget;
   readonly client_version?: string;
   readonly handshake_timeout_ms?: number;
@@ -179,6 +180,14 @@ class DefaultCodexAppServerConnection implements CodexAppServerConnection {
           signal: connectSignal
         })
       );
+      if (
+        this.options.expected_codex_home !== undefined &&
+        initialized.codex_home !== this.options.expected_codex_home
+      ) {
+        throw handshakeError(
+          "Codex initialize codexHome does not match the selected standard endpoint."
+        );
+      }
       throwIfAborted(connectSignal);
       try {
         await this.broker.notify("initialized");
@@ -424,6 +433,10 @@ function parseConnectionOptions(options: CodexAppServerConnectionOptions): Parse
   if (options.observed_version !== null && typeof options.observed_version !== "string") {
     throw connectionError("handshake_failed", "Codex observed version must be a string or null.");
   }
+  const expectedCodexHome =
+    options.expected_codex_home === undefined
+      ? undefined
+      : parseExpectedCodexHome(options.expected_codex_home);
   if (
     options.host_target !== undefined &&
     options.host_target !== "linux-x64" &&
@@ -433,6 +446,9 @@ function parseConnectionOptions(options: CodexAppServerConnectionOptions): Parse
   }
   return {
     ...options,
+    ...(expectedCodexHome === undefined
+      ? {}
+      : { expected_codex_home: expectedCodexHome }),
     host_target: options.host_target ?? "linux-x64",
     client_version: parsePrintableString(options.client_version ?? defaults.client_version, "HostDeck client version", 64),
     handshake_timeout_ms: parseBoundedInteger(
@@ -444,6 +460,25 @@ function parseConnectionOptions(options: CodexAppServerConnectionOptions): Parse
     ),
     now: options.now ?? (() => new Date().toISOString())
   };
+}
+
+function parseExpectedCodexHome(candidate: unknown): string {
+  const value = parsePrintableString(
+    candidate,
+    "Expected Codex home",
+    4_096
+  );
+  if (
+    !isAbsolute(value) ||
+    normalize(value) !== value ||
+    (value !== "/" && value.endsWith("/"))
+  ) {
+    throw connectionError(
+      "handshake_failed",
+      "Expected Codex home must be a normalized absolute path."
+    );
+  }
+  return value;
 }
 
 function parseInitializeResponse(candidate: unknown): InitializeProbe {
