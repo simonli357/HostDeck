@@ -15,6 +15,7 @@
     "check:runtime-boundary": "node --test scripts/check-selected-runtime-boundary.test.mjs && node scripts/check-selected-runtime-boundary.mjs",
     "check:codex-bindings": "node scripts/codex-bindings.mjs --check",
     "generate:codex-bindings": "node scripts/codex-bindings.mjs --write",
+    "spike:codex-shared-runtime": "node scripts/codex-shared-runtime-spike.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome check . && node scripts/check-package-exports.mjs",
     "test": "pnpm test:unit",
