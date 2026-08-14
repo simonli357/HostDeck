@@ -67,7 +67,8 @@ describe("selected network retirement migration", () => {
         expect(migrated.result.applied).toEqual([
           hostDeckSelectedNetworkRetirementMigration.version,
           "202608110019_cross_platform_cwd",
-          "202608120020_native_session_membership"
+          "202608120020_native_session_membership",
+          "202608140021_automatic_session_membership"
         ]);
         expect(createSettingsRepository(migrated.db).require()).toEqual({
           id: "hostdeck_settings",

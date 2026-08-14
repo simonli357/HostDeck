@@ -1,5 +1,9 @@
 import type { NativeCodexThreadId } from "@hostdeck/core";
-import { parseNativeCodexThreadId, selectedRuntimeSource } from "@hostdeck/core";
+import {
+  parseNativeCodexThreadId,
+  selectedRuntimeSource,
+  sessionEnrollmentOrigins
+} from "@hostdeck/core";
 import { z } from "zod";
 import { selectedNativeSessionMembershipRecordSchema } from "./native-session.js";
 import { resourceBudgetDefinitionByKey } from "./resource-policy.js";
@@ -106,13 +110,7 @@ export const sharedSessionTargetSchema = z.discriminatedUnion("type", [
 
 export const sharedSessionTargetIdSchema = z.union([nativeCodexThreadIdSchema, sessionIdSchema]);
 
-export const sharedSessionEnrollmentOrigins = [
-  "loaded_before",
-  "created_after",
-  "resumed_after",
-  "hostdeck_start",
-  "reconciliation"
-] as const;
+export const sharedSessionEnrollmentOrigins = sessionEnrollmentOrigins;
 
 export const trackedSessionSchema = z
   .object({

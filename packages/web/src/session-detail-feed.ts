@@ -608,6 +608,12 @@ function boundaryCopy(reason: SessionDetailContinuityBoundary["reason"]): {
         title: "Earlier Codex activity",
         body: "This session joined HostDeck here. Earlier activity remains in Codex."
       };
+    case "enrollment":
+      return {
+        state: "Enrolled",
+        title: "Earlier Codex activity",
+        body: "HostDeck began tracking this session here. Earlier activity remains in Codex."
+      };
     case "retention":
       return {
         state: "History limited",

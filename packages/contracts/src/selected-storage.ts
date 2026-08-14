@@ -1,10 +1,12 @@
 import {
   errorCodes,
+  parseNativeCodexThreadId,
   persistedSelectedAuditActions,
   selectedAuditActions,
   selectedAuditOutcomes,
   selectedOperationKinds,
-  selectedRuntimeSource
+  selectedRuntimeSource,
+  sessionEnrollmentOrigins
 } from "@hostdeck/core";
 import { z } from "zod";
 import { nativeCodexThreadTargetSchema } from "./native-session.js";
@@ -270,6 +272,56 @@ export const selectedSessionStartAuditEventRecordSchema = selectedAuditEventReco
       context.addIssue({
         code: "custom",
         message: "Session-start audit summary contradicts its phase or outcome.",
+        path: ["payload_summary"]
+      });
+    }
+  }
+);
+
+export const selectedSessionEnrollmentAuditPayloadSummarySchema = z
+  .object({
+    schema_version: z.literal(1),
+    enrollment_origin: z.enum(sessionEnrollmentOrigins).optional(),
+    enrolled: z.literal(true).optional(),
+    created: z.boolean().optional(),
+    reconciliation_reason: z.literal("host_restart_without_terminal").optional()
+  })
+  .strict();
+
+export const selectedSessionEnrollmentAuditEventRecordSchema = selectedAuditEventRecordSchema.superRefine(
+  (value, context) => {
+    if (value.action !== "session_enroll") {
+      context.addIssue({ code: "custom", message: "Session-enrollment audit records require session_enroll." });
+      return;
+    }
+    if (
+      value.actor.type !== "system" ||
+      value.target.type !== "native_codex_thread" ||
+      !parseNativeCodexThreadId(value.target.codex_thread_id).ok
+    ) {
+      context.addIssue({ code: "custom", message: "Automatic session enrollment requires system authority and one native thread UUID." });
+    }
+    if (value.outcome === "rejected") {
+      context.addIssue({ code: "custom", message: "Automatic session enrollment cannot be represented as a standalone rejection." });
+    }
+    const summary = selectedSessionEnrollmentAuditPayloadSummarySchema.safeParse(value.payload_summary);
+    if (!summary.success) {
+      context.addIssue({ code: "custom", message: "Session-enrollment audit summary is invalid.", path: ["payload_summary"] });
+      return;
+    }
+    const keys = Object.keys(summary.data).sort();
+    const expected =
+      value.phase === "accepted"
+        ? ["enrollment_origin", "schema_version"]
+        : value.outcome === "succeeded"
+          ? ["created", "enrolled", "schema_version"]
+          : value.outcome === "incomplete"
+            ? ["reconciliation_reason", "schema_version"]
+            : ["schema_version"];
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
+      context.addIssue({
+        code: "custom",
+        message: "Session-enrollment audit summary contradicts its phase or outcome.",
         path: ["payload_summary"]
       });
     }
@@ -566,6 +618,9 @@ function createAuditEventRecordSchema<const Actions extends readonly [string, ..
       if (value.action === "session_adopt" && value.target.type !== "native_codex_thread") {
         context.addIssue({ code: "custom", message: "Session adoption must audit one exact native Codex thread target." });
       }
+      if (value.action === "session_enroll" && value.target.type !== "native_codex_thread") {
+        context.addIssue({ code: "custom", message: "Session enrollment must audit one exact native Codex thread target." });
+      }
       if (value.action === "session_unmanage" && value.target.type !== "managed_session") {
         context.addIssue({ code: "custom", message: "Session unmanage must audit one exact managed-session target." });
       }
@@ -577,6 +632,7 @@ function createAuditEventRecordSchema<const Actions extends readonly [string, ..
         !sessionActions.has(value.action) &&
         value.action !== "approval_response" &&
         value.action !== "interrupt" &&
+        value.action !== "session_enroll" &&
         value.action !== "session_adopt" &&
         value.action !== "session_unmanage" &&
         !deviceAction &&
@@ -614,6 +670,7 @@ export type SelectedAuditTarget = z.infer<typeof selectedAuditTargetSchema>;
 export type SelectedAuditEventRecord = z.infer<typeof selectedAuditEventRecordSchema>;
 export type PersistedSelectedAuditEventRecord = z.infer<typeof persistedSelectedAuditEventRecordSchema>;
 export type SelectedSessionStartAuditEventRecord = z.infer<typeof selectedSessionStartAuditEventRecordSchema>;
+export type SelectedSessionEnrollmentAuditEventRecord = z.infer<typeof selectedSessionEnrollmentAuditEventRecordSchema>;
 export type SelectedNativeSessionAdoptionAuditEventRecord = z.infer<
   typeof selectedNativeSessionAdoptionAuditEventRecordSchema
 >;

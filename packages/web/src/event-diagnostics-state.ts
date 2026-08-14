@@ -1194,6 +1194,7 @@ function eventTypeLabel(type: SelectedProjectionEvent["type"]): string {
 function boundaryReasonLabel(reason: SessionDetailContinuityBoundary["reason"]): string {
   switch (reason) {
     case "adoption": return "HostDeck adoption";
+    case "enrollment": return "Automatic enrollment";
     case "retention": return "Retention";
     case "disconnect": return "Disconnect";
     case "restart": return "Runtime restart";
@@ -1204,6 +1205,7 @@ function boundaryReasonLabel(reason: SessionDetailContinuityBoundary["reason"]):
 function boundaryReason(reason: SessionDetailContinuityBoundary["reason"]): string {
   switch (reason) {
     case "adoption": return "Earlier activity remains in Codex before this HostDeck adoption boundary.";
+    case "enrollment": return "Earlier activity remains in Codex before this HostDeck enrollment boundary.";
     case "retention": return "Earlier events are outside retained history.";
     case "disconnect": return "Event continuity was interrupted by a runtime disconnect.";
     case "restart": return "Event continuity was interrupted by a runtime restart.";

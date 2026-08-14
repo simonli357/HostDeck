@@ -1,11 +1,14 @@
 import { Buffer } from "node:buffer";
 import { isDeepStrictEqual } from "node:util";
 import {
+  type AutomaticSessionMembershipRecord,
+  automaticSessionMembershipRecordSchema,
   clientOperationIdSchema,
   codexThreadIdSchema,
   isoTimestampSchema,
   type LegacySessionDispositionRecord,
   legacySessionDispositionRecordSchema,
+  nativeCodexThreadIdSchema,
   nativeSessionContractLimits,
   outputCursorSchema,
   type RetentionPolicy,
@@ -16,6 +19,7 @@ import {
   type SelectedSessionMappingRecord,
   type SelectedSessionProjectionRecord,
   type SelectedSessionStartRecoveryRecord,
+  type SharedSessionMembershipRecord,
   selectedNativeSessionMembershipRecordSchema,
   selectedProjectedEventRecordSchema,
   selectedProjectionEventSchema,
@@ -23,9 +27,12 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema,
   selectedSessionStartRecoveryRecordSchema,
-  sessionIdSchema
+  sessionIdSchema,
+  sharedSessionMembershipRecordSchema,
+  sharedSessionTargetIdSchema
 } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
+import { deriveAutomaticSessionIdentity } from "./automatic-session-identity.js";
 
 export type SelectedStateRepositoryErrorCode =
   | "cursor_not_monotonic"
@@ -71,6 +78,19 @@ export interface AdoptSelectedNativeSessionInput {
   readonly events: readonly unknown[];
 }
 
+export interface EnrollAutomaticSelectedSessionInput {
+  readonly membership: unknown;
+  readonly state: unknown;
+  readonly events: readonly unknown[];
+  readonly project_cue: string;
+}
+
+export interface AutomaticSelectedSessionEnrollmentResult {
+  readonly created: boolean;
+  readonly membership: SharedSessionMembershipRecord;
+  readonly state: SelectedSessionState;
+}
+
 export interface SelectedNativeSessionUnmanageResult {
   readonly membership: SelectedNativeSessionMembershipRecord;
   readonly state: SelectedSessionState;
@@ -112,9 +132,12 @@ export interface SelectedStateRepository {
   readonly get: (sessionId: string) => SelectedSessionState | null;
   readonly require: (sessionId: string) => SelectedSessionState;
   readonly getByThreadId: (threadId: string) => SelectedSessionState | null;
+  readonly getByTargetId: (targetId: string) => SelectedSessionState | null;
+  readonly requireByTargetId: (targetId: string) => SelectedSessionState;
   readonly list: () => readonly SelectedSessionState[];
   readonly create: (state: unknown) => SelectedSessionState;
   readonly adopt: (input: AdoptSelectedNativeSessionInput) => SelectedSessionState;
+  readonly enrollAutomatic: (input: EnrollAutomaticSelectedSessionInput) => AutomaticSelectedSessionEnrollmentResult;
   readonly replace: (state: unknown, expectedRevision: unknown) => SelectedSessionState;
   readonly appendEvent: (
     event: unknown,
@@ -130,6 +153,9 @@ export interface SelectedStateRepository {
   readonly listEvents: (sessionId: string, input?: ListSelectedEventsInput) => SelectedSessionEventStream;
   readonly getNativeMembership: (sessionId: string) => SelectedNativeSessionMembershipRecord | null;
   readonly listNativeMemberships: () => readonly SelectedNativeSessionMembershipRecord[];
+  readonly getSharedMembership: (sessionId: string) => SharedSessionMembershipRecord | null;
+  readonly getSharedMembershipByThreadId: (threadId: string) => SharedSessionMembershipRecord | null;
+  readonly listSharedMemberships: () => readonly SharedSessionMembershipRecord[];
   readonly unmanageAdopted: (
     sessionId: string,
     expectedRevision: unknown
@@ -220,15 +246,24 @@ interface RecoveryRow {
 interface NativeMembershipRow {
   readonly session_id: string;
   readonly codex_thread_id: string;
-  readonly origin: "adopted";
-  readonly adopted_at: string;
-  readonly handoff_confirmed_at: string;
+  readonly origin: "automatic" | "adopted";
+  readonly enrollment_origin: AutomaticSessionMembershipRecord["enrollment_origin"] | null;
+  readonly enrolled_at: string | null;
+  readonly adopted_at: string | null;
+  readonly handoff_confirmed_at: string | null;
 }
 
 interface ParsedNativeSessionAdoption {
   readonly membership: SelectedNativeSessionMembershipRecord;
   readonly state: SelectedSessionState;
   readonly events: readonly SelectedProjectedEventRecord[];
+}
+
+interface ParsedAutomaticSessionEnrollment {
+  readonly membership: AutomaticSessionMembershipRecord;
+  readonly state: SelectedSessionState;
+  readonly events: readonly SelectedProjectedEventRecord[];
+  readonly project_cue: string;
 }
 
 const defaultEventLimit = 100;
@@ -261,12 +296,45 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
     return input.state;
   }).immediate;
 
+  const automaticEnrollmentTransaction = db.transaction(
+    (input: ParsedAutomaticSessionEnrollment): AutomaticSelectedSessionEnrollmentResult => {
+      const existing = readStateByThreadId(db, input.membership.native_thread_id);
+      if (existing !== null) {
+        const membership = readSharedMembership(db, existing.mapping.id);
+        if (membership === null) {
+          try {
+            return convertExistingMappingToAutomaticEnrollment(db, existing, input);
+          } catch (error) {
+            if (error instanceof HostDeckSelectedStateRepositoryError) throw error;
+            throw mapNativeEnrollmentConstraint(error);
+          }
+        }
+        assertSharedMembershipIdentity(membership, existing);
+        assertPersistedEventProjection(db, existing.projection);
+        return { created: false, membership, state: existing };
+      }
+
+      assertDeterministicAutomaticIdentity(input);
+      try {
+        insertMapping(db, input.state.mapping);
+        insertProjection(db, input.state.projection);
+        insertAutomaticMembership(db, input.membership);
+        for (const event of input.events) insertEvent(db, event);
+        assertPersistedEventProjection(db, input.state.projection);
+      } catch (error) {
+        if (error instanceof HostDeckSelectedStateRepositoryError) throw error;
+        throw mapNativeEnrollmentConstraint(error);
+      }
+      return { created: true, membership: input.membership, state: input.state };
+    }
+  ).immediate;
+
   const unmanageAdoptedTransaction = db.transaction(
     (sessionId: string, expectedRevision: SelectedStateRevision): SelectedNativeSessionUnmanageResult => {
       const state = requireState(db, sessionId);
       assertPersistedEventProjection(db, state.projection);
       assertCurrentRevision(state, expectedRevision);
-      const membership = readNativeMembership(db, sessionId);
+      const membership = readAdoptedNativeMembership(db, sessionId);
       if (membership === null) {
         throw new HostDeckSelectedStateRepositoryError(
           "session_not_adopted",
@@ -292,23 +360,9 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
     assertSafeStateReplacement(current, state);
 
     try {
-      const mappingResult = db
-        .prepare(
-          `
-            UPDATE selected_sessions SET
-              name = @name,
-              cwd = @cwd,
-              runtime_source = @runtime_source,
-              runtime_version = @runtime_version,
-              disposition = @disposition,
-              updated_at = @updated_at,
-              archived_at = @archived_at
-            WHERE id = @id
-          `
-        )
-        .run(mappingToRow(state.mapping));
+      const mappingChanges = updateMapping(db, state.mapping);
       const projectionResult = updateProjection(db, state.projection);
-      if (mappingResult.changes !== 1 || projectionResult !== 1) {
+      if (mappingChanges !== 1 || projectionResult !== 1) {
         throw new HostDeckSelectedStateRepositoryError("session_not_found", `Selected session ${state.mapping.id} does not exist.`);
       }
     } catch (error) {
@@ -439,11 +493,26 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
       return requireState(db, parseSessionId(sessionId));
     },
     getByThreadId(threadId) {
-      const parsedThreadId = parseThreadId(threadId);
-      const row = db.prepare("SELECT id FROM selected_sessions WHERE codex_thread_id = ?").get(parsedThreadId) as
-        | { readonly id: string }
-        | undefined;
-      return row === undefined ? null : requireState(db, row.id);
+      return readStateByThreadId(db, parseThreadId(threadId));
+    },
+    getByTargetId(targetId) {
+      const parsedTargetId = parseSharedTargetId(targetId);
+      return parsedTargetId.startsWith("sess_")
+        ? readState(db, parsedTargetId)
+        : readStateByThreadId(db, parsedTargetId);
+    },
+    requireByTargetId(targetId) {
+      const parsedTargetId = parseSharedTargetId(targetId);
+      const state = parsedTargetId.startsWith("sess_")
+        ? readState(db, parsedTargetId)
+        : readStateByThreadId(db, parsedTargetId);
+      if (state === null) {
+        throw new HostDeckSelectedStateRepositoryError(
+          "session_not_found",
+          `Selected session target ${parsedTargetId} does not exist.`
+        );
+      }
+      return state;
     },
     list() {
       const rows = db.prepare("SELECT id FROM selected_sessions ORDER BY created_at ASC, id ASC").all() as Array<{ readonly id: string }>;
@@ -456,6 +525,9 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
     },
     adopt(input) {
       return adoptTransaction(parseNativeSessionAdoption(input));
+    },
+    enrollAutomatic(input) {
+      return automaticEnrollmentTransaction(parseAutomaticSessionEnrollment(input));
     },
     replace(state, expectedRevision) {
       return replaceTransaction(parseState(state), parseSelectedStateRevision(expectedRevision));
@@ -521,14 +593,29 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
       });
     },
     getNativeMembership(sessionId) {
-      return readNativeMembership(db, parseSessionId(sessionId));
+      return readAdoptedNativeMembership(db, parseSessionId(sessionId));
     },
     listNativeMemberships() {
       return (
         db
-          .prepare("SELECT * FROM selected_native_session_memberships ORDER BY adopted_at ASC, session_id ASC")
+          .prepare("SELECT * FROM selected_native_session_memberships WHERE origin = 'adopted' ORDER BY adopted_at ASC, session_id ASC")
           .all() as NativeMembershipRow[]
-      ).map(parseNativeMembershipRow);
+      ).map(parseAdoptedNativeMembershipRow);
+    },
+    getSharedMembership(sessionId) {
+      return readSharedMembership(db, parseSessionId(sessionId));
+    },
+    getSharedMembershipByThreadId(threadId) {
+      return readSharedMembershipByThreadId(db, parseStrictNativeThreadId(threadId));
+    },
+    listSharedMemberships() {
+      return (
+        db
+          .prepare(
+            "SELECT * FROM selected_native_session_memberships ORDER BY COALESCE(enrolled_at, adopted_at) ASC, session_id ASC"
+          )
+          .all() as NativeMembershipRow[]
+      ).map(parseSharedMembershipRow);
     },
     unmanageAdopted(sessionId, expectedRevision) {
       return unmanageAdoptedTransaction(parseSessionId(sessionId), parseSelectedStateRevision(expectedRevision));
@@ -950,6 +1037,13 @@ function readState(db: Database.Database, sessionId: string): SelectedSessionSta
   return parseStateRows(mappingRow, projectionRow);
 }
 
+function readStateByThreadId(db: Database.Database, threadId: string): SelectedSessionState | null {
+  const row = db.prepare("SELECT id FROM selected_sessions WHERE codex_thread_id = ?").get(threadId) as
+    | { readonly id: string }
+    | undefined;
+  return row === undefined ? null : requireState(db, row.id);
+}
+
 function requireState(db: Database.Database, sessionId: string): SelectedSessionState {
   const state = readState(db, sessionId);
   if (state === null) {
@@ -1007,6 +1101,55 @@ function parseNativeSessionAdoption(candidate: AdoptSelectedNativeSessionInput):
   assertNativeAdoptionIdentity(membership, state);
   assertNativeAdoptionProjection(membership, state, events);
   return { membership, state, events };
+}
+
+function parseAutomaticSessionEnrollment(
+  candidate: EnrollAutomaticSelectedSessionInput
+): ParsedAutomaticSessionEnrollment {
+  if (candidate === null || typeof candidate !== "object") {
+    throw new HostDeckSelectedStateRepositoryError("invalid_membership", "Automatic session enrollment must be an object.");
+  }
+  const keys = Object.keys(candidate).sort();
+  if (
+    keys.length !== 4 ||
+    keys[0] !== "events" ||
+    keys[1] !== "membership" ||
+    keys[2] !== "project_cue" ||
+    keys[3] !== "state"
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_membership",
+      "Automatic session enrollment must contain exactly events, membership, project_cue, and state."
+    );
+  }
+  if (typeof candidate.project_cue !== "string") {
+    throw new HostDeckSelectedStateRepositoryError("invalid_membership", "Automatic session project cue must be a string.");
+  }
+  const membership = parseAutomaticMembership(candidate.membership);
+  try {
+    deriveAutomaticSessionIdentity(membership.native_thread_id, candidate.project_cue);
+  } catch (error) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_membership",
+      "Automatic session enrollment has an invalid native identity or project cue.",
+      { cause: error }
+    );
+  }
+  const state = parseState(candidate.state);
+  if (!Array.isArray(candidate.events) || candidate.events.length < 1 || candidate.events.length > maxEventLimit) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_event",
+      `Automatic enrollment must retain between 1 and ${maxEventLimit} bounded projected events.`
+    );
+  }
+  const events = candidate.events.map((event) => {
+    const parsed = parseProjectedEventRecord(event);
+    assertEventByteLength(parsed);
+    return parsed;
+  });
+  assertAutomaticEnrollmentIdentity(membership, state);
+  assertAutomaticEnrollmentProjection(membership, state, events);
+  return { membership, state, events, project_cue: candidate.project_cue };
 }
 
 function parseStateRows(mappingRow: MappingRow, projectionRow: ProjectionRow): SelectedSessionState {
@@ -1084,18 +1227,76 @@ function parseNativeMembership(candidate: unknown): SelectedNativeSessionMembers
   return result.data;
 }
 
-function parseNativeMembershipRow(row: NativeMembershipRow): SelectedNativeSessionMembershipRecord {
-  return parseNativeMembership(row);
+function parseAutomaticMembership(candidate: unknown): AutomaticSessionMembershipRecord {
+  const result = automaticSessionMembershipRecordSchema.safeParse(candidate);
+  if (!result.success) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_membership", "Automatic session membership is invalid.", {
+      cause: result.error
+    });
+  }
+  return result.data;
 }
 
-function readNativeMembership(
+function parseSharedMembershipRow(row: NativeMembershipRow): SharedSessionMembershipRecord {
+  const candidate =
+    row.origin === "automatic"
+      ? {
+          session_id: row.session_id,
+          native_thread_id: row.codex_thread_id,
+          origin: row.origin,
+          enrollment_origin: row.enrollment_origin,
+          enrolled_at: row.enrolled_at
+        }
+      : {
+          session_id: row.session_id,
+          codex_thread_id: row.codex_thread_id,
+          origin: row.origin,
+          adopted_at: row.adopted_at,
+          handoff_confirmed_at: row.handoff_confirmed_at
+        };
+  const result = sharedSessionMembershipRecordSchema.safeParse(candidate);
+  if (!result.success) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_membership", "Stored shared-session membership is invalid.", {
+      cause: result.error
+    });
+  }
+  return result.data;
+}
+
+function parseAdoptedNativeMembershipRow(row: NativeMembershipRow): SelectedNativeSessionMembershipRecord {
+  const membership = parseSharedMembershipRow(row);
+  if (membership.origin !== "adopted") {
+    throw new HostDeckSelectedStateRepositoryError("invalid_membership", "Stored native adoption row has the wrong origin.");
+  }
+  return membership;
+}
+
+function readSharedMembership(
   db: Database.Database,
   sessionId: string
-): SelectedNativeSessionMembershipRecord | null {
+): SharedSessionMembershipRecord | null {
   const row = db
     .prepare("SELECT * FROM selected_native_session_memberships WHERE session_id = ?")
     .get(sessionId) as NativeMembershipRow | undefined;
-  return row === undefined ? null : parseNativeMembershipRow(row);
+  return row === undefined ? null : parseSharedMembershipRow(row);
+}
+
+function readSharedMembershipByThreadId(
+  db: Database.Database,
+  threadId: string
+): SharedSessionMembershipRecord | null {
+  const row = db
+    .prepare("SELECT * FROM selected_native_session_memberships WHERE codex_thread_id = ?")
+    .get(threadId) as NativeMembershipRow | undefined;
+  return row === undefined ? null : parseSharedMembershipRow(row);
+}
+
+function readAdoptedNativeMembership(
+  db: Database.Database,
+  sessionId: string
+): SelectedNativeSessionMembershipRecord | null {
+  const membership = readSharedMembership(db, sessionId);
+  return membership?.origin === "adopted" ? membership : null;
 }
 
 export function parseSelectedStateRevision(candidate: unknown): SelectedStateRevision {
@@ -1183,6 +1384,248 @@ function assertProjectionIdentity(mapping: SelectedSessionMappingRecord, project
   ) {
     throw new HostDeckSelectedStateRepositoryError("identity_mismatch", "Selected mapping and projection identity do not match.");
   }
+}
+
+function assertSharedMembershipIdentity(
+  membership: SharedSessionMembershipRecord,
+  state: SelectedSessionState
+): void {
+  const threadId = membership.origin === "automatic" ? membership.native_thread_id : membership.codex_thread_id;
+  if (membership.session_id !== state.mapping.id || threadId !== state.mapping.codex_thread_id) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "identity_mismatch",
+      "Shared-session membership must identify one selected mapping and exact native Codex thread."
+    );
+  }
+}
+
+function assertAutomaticEnrollmentIdentity(
+  membership: AutomaticSessionMembershipRecord,
+  state: SelectedSessionState
+): void {
+  assertSharedMembershipIdentity(membership, state);
+  if (
+    state.mapping.disposition !== "selected" ||
+    state.mapping.archived_at !== null ||
+    state.projection.session.session_state !== "active" ||
+    state.projection.session.freshness !== "current" ||
+    membership.enrolled_at < state.mapping.created_at ||
+    membership.enrolled_at > state.mapping.updated_at ||
+    membership.enrolled_at > state.projection.session.updated_at
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_membership",
+      "Automatic enrollment must begin as one current, active, selected native session."
+    );
+  }
+}
+
+function assertDeterministicAutomaticIdentity(input: ParsedAutomaticSessionEnrollment): void {
+  let derived: ReturnType<typeof deriveAutomaticSessionIdentity>;
+  try {
+    derived = deriveAutomaticSessionIdentity(input.membership.native_thread_id, input.project_cue);
+  } catch (error) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_membership",
+      "Automatic session identity could not be derived from the native thread and project cue.",
+      { cause: error }
+    );
+  }
+  if (
+    input.membership.session_id !== derived.internal_session_id ||
+    input.state.mapping.id !== derived.internal_session_id ||
+    input.state.mapping.name !== derived.alias
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "identity_mismatch",
+      "New automatic enrollment must use the deterministic native-thread id and alias."
+    );
+  }
+}
+
+function assertAutomaticEnrollmentProjection(
+  membership: AutomaticSessionMembershipRecord,
+  state: SelectedSessionState,
+  events: readonly SelectedProjectedEventRecord[],
+  expectedBoundaryCursor = 1
+): void {
+  const boundary = events[0]?.event;
+  if (
+    boundary?.type !== "replay_boundary" ||
+    boundary.reason !== "enrollment" ||
+    boundary.cursor !== expectedBoundaryCursor ||
+    boundary.after !== (expectedBoundaryCursor === 1 ? null : expectedBoundaryCursor - 1) ||
+    boundary.next_cursor !== expectedBoundaryCursor ||
+    boundary.codex_event_id !== null ||
+    boundary.codex_event_type !== null ||
+    boundary.captured_at !== membership.enrolled_at
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_event",
+      "Automatic enrollment must begin with one cursor-1 enrollment boundary captured at enrollment."
+    );
+  }
+
+  let retainedBytes = 0;
+  const codexEventIds = new Set<string>();
+  for (const [index, record] of events.entries()) {
+    const event = record.event;
+    if (event.session_id !== state.mapping.id || event.cursor !== expectedBoundaryCursor + index) {
+      throw new HostDeckSelectedStateRepositoryError(
+        "cursor_not_monotonic",
+        "Automatic enrollment events must target one session with contiguous cursors beginning at one."
+      );
+    }
+    if (event.captured_at < state.mapping.created_at || event.captured_at > state.projection.session.updated_at) {
+      throw new HostDeckSelectedStateRepositoryError(
+        "invalid_event",
+        "Automatic enrollment event capture is outside the selected projection lifetime."
+      );
+    }
+    if (index > 0 && event.type === "replay_boundary") {
+      throw new HostDeckSelectedStateRepositoryError(
+        "invalid_event",
+        "Automatic enrollment may persist exactly one initial history boundary."
+      );
+    }
+    if (event.codex_event_id !== null) {
+      if (codexEventIds.has(event.codex_event_id)) {
+        throw new HostDeckSelectedStateRepositoryError(
+          "invalid_event",
+          "Automatic enrollment history cannot repeat an upstream event id."
+        );
+      }
+      codexEventIds.add(event.codex_event_id);
+    }
+    retainedBytes += record.byte_length;
+  }
+
+  const projection = state.projection;
+  const finalCursor = expectedBoundaryCursor + events.length - 1;
+  if (
+    projection.session.last_event_cursor !== finalCursor ||
+    projection.retained_event_count !== events.length ||
+    projection.retained_event_bytes !== retainedBytes ||
+    projection.earliest_retained_cursor !== expectedBoundaryCursor ||
+    projection.retention_boundary_cursor !== boundary.after
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_projection",
+      "Automatic enrollment projection counters must exactly cover its bounded history window."
+    );
+  }
+}
+
+function convertExistingMappingToAutomaticEnrollment(
+  db: Database.Database,
+  existing: SelectedSessionState,
+  input: ParsedAutomaticSessionEnrollment
+): AutomaticSelectedSessionEnrollmentResult {
+  assertPersistedEventProjection(db, existing.projection);
+  if (
+    existing.mapping.disposition !== "selected" ||
+    existing.mapping.archived_at !== null ||
+    existing.projection.session.session_state === "archived"
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_membership",
+      "Only an unarchived selected mapping can acquire automatic shared-session membership."
+    );
+  }
+
+  const floor = Math.max(
+    existing.projection.session.last_event_cursor ?? 0,
+    existing.projection.retention_boundary_cursor ?? 0
+  );
+  if (!Number.isSafeInteger(floor + input.events.length)) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_event",
+      "Existing selected history has no safe cursor range for automatic enrollment."
+    );
+  }
+  const boundaryCursor = floor + 1;
+  const events = rebaseAutomaticEnrollmentEvents(input.events, existing.mapping.id, boundaryCursor);
+  const updatedAt = [
+    existing.mapping.updated_at,
+    existing.projection.session.updated_at,
+    input.membership.enrolled_at,
+    input.state.mapping.updated_at,
+    input.state.projection.session.updated_at
+  ].sort().at(-1);
+  if (updatedAt === undefined) {
+    throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Automatic enrollment update time is missing.");
+  }
+  const membership = parseAutomaticMembership({
+    ...input.membership,
+    session_id: existing.mapping.id
+  });
+  const mapping = parseMapping({
+    ...input.state.mapping,
+    id: existing.mapping.id,
+    name: existing.mapping.name,
+    created_at: existing.mapping.created_at,
+    updated_at: updatedAt
+  });
+  const retainedBytes = events.reduce((total, event) => total + event.byte_length, 0);
+  const projection = parseProjection({
+    ...input.state.projection,
+    session: {
+      ...input.state.projection.session,
+      id: mapping.id,
+      name: mapping.name,
+      codex_thread_id: mapping.codex_thread_id,
+      cwd: mapping.cwd,
+      runtime_source: mapping.runtime_source,
+      runtime_version: mapping.runtime_version,
+      created_at: mapping.created_at,
+      archived_at: null,
+      updated_at: updatedAt,
+      last_event_cursor: boundaryCursor + events.length - 1
+    },
+    retained_event_count: events.length,
+    retained_event_bytes: retainedBytes,
+    earliest_retained_cursor: boundaryCursor,
+    retention_boundary_cursor: boundaryCursor === 1 ? null : boundaryCursor - 1
+  });
+  const state = { mapping, projection };
+  assertProjectionIdentity(mapping, projection);
+  assertStateChronology(mapping, projection);
+  assertAutomaticEnrollmentIdentity(membership, state);
+  assertAutomaticEnrollmentProjection(membership, state, events, boundaryCursor);
+
+  if (updateMapping(db, mapping) !== 1) {
+    throw new HostDeckSelectedStateRepositoryError("session_not_found", `Selected session ${mapping.id} does not exist.`);
+  }
+  db.prepare("DELETE FROM selected_projected_events WHERE session_id = ?").run(mapping.id);
+  insertAutomaticMembership(db, membership);
+  for (const event of events) insertEvent(db, event);
+  if (updateProjection(db, projection) !== 1) {
+    throw new HostDeckSelectedStateRepositoryError("session_not_found", `Selected session ${mapping.id} does not exist.`);
+  }
+  assertPersistedEventProjection(db, projection);
+  return { created: false, membership, state };
+}
+
+function rebaseAutomaticEnrollmentEvents(
+  events: readonly SelectedProjectedEventRecord[],
+  sessionId: string,
+  boundaryCursor: number
+): readonly SelectedProjectedEventRecord[] {
+  return events.map((record, index) => {
+    const cursor = boundaryCursor + index;
+    const event = selectedProjectionEventSchema.parse(
+      record.event.type === "replay_boundary"
+        ? {
+            ...record.event,
+            session_id: sessionId,
+            cursor,
+            after: boundaryCursor === 1 ? null : boundaryCursor - 1,
+            next_cursor: boundaryCursor
+          }
+        : { ...record.event, session_id: sessionId, cursor }
+    );
+    return { event, byte_length: selectedProjectedEventByteLength(event) };
+  });
 }
 
 function assertNativeAdoptionIdentity(
@@ -1752,6 +2195,24 @@ function updateProjection(db: Database.Database, projection: SelectedSessionProj
     .run(projectionToRow(projection)).changes;
 }
 
+function updateMapping(db: Database.Database, mapping: SelectedSessionMappingRecord): number {
+  return db
+    .prepare(
+      `
+        UPDATE selected_sessions SET
+          name = @name,
+          cwd = @cwd,
+          runtime_source = @runtime_source,
+          runtime_version = @runtime_version,
+          disposition = @disposition,
+          updated_at = @updated_at,
+          archived_at = @archived_at
+        WHERE id = @id
+      `
+    )
+    .run(mappingToRow(mapping)).changes;
+}
+
 function insertEvent(db: Database.Database, record: SelectedProjectedEventRecord): void {
   db.prepare(
     `
@@ -1776,6 +2237,23 @@ function insertNativeMembership(
         session_id, codex_thread_id, origin, adopted_at, handoff_confirmed_at
       ) VALUES (
         @session_id, @codex_thread_id, @origin, @adopted_at, @handoff_confirmed_at
+      )
+    `
+  ).run(membership);
+}
+
+function insertAutomaticMembership(
+  db: Database.Database,
+  membership: AutomaticSessionMembershipRecord
+): void {
+  db.prepare(
+    `
+      INSERT INTO selected_native_session_memberships (
+        session_id, codex_thread_id, origin, enrollment_origin, enrolled_at,
+        adopted_at, handoff_confirmed_at
+      ) VALUES (
+        @session_id, @native_thread_id, @origin, @enrollment_origin, @enrolled_at,
+        NULL, NULL
       )
     `
   ).run(membership);
@@ -1856,6 +2334,26 @@ function parseThreadId(threadId: string): string {
   return result.data;
 }
 
+function parseStrictNativeThreadId(threadId: string): string {
+  const result = nativeCodexThreadIdSchema.safeParse(threadId);
+  if (!result.success) {
+    throw new HostDeckSelectedStateRepositoryError("session_not_found", "Native Codex thread UUID is invalid.", {
+      cause: result.error
+    });
+  }
+  return result.data;
+}
+
+function parseSharedTargetId(targetId: string): string {
+  const result = sharedSessionTargetIdSchema.safeParse(targetId);
+  if (!result.success) {
+    throw new HostDeckSelectedStateRepositoryError("session_not_found", "Shared session target id is invalid.", {
+      cause: result.error
+    });
+  }
+  return result.data;
+}
+
 function parseOperationId(operationId: string): string {
   const result = clientOperationIdSchema.safeParse(operationId);
   if (!result.success) {
@@ -1916,6 +2414,18 @@ function mapNativeAdoptionConstraint(error: unknown): HostDeckSelectedStateRepos
   return new HostDeckSelectedStateRepositoryError(
     "invalid_membership",
     "Native session adoption violates durable membership or projection constraints.",
+    { cause: error }
+  );
+}
+
+function mapNativeEnrollmentConstraint(error: unknown): HostDeckSelectedStateRepositoryError {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("selected_projected_events")) return mapEventConstraint(error);
+  const mapped = mapStateConstraint(error);
+  if (mapped.code !== "invalid_mapping") return mapped;
+  return new HostDeckSelectedStateRepositoryError(
+    "invalid_membership",
+    "Automatic session enrollment violates durable identity, membership, or projection constraints.",
     { cause: error }
   );
 }

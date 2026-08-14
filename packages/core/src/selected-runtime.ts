@@ -153,8 +153,18 @@ export const persistedSelectedSecurityAuditActions = [
 ] as const;
 export type PersistedSelectedSecurityAuditAction = (typeof persistedSelectedSecurityAuditActions)[number];
 
+export const sessionEnrollmentOrigins = [
+  "loaded_before",
+  "created_after",
+  "resumed_after",
+  "hostdeck_start",
+  "reconciliation"
+] as const;
+export type SessionEnrollmentOrigin = (typeof sessionEnrollmentOrigins)[number];
+
 export const selectedSessionLifecycleAuditActions = [
   "session_start",
+  "session_enroll",
   "session_adopt",
   "session_unmanage"
 ] as const;

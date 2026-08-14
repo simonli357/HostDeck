@@ -1626,6 +1626,251 @@ export const hostDeckNativeSessionMembershipMigration: StorageMigration = {
   `
 };
 
+export const hostDeckAutomaticSessionMembershipMigration: StorageMigration = {
+  version: "202608140021_automatic_session_membership",
+  sql: `
+    DROP TRIGGER selected_native_session_membership_identity;
+    DROP TRIGGER selected_native_session_membership_no_update;
+    ALTER TABLE selected_native_session_memberships RENAME TO selected_native_session_memberships_prior;
+
+    CREATE TABLE selected_native_session_memberships (
+      session_id TEXT PRIMARY KEY REFERENCES selected_sessions(id) ON DELETE CASCADE,
+      codex_thread_id TEXT NOT NULL UNIQUE,
+      origin TEXT NOT NULL CHECK (origin IN ('automatic', 'adopted')),
+      enrollment_origin TEXT CHECK (enrollment_origin IN (
+        'loaded_before',
+        'created_after',
+        'resumed_after',
+        'hostdeck_start',
+        'reconciliation'
+      )),
+      enrolled_at TEXT,
+      adopted_at TEXT,
+      handoff_confirmed_at TEXT,
+      CHECK (
+        (
+          origin = 'automatic' AND
+          enrollment_origin IS NOT NULL AND
+          enrolled_at IS NOT NULL AND
+          adopted_at IS NULL AND
+          handoff_confirmed_at IS NULL AND
+          length(codex_thread_id) = 36 AND
+          length(replace(codex_thread_id, '-', '')) = 32 AND
+          codex_thread_id = lower(codex_thread_id) AND
+          codex_thread_id NOT GLOB '*[^0-9a-f-]*' AND
+          substr(codex_thread_id, 9, 1) = '-' AND
+          substr(codex_thread_id, 14, 1) = '-' AND
+          substr(codex_thread_id, 15, 1) = '7' AND
+          substr(codex_thread_id, 19, 1) = '-' AND
+          substr(codex_thread_id, 20, 1) IN ('8', '9', 'a', 'b') AND
+          substr(codex_thread_id, 24, 1) = '-'
+        ) OR
+        (
+          origin = 'adopted' AND
+          enrollment_origin IS NULL AND
+          enrolled_at IS NULL AND
+          adopted_at IS NOT NULL AND
+          handoff_confirmed_at IS NOT NULL AND
+          handoff_confirmed_at <= adopted_at
+        )
+      )
+    );
+
+    INSERT INTO selected_native_session_memberships (
+      session_id,
+      codex_thread_id,
+      origin,
+      enrollment_origin,
+      enrolled_at,
+      adopted_at,
+      handoff_confirmed_at
+    )
+    SELECT
+      session_id,
+      codex_thread_id,
+      origin,
+      NULL,
+      NULL,
+      adopted_at,
+      handoff_confirmed_at
+    FROM selected_native_session_memberships_prior;
+
+    DROP TABLE selected_native_session_memberships_prior;
+
+    CREATE TRIGGER selected_native_session_membership_identity
+    BEFORE INSERT ON selected_native_session_memberships
+    WHEN NOT EXISTS (
+      SELECT 1 FROM selected_sessions
+      WHERE id = NEW.session_id
+        AND codex_thread_id = NEW.codex_thread_id
+        AND disposition = 'selected'
+        AND archived_at IS NULL
+        AND (
+          NEW.origin <> 'automatic' OR
+          (created_at <= NEW.enrolled_at AND updated_at >= NEW.enrolled_at)
+        )
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'native session membership identity mismatch');
+    END;
+
+    CREATE TRIGGER selected_native_session_membership_no_update
+    BEFORE UPDATE ON selected_native_session_memberships
+    BEGIN
+      SELECT RAISE(ABORT, 'native session membership is immutable');
+    END;
+
+    CREATE TABLE selected_audit_events_next (
+      id TEXT PRIMARY KEY,
+      operation_id TEXT NOT NULL,
+      at TEXT NOT NULL,
+      action TEXT NOT NULL CHECK (action IN (
+        'prompt',
+        'model',
+        'goal',
+        'plan',
+        'usage',
+        'compact',
+        'skills',
+        'approval_response',
+        'interrupt',
+        'archive',
+        'session_start',
+        'session_enroll',
+        'session_adopt',
+        'session_unmanage',
+        'pair_request',
+        'pair_claim',
+        'csrf_bootstrap',
+        'device_revoke',
+        'lock',
+        'unlock',
+        'lan_configure',
+        'lan_enable',
+        'lan_disable',
+        'certificate_rotate',
+        'remote_enable',
+        'remote_disable'
+      )),
+      security_schema_version INTEGER CHECK (
+        security_schema_version IS NULL OR
+        (typeof(security_schema_version) = 'integer' AND security_schema_version IN (1, 2))
+      ),
+      phase TEXT NOT NULL CHECK (phase IN ('accepted', 'terminal')),
+      outcome TEXT NOT NULL CHECK (outcome IN ('accepted', 'succeeded', 'failed', 'rejected', 'incomplete')),
+      error_code TEXT,
+      record_json TEXT NOT NULL CHECK (
+        json_valid(record_json) AND
+        length(CAST(record_json AS BLOB)) BETWEEN 2 AND 65536
+      ),
+      UNIQUE (operation_id, phase),
+      CHECK (
+        (phase = 'accepted' AND outcome = 'accepted' AND error_code IS NULL) OR
+        (phase = 'terminal' AND outcome = 'succeeded' AND error_code IS NULL) OR
+        (phase = 'terminal' AND outcome IN ('failed', 'rejected', 'incomplete') AND error_code IS NOT NULL)
+      ),
+      CHECK (
+        (
+          security_schema_version IS NULL AND
+          action NOT IN ('csrf_bootstrap', 'remote_enable', 'remote_disable')
+        ) OR
+        (
+          security_schema_version IS NOT NULL AND
+          security_schema_version = 1 AND action IN (
+            'pair_request',
+            'pair_claim',
+            'csrf_bootstrap',
+            'device_revoke',
+            'lock',
+            'unlock',
+            'lan_configure',
+            'lan_enable',
+            'lan_disable',
+            'certificate_rotate'
+          )
+        ) OR
+        (
+          security_schema_version IS NOT NULL AND
+          security_schema_version = 2 AND action IN (
+            'pair_request',
+            'pair_claim',
+            'csrf_bootstrap',
+            'device_revoke',
+            'lock',
+            'unlock',
+            'remote_enable',
+            'remote_disable'
+          )
+        )
+      )
+    );
+
+    INSERT INTO selected_audit_events_next (
+      id,
+      operation_id,
+      at,
+      action,
+      security_schema_version,
+      phase,
+      outcome,
+      error_code,
+      record_json
+    )
+    SELECT
+      id,
+      operation_id,
+      at,
+      action,
+      security_schema_version,
+      phase,
+      outcome,
+      error_code,
+      record_json
+    FROM selected_audit_events;
+
+    DROP TABLE selected_audit_events;
+    ALTER TABLE selected_audit_events_next RENAME TO selected_audit_events;
+
+    CREATE INDEX selected_audit_events_at_idx ON selected_audit_events(at, id);
+    CREATE INDEX selected_audit_events_phase_at_operation_idx
+      ON selected_audit_events(phase, at, operation_id);
+
+    CREATE TRIGGER selected_audit_events_start_requires_empty
+    BEFORE INSERT ON selected_audit_events
+    WHEN (NEW.phase = 'accepted' OR NEW.outcome = 'rejected')
+      AND EXISTS (SELECT 1 FROM selected_audit_events WHERE operation_id = NEW.operation_id)
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit operation already has a trail');
+    END;
+
+    CREATE TRIGGER selected_audit_events_terminal_requires_accepted
+    BEFORE INSERT ON selected_audit_events
+    WHEN NEW.phase = 'terminal'
+      AND NEW.outcome <> 'rejected'
+      AND NOT EXISTS (
+        SELECT 1 FROM selected_audit_events
+        WHERE operation_id = NEW.operation_id AND phase = 'accepted' AND outcome = 'accepted'
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit terminal requires accepted');
+    END;
+
+    CREATE TRIGGER selected_audit_events_no_update
+    BEFORE UPDATE ON selected_audit_events
+    BEGIN
+      SELECT RAISE(ABORT, 'selected audit events are append-only');
+    END;
+
+    CREATE TRIGGER selected_remote_ingress_admission_proof_invalidate
+    AFTER INSERT ON selected_audit_events
+    WHEN NEW.phase = 'accepted' AND NEW.action IN ('remote_enable', 'remote_disable')
+    BEGIN
+      DELETE FROM selected_remote_ingress_admission_proof
+      WHERE id = 'hostdeck_remote_ingress_admission';
+    END;
+  `
+};
+
 export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckBaseSchemaMigration,
   hostDeckSessionMetadataFailedStatusMigration,
@@ -1646,5 +1891,6 @@ export const defaultMigrations: readonly StorageMigration[] = [
   hostDeckSelectedSessionSettingsProjectionMigration,
   hostDeckSelectedNetworkRetirementMigration,
   hostDeckCrossPlatformCwdMigration,
-  hostDeckNativeSessionMembershipMigration
+  hostDeckNativeSessionMembershipMigration,
+  hostDeckAutomaticSessionMembershipMigration
 ] as const;

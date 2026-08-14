@@ -368,6 +368,7 @@ export const replayBoundaryReasons = Object.freeze([
   "disconnect",
   "restart",
   "schema_change",
+  "enrollment",
   "adoption"
 ] as const);
 

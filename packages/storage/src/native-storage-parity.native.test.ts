@@ -34,8 +34,8 @@ import {
 import { openMigratedDatabase } from "./migration-runner.js";
 import {
   defaultMigrations,
+  hostDeckAutomaticSessionMembershipMigration,
   hostDeckCrossPlatformCwdMigration,
-  hostDeckNativeSessionMembershipMigration
 } from "./migrations.js";
 import {
   prepareHostDeckStatePaths,
@@ -59,7 +59,7 @@ const cleanup: string[] = [];
 const leases: HostDeckDaemonLease[] = [];
 const at = "2026-08-11T12:00:00.000Z";
 const expectedSchemaSha256 =
-  "e6c2e0e18cdee68c0fae234ca43107908968c9c8aadb271ca5ca4005ae160e7a";
+  "1102c68f83e1708e7a9df53082e91c51908cc282ab985cddd8ea262c6d647286";
 
 afterEach(() => {
   for (const lease of leases.splice(0).reverse()) lease.release();
@@ -117,7 +117,7 @@ describe("native SQLite storage parity", () => {
     try {
       insertSelectedSession(opened.db, "sess_native_schema_01", "native-schema");
       expect(opened.result.currentVersion).toBe(
-        hostDeckNativeSessionMembershipMigration.version
+        hostDeckAutomaticSessionMembershipMigration.version
       );
       expect(schemaSha256(opened.db)).toBe(expectedSchemaSha256);
       expectPlanUses(

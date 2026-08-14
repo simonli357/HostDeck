@@ -36,7 +36,8 @@ describe("native session membership migration", () => {
       const priorJson = rawRecordJson(open.db, prior.operation_id, "terminal");
 
       expect(runMigrations(open.db, { migrations: defaultMigrations, now: fixedNow }).applied).toEqual([
-        hostDeckNativeSessionMembershipMigration.version
+        hostDeckNativeSessionMembershipMigration.version,
+        "202608140021_automatic_session_membership"
       ]);
       expect(rawRecordJson(open.db, prior.operation_id, "terminal")).toBe(priorJson);
       expect(tableExists(open.db, "selected_native_session_memberships")).toBe(true);

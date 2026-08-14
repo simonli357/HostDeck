@@ -45,7 +45,8 @@ describe("SQLite migration runner", () => {
       "202607160017_selected_session_settings_projection": "c6382889bd40b65cf2f421c03bfb750588483edf47cacefacc5f0a910fa78ff7",
       "202607200018_selected_network_retirement": "d9b24e5918b7e50448a5ebe9c4e64138b8328e9772985506b9bc7a1667189732",
       "202608110019_cross_platform_cwd": "71deb565f83b63075652b106b862cd7222b9a078b12a144676ef9ab94fa6605a",
-      "202608120020_native_session_membership": "685ff1608e9a179fe706f9a3747072dc548c2abccb87a1f45d2dd4e08007d20d"
+      "202608120020_native_session_membership": "685ff1608e9a179fe706f9a3747072dc548c2abccb87a1f45d2dd4e08007d20d",
+      "202608140021_automatic_session_membership": "97d0ca32f8bd8a447e6a3dd7eb48a00bff0786a8be9a07be656d7a383c9373df"
     });
   });
 
@@ -76,7 +77,8 @@ describe("SQLite migration runner", () => {
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
         "202608110019_cross_platform_cwd",
-        "202608120020_native_session_membership"
+        "202608120020_native_session_membership",
+        "202608140021_automatic_session_membership"
       ]);
       expect(tableNames(db)).toEqual([
         "audit_events",
@@ -101,7 +103,7 @@ describe("SQLite migration runner", () => {
         "sessions",
         "settings"
       ]);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 20 });
+      expect(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get()).toEqual({ count: 21 });
       expect(
         db
           .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
@@ -276,7 +278,8 @@ describe("SQLite migration runner", () => {
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
         "202608110019_cross_platform_cwd",
-        "202608120020_native_session_membership"
+        "202608120020_native_session_membership",
+        "202608140021_automatic_session_membership"
       ]);
       expect(migrated.db.prepare("SELECT id FROM audit_events WHERE id = 'audit_legacy_preserved'").get()).toEqual({
         id: "audit_legacy_preserved"
@@ -344,7 +347,8 @@ describe("SQLite migration runner", () => {
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
         "202608110019_cross_platform_cwd",
-        "202608120020_native_session_membership"
+        "202608120020_native_session_membership",
+        "202608140021_automatic_session_membership"
       ]);
       expect(migrated.db.prepare("SELECT id FROM selected_audit_events WHERE operation_id = ?").get("op_index_preserved")).toEqual({
         id: "audit:index:preserved"
@@ -417,7 +421,8 @@ describe("SQLite migration runner", () => {
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
         "202608110019_cross_platform_cwd",
-        "202608120020_native_session_membership"
+        "202608120020_native_session_membership",
+        "202608140021_automatic_session_membership"
       ]);
       expect(migrated.db.prepare("SELECT * FROM auth_devices WHERE id = ?").get("client_csrf_migration")).toEqual({
         id: "client_csrf_migration",
@@ -512,7 +517,8 @@ describe("SQLite migration runner", () => {
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
         "202608110019_cross_platform_cwd",
-        "202608120020_native_session_membership"
+        "202608120020_native_session_membership",
+        "202608140021_automatic_session_membership"
       ]);
       expect(
         migrated.db
@@ -722,7 +728,8 @@ describe("SQLite migration runner", () => {
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
         "202608110019_cross_platform_cwd",
-        "202608120020_native_session_membership"
+        "202608120020_native_session_membership",
+        "202608140021_automatic_session_membership"
       ]);
       expect(
         migrated.db
@@ -952,7 +959,8 @@ describe("SQLite migration runner", () => {
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
         "202608110019_cross_platform_cwd",
-        "202608120020_native_session_membership"
+        "202608120020_native_session_membership",
+        "202608140021_automatic_session_membership"
       ]);
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM selected_sessions").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT * FROM legacy_session_dispositions").get()).toMatchObject({

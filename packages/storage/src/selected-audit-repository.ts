@@ -19,6 +19,7 @@ import {
   selectedNativeSessionUnmanageAuditEventRecordSchema,
   selectedSecurityAuditEventRecordSchema,
   selectedSecurityAuditV1EventRecordSchema,
+  selectedSessionEnrollmentAuditEventRecordSchema,
   selectedSessionStartAuditEventRecordSchema
 } from "@hostdeck/contracts";
 import type Database from "better-sqlite3";
@@ -851,6 +852,8 @@ function parseRecord(candidate: unknown, catalog: AuditWriteCatalog): WritableAu
         ? selectedSecurityAuditEventRecordSchema.safeParse(candidate)
         : securityAction === "session_start"
           ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
+          : securityAction === "session_enroll"
+            ? selectedSessionEnrollmentAuditEventRecordSchema.safeParse(candidate)
           : securityAction === "session_adopt"
             ? selectedNativeSessionAdoptionAuditEventRecordSchema.safeParse(candidate)
             : securityAction === "session_unmanage"
@@ -920,6 +923,8 @@ function parseStoredRecord(row: SelectedAuditRow): PersistedSelectedAuditEventRe
     const result =
       row.action === "session_start"
         ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
+        : row.action === "session_enroll"
+          ? selectedSessionEnrollmentAuditEventRecordSchema.safeParse(candidate)
         : row.action === "session_adopt"
           ? selectedNativeSessionAdoptionAuditEventRecordSchema.safeParse(candidate)
           : row.action === "session_unmanage"
@@ -977,6 +982,12 @@ function reconciliationPayloadSummary(
       reconciliation_reason: "host_restart_without_terminal"
     });
   }
+  if (accepted.action === "session_enroll") {
+    return Object.freeze({
+      schema_version: 1,
+      reconciliation_reason: "host_restart_without_terminal"
+    });
+  }
   if (accepted.action === "session_adopt") {
     return Object.freeze({
       schema_version: 1,
@@ -1029,6 +1040,8 @@ function parseReconciliationRecord(
         ? selectedSecurityAuditV1EventRecordSchema.safeParse(candidate)
         : action === "session_start"
           ? selectedSessionStartAuditEventRecordSchema.safeParse(candidate)
+          : action === "session_enroll"
+            ? selectedSessionEnrollmentAuditEventRecordSchema.safeParse(candidate)
           : action === "session_adopt"
             ? selectedNativeSessionAdoptionAuditEventRecordSchema.safeParse(candidate)
             : action === "session_unmanage"

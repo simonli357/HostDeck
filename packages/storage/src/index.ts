@@ -14,6 +14,12 @@ export {
   type SelectedCsrfAuthorizationRepositoryOptions
 } from "./auth-repository.js";
 export {
+  type AutomaticSessionIdentity,
+  type AutomaticSessionIdentityErrorCode,
+  deriveAutomaticSessionIdentity,
+  HostDeckAutomaticSessionIdentityError
+} from "./automatic-session-identity.js";
+export {
   type CaptureGitBranchMetadataInput,
   captureGitBranchMetadata,
   type GitBranchMetadataErrorCode,
@@ -188,7 +194,9 @@ export {
 export {
   type AdoptSelectedNativeSessionInput,
   type AppendSelectedEventResult,
+  type AutomaticSelectedSessionEnrollmentResult,
   createSelectedStateRepository,
+  type EnrollAutomaticSelectedSessionInput,
   HostDeckSelectedStateRepositoryError,
   type ListSelectedEventsInput,
   maintainSelectedProjectionRetentionBatch,

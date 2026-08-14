@@ -52,7 +52,8 @@ describe("remote audit catalog migration", () => {
         "202607160017_selected_session_settings_projection",
         "202607200018_selected_network_retirement",
         "202608110019_cross_platform_cwd",
-        "202608120020_native_session_membership"
+        "202608120020_native_session_membership",
+        "202608140021_automatic_session_membership"
       ]);
       expect(rawRows(open.db)).toEqual(before);
       expect(createSelectedAuditRepository(open.db).require(versioned.operation_id).records).toHaveLength(2);

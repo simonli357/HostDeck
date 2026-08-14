@@ -19,9 +19,10 @@ const terminalAt = "2026-07-11T20:01:00.000Z";
 
 describe("selected security audit contracts", () => {
   it("freezes a 21-action selected catalog and a separate preserved version-1 catalog", () => {
-    expect(selectedAuditActions).toHaveLength(21);
-    expect(new Set(selectedAuditActions).size).toBe(21);
+    expect(selectedAuditActions).toHaveLength(22);
+    expect(new Set(selectedAuditActions).size).toBe(22);
     expect(selectedAuditActions).toContain("session_start");
+    expect(selectedAuditActions).toContain("session_enroll");
     expect(selectedAuditActions).toContain("session_adopt");
     expect(selectedAuditActions).toContain("session_unmanage");
     expect(selectedSecurityAuditActions).toEqual([
@@ -53,7 +54,7 @@ describe("selected security audit contracts", () => {
       "certificate_rotate"
     ]);
     expect(new Set(selectedSecurityAuditActions).size).toBe(8);
-    expect(new Set(persistedSelectedAuditActions).size).toBe(25);
+    expect(new Set(persistedSelectedAuditActions).size).toBe(26);
     for (const action of selectedSecurityAuditActions) expect(selectedAuditActions).toContain(action);
     for (const action of historicalSelectedNetworkAuditActions) expect(selectedAuditActions).not.toContain(action);
   });
