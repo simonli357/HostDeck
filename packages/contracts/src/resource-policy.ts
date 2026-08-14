@@ -139,6 +139,56 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("protocol_thread_page_size", "count", 1, 100, 500, "codex_broker", "service_overloaded", "abort_operation"),
   defineResource("protocol_thread_max_pages", "count", 1, 100, 100, "codex_broker", "service_overloaded", "abort_operation"),
   defineResource("protocol_thread_max_loaded_reads", "count", 1, 500, 5_000, "codex_broker", "service_overloaded", "abort_operation"),
+  defineResource(
+    "protocol_enrollment_max_pending_threads",
+    "count",
+    1,
+    256,
+    4_096,
+    "codex_event_pipeline",
+    "service_overloaded",
+    "reject_operation"
+  ),
+  defineResource(
+    "protocol_enrollment_pending_events_per_thread",
+    "count",
+    1,
+    64,
+    512,
+    "codex_event_pipeline",
+    "service_overloaded",
+    "reject_operation"
+  ),
+  defineResource(
+    "protocol_enrollment_pending_bytes_per_thread",
+    "bytes",
+    65_536,
+    1_048_576,
+    8_388_608,
+    "codex_event_pipeline",
+    "service_overloaded",
+    "reject_operation"
+  ),
+  defineResource(
+    "protocol_enrollment_pending_timeout_ms",
+    "milliseconds",
+    1_000,
+    30_000,
+    120_000,
+    "codex_event_pipeline",
+    "operation_timeout",
+    "abort_operation"
+  ),
+  defineResource(
+    "protocol_enrollment_retry_interval_ms",
+    "milliseconds",
+    25,
+    250,
+    5_000,
+    "codex_broker",
+    "operation_timeout",
+    "abort_operation"
+  ),
   defineResource("protocol_model_page_size", "count", 1, 100, 128, "codex_broker", "service_overloaded", "abort_operation"),
   defineResource("protocol_model_max_pages", "count", 1, 10, 100, "codex_broker", "service_overloaded", "abort_operation"),
   defineResource("protocol_model_max_entries", "count", 1, 128, 128, "codex_broker", "service_overloaded", "abort_operation"),
@@ -360,6 +410,26 @@ export const resourceBudgetSchema = z
     atMost("protocol_mutation_timeout_ms", "http_request_deadline_ms", "Protocol mutations must fit within the HTTP request deadline.");
     atMost("protocol_start_timeout_ms", "http_request_deadline_ms", "Protocol session start must fit within the HTTP request deadline.");
     atMost("protocol_max_in_flight_requests", "http_max_in_flight_requests", "Protocol in-flight requests cannot exceed HTTP request concurrency.");
+    atMost(
+      "protocol_enrollment_max_pending_threads",
+      "protocol_thread_max_loaded_reads",
+      "Pending enrollment capacity cannot exceed the loaded-thread read bound."
+    );
+    atMost(
+      "protocol_enrollment_pending_events_per_thread",
+      "protocol_max_pending_notifications",
+      "One pending enrollment buffer cannot exceed the connection notification bound."
+    );
+    atMost(
+      "protocol_enrollment_pending_bytes_per_thread",
+      "protocol_max_buffered_bytes",
+      "One pending enrollment buffer must fit within the protocol buffer bound."
+    );
+    lessThan(
+      "protocol_enrollment_retry_interval_ms",
+      "protocol_enrollment_pending_timeout_ms",
+      "Enrollment retry interval must be shorter than its pending timeout."
+    );
     atMost("protocol_model_page_size", "protocol_model_max_entries", "One model page must fit within the model catalog entry bound.");
     atMost("protocol_close_timeout_ms", "lifecycle_shutdown_timeout_ms", "Protocol close must fit within host shutdown.");
     atMost("lifecycle_cleanup_step_timeout_ms", "lifecycle_shutdown_timeout_ms", "One cleanup step must fit within host shutdown.");

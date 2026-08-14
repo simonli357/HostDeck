@@ -15,7 +15,7 @@ import {
 
 describe("selected V1 resource budget", () => {
   it("defines one complete, immutable, observable registry", () => {
-    expect(resourceBudgetDefinitions).toHaveLength(99);
+    expect(resourceBudgetDefinitions).toHaveLength(104);
     expect(Object.isFrozen(resourceBudgetDefinitions)).toBe(true);
     expect(Object.isFrozen(defaultResourceBudget)).toBe(true);
     expect(Object.isFrozen(resourceBudgetDefinitionByKey)).toBe(true);
@@ -81,6 +81,11 @@ describe("selected V1 resource budget", () => {
       protocol_thread_page_size: 100,
       protocol_thread_max_pages: 100,
       protocol_thread_max_loaded_reads: 500,
+      protocol_enrollment_max_pending_threads: 256,
+      protocol_enrollment_pending_events_per_thread: 64,
+      protocol_enrollment_pending_bytes_per_thread: 1_048_576,
+      protocol_enrollment_pending_timeout_ms: 30_000,
+      protocol_enrollment_retry_interval_ms: 250,
       protocol_model_page_size: 100,
       protocol_model_max_pages: 10,
       protocol_model_max_entries: 128,
@@ -183,6 +188,10 @@ describe("selected V1 resource budget", () => {
       { protocol_mutation_timeout_ms: 120_000, http_request_deadline_ms: 1_000 },
       { protocol_start_timeout_ms: 120_000, http_request_deadline_ms: 1_000 },
       { protocol_max_in_flight_requests: 256, http_max_in_flight_requests: 1 },
+      { protocol_enrollment_max_pending_threads: 4_096, protocol_thread_max_loaded_reads: 1 },
+      { protocol_enrollment_pending_events_per_thread: 512, protocol_max_pending_notifications: 8 },
+      { protocol_enrollment_pending_bytes_per_thread: 8_388_608, protocol_max_buffered_bytes: 1_024 },
+      { protocol_enrollment_retry_interval_ms: 5_000, protocol_enrollment_pending_timeout_ms: 1_000 },
       { protocol_close_timeout_ms: 10_000, lifecycle_shutdown_timeout_ms: 1_000 },
       { lifecycle_cleanup_step_timeout_ms: 10_000, lifecycle_shutdown_timeout_ms: 1_000 },
       { cli_connect_timeout_ms: 30_000, cli_request_timeout_ms: 1_000 },

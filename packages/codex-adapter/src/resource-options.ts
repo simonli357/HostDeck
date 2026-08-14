@@ -19,6 +19,11 @@ export const codexResourceBudgetKeys = [
   "protocol_thread_page_size",
   "protocol_thread_max_pages",
   "protocol_thread_max_loaded_reads",
+  "protocol_enrollment_max_pending_threads",
+  "protocol_enrollment_pending_events_per_thread",
+  "protocol_enrollment_pending_bytes_per_thread",
+  "protocol_enrollment_pending_timeout_ms",
+  "protocol_enrollment_retry_interval_ms",
   "protocol_model_page_size",
   "protocol_model_max_pages",
   "protocol_model_max_entries",
@@ -62,6 +67,14 @@ export interface CodexEventPipelineResourceOptions {
   readonly max_pending_notifications: number;
 }
 
+export interface CodexEnrollmentResourceOptions {
+  readonly max_pending_threads: number;
+  readonly pending_events_per_thread: number;
+  readonly pending_bytes_per_thread: number;
+  readonly pending_timeout_ms: number;
+  readonly retry_interval_ms: number;
+}
+
 export interface CodexModelResourceOptions {
   readonly page_size: number;
   readonly max_pages: number;
@@ -101,6 +114,7 @@ export interface CodexResourceOptions {
   readonly connection: CodexConnectionResourceOptions;
   readonly reconnect: CodexReconnectResourceOptions;
   readonly event_pipeline: CodexEventPipelineResourceOptions;
+  readonly enrollment: CodexEnrollmentResourceOptions;
   readonly thread: CodexThreadResourceOptions;
   readonly model: CodexModelResourceOptions;
   readonly plan: CodexPlanResourceOptions;
@@ -132,6 +146,13 @@ export function codexResourceOptionsFromBudget(input: unknown): CodexResourceOpt
     }),
     event_pipeline: Object.freeze({
       max_pending_notifications: budget.protocol_max_pending_notifications
+    }),
+    enrollment: Object.freeze({
+      max_pending_threads: budget.protocol_enrollment_max_pending_threads,
+      pending_events_per_thread: budget.protocol_enrollment_pending_events_per_thread,
+      pending_bytes_per_thread: budget.protocol_enrollment_pending_bytes_per_thread,
+      pending_timeout_ms: budget.protocol_enrollment_pending_timeout_ms,
+      retry_interval_ms: budget.protocol_enrollment_retry_interval_ms
     }),
     thread: Object.freeze({
       page_size: budget.protocol_thread_page_size,

@@ -10,6 +10,7 @@ import {
   parseCodexItemId,
   parseCodexThreadId,
   parseCodexTurnId,
+  parseNativeCodexThreadId,
   parseRuntimeRequestId,
   requiredRuntimeCapabilities,
   runtimeCapabilities,
@@ -31,6 +32,19 @@ describe("selected runtime identifiers", () => {
     expect(parseCodexThreadId(" thread_1")).toMatchObject({ ok: false, code: "invalid_format" });
     expect(parseCodexTurnId("turn\n1")).toMatchObject({ ok: false, code: "invalid_format" });
     expect(parseCodexItemId("x".repeat(129))).toMatchObject({ ok: false, code: "too_long" });
+  });
+
+  it("distinguishes exact native Codex UUIDv7 identifiers from legacy opaque identifiers", () => {
+    expect(parseNativeCodexThreadId("019f489a-1f9d-7402-ae00-eac6ea322f64").ok).toBe(true);
+    expect(parseNativeCodexThreadId("thr_123")).toMatchObject({ ok: false, code: "invalid_format" });
+    expect(parseNativeCodexThreadId("019f489a-1f9d-6402-ae00-eac6ea322f64")).toMatchObject({
+      ok: false,
+      code: "invalid_format"
+    });
+    expect(parseNativeCodexThreadId("019F489A-1F9D-7402-AE00-EAC6EA322F64")).toMatchObject({
+      ok: false,
+      code: "invalid_format"
+    });
   });
 
   it("requires HostDeck-owned operation ids to use a stable namespace", () => {

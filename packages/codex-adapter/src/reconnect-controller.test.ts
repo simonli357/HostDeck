@@ -571,7 +571,10 @@ describe("Codex runtime reconnect controller", () => {
   it("fails a generation when the bounded pre-admission notification queue overflows", async () => {
     const gate = deferred<void>();
     const transport = respondingTransport();
-    const budget = resolveResourceBudget({ protocol_max_pending_notifications: 8 });
+    const budget = resolveResourceBudget({
+      protocol_max_pending_notifications: 8,
+      protocol_enrollment_pending_events_per_thread: 8
+    });
     const controller = createCodexRuntimeReconnectController({
       ...baseOptions(transport),
       resource_budget: budget,

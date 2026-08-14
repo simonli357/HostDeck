@@ -12,12 +12,14 @@ export const attentionLevels = [
 export type AttentionLevel = (typeof attentionLevels)[number];
 
 const codexThreadIdBrand: unique symbol = Symbol("CodexThreadId");
+const nativeCodexThreadIdBrand: unique symbol = Symbol("NativeCodexThreadId");
 const codexTurnIdBrand: unique symbol = Symbol("CodexTurnId");
 const codexItemIdBrand: unique symbol = Symbol("CodexItemId");
 const runtimeRequestIdBrand: unique symbol = Symbol("RuntimeRequestId");
 const clientOperationIdBrand: unique symbol = Symbol("ClientOperationId");
 
 export type CodexThreadId = string & { readonly [codexThreadIdBrand]: "CodexThreadId" };
+export type NativeCodexThreadId = string & { readonly [nativeCodexThreadIdBrand]: "NativeCodexThreadId" };
 export type CodexTurnId = string & { readonly [codexTurnIdBrand]: "CodexTurnId" };
 export type CodexItemId = string & { readonly [codexItemIdBrand]: "CodexItemId" };
 export type RuntimeRequestId = string & { readonly [runtimeRequestIdBrand]: "RuntimeRequestId" };
@@ -245,6 +247,7 @@ const mobileAttentionPriorityByLevel = {
 } as const;
 
 const opaqueRuntimeIdPattern = /^\S{1,128}$/u;
+const nativeCodexThreadIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const clientOperationIdPattern = /^op_[a-z0-9][a-z0-9_-]{7,95}$/u;
 const mutationOperationSet = new Set<string>(selectedMutationOperationKinds);
 const requiredCapabilitySet = new Set<RuntimeCapability>(requiredRuntimeCapabilities);
@@ -269,6 +272,18 @@ const reconciliationManagedSessionTransitions: Readonly<Record<ManagedSessionSta
 
 export function parseCodexThreadId(value: string): ValidationResult<CodexThreadId> {
   return parseOpaqueRuntimeId(value, "Codex thread id", (id) => id as CodexThreadId);
+}
+
+export function parseNativeCodexThreadId(value: string): ValidationResult<NativeCodexThreadId> {
+  if (value.length === 0) {
+    return invalid("empty", "Native Codex thread id is required.");
+  }
+
+  if (!nativeCodexThreadIdPattern.test(value)) {
+    return invalid("invalid_format", "Native Codex thread id must be a canonical lowercase UUIDv7.");
+  }
+
+  return valid(value as NativeCodexThreadId);
 }
 
 export function parseCodexTurnId(value: string): ValidationResult<CodexTurnId> {

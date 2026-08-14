@@ -121,6 +121,7 @@ const exactRootModules = new Map([
       "./selected-runtime.js",
       "./selected-session-read.js",
       "./selected-storage.js",
+      "./shared-codex-runtime.js",
       "./storage.js"
     ]
   ],
@@ -182,6 +183,7 @@ const exactRootModules = new Map([
       "./host-platform.js",
       "./mobile-design-contract.js",
       "./remote-ingress.js",
+      "./shared-codex-runtime.js",
       "./structured-runtime.js"
     ]
   ]

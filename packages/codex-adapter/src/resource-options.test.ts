@@ -18,6 +18,7 @@ describe("Codex resource options", () => {
     expect(Object.isFrozen(options.connection)).toBe(true);
     expect(Object.isFrozen(options.reconnect)).toBe(true);
     expect(Object.isFrozen(options.event_pipeline)).toBe(true);
+    expect(Object.isFrozen(options.enrollment)).toBe(true);
     expect(Object.isFrozen(options.thread)).toBe(true);
     expect(Object.isFrozen(options.model)).toBe(true);
     expect(Object.isFrozen(options.plan)).toBe(true);
@@ -43,6 +44,11 @@ describe("Codex resource options", () => {
       protocol_thread_page_size: 50,
       protocol_thread_max_pages: 20,
       protocol_thread_max_loaded_reads: 100,
+      protocol_enrollment_max_pending_threads: 100,
+      protocol_enrollment_pending_events_per_thread: 32,
+      protocol_enrollment_pending_bytes_per_thread: 524_288,
+      protocol_enrollment_pending_timeout_ms: 20_000,
+      protocol_enrollment_retry_interval_ms: 100,
       protocol_model_page_size: 25,
       protocol_model_max_pages: 4,
       protocol_model_max_entries: 100,
@@ -68,6 +74,13 @@ describe("Codex resource options", () => {
       },
       event_pipeline: {
         max_pending_notifications: 64
+      },
+      enrollment: {
+        max_pending_threads: 100,
+        pending_events_per_thread: 32,
+        pending_bytes_per_thread: 524_288,
+        pending_timeout_ms: 20_000,
+        retry_interval_ms: 100
       },
       thread: {
         page_size: 50,
@@ -136,6 +149,11 @@ function mappedProtocolValues(options: CodexResourceOptions) {
     protocol_thread_page_size: options.thread.page_size,
     protocol_thread_max_pages: options.thread.max_pages,
     protocol_thread_max_loaded_reads: options.thread.max_loaded_reads,
+    protocol_enrollment_max_pending_threads: options.enrollment.max_pending_threads,
+    protocol_enrollment_pending_events_per_thread: options.enrollment.pending_events_per_thread,
+    protocol_enrollment_pending_bytes_per_thread: options.enrollment.pending_bytes_per_thread,
+    protocol_enrollment_pending_timeout_ms: options.enrollment.pending_timeout_ms,
+    protocol_enrollment_retry_interval_ms: options.enrollment.retry_interval_ms,
     protocol_model_page_size: options.model.page_size,
     protocol_model_max_pages: options.model.max_pages,
     protocol_model_max_entries: options.model.max_entries,
