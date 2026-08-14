@@ -35,7 +35,7 @@ assert(Number.isSafeInteger(uid) && uid > 0);
 const nodeBin = requireExecutable(process.execPath, "Node");
 const codexBin = requireExactCodex(
   process.env.HOSTDECK_CODEX_BIN,
-  "0.144.0"
+  "0.147.0"
 );
 const unitNames = ["hostdeck-codex.service", "hostdeck.service"];
 const systemdUserRoot = join(home, ".config", "systemd", "user");

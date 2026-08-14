@@ -165,7 +165,7 @@ describe("selected runtime crash reconciliation integration", () => {
     const pendingPipeline = new Set<Promise<unknown>>();
     controller = createCodexRuntimeReconnectController({
       transport,
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       resource_budget: resourceBudget,
       lifecycle: {
         disconnected: lifecycle.disconnected,
@@ -388,7 +388,7 @@ function runtimeTransport(
         transport.receive(JSON.stringify({
           id: message.id,
           result: {
-            userAgent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+            userAgent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
             codexHome: "/tmp/codex-home",
             platformFamily: "unix",
             platformOs: "linux"
@@ -473,6 +473,8 @@ function runtimeThread(threadId: string, crashed: boolean): Record<string, unkno
     parentThreadId: null,
     preview: "",
     ephemeral: false,
+    section: null,
+    sectionEnteredAt: null,
     historyMode: "legacy",
     modelProvider: "openai",
     createdAt: Date.parse(createdAt) / 1_000,
@@ -481,8 +483,9 @@ function runtimeThread(threadId: string, crashed: boolean): Record<string, unkno
     status,
     path: `/tmp/${threadId}.jsonl`,
     cwd: isA ? `/tmp/${sessionA}` : `/tmp/${sessionB}`,
-    cliVersion: "0.144.0",
+    cliVersion: "0.147.0",
     source: "appServer",
+    canAcceptDirectInput: null,
     threadSource: "hostdeck:managed",
     agentNickname: null,
     agentRole: null,
@@ -529,7 +532,9 @@ function rawResume(threadId: string): Record<string, unknown> {
     activePermissionProfile: null,
     reasoningEffort: isA ? "high" : "medium",
     multiAgentMode: "explicitRequestOnly",
-    initialTurnsPage: null
+    initialTurnsPage: null,
+    turnsBackwardsCursor: null,
+    itemsBackwardsCursor: null
   };
 }
 
@@ -577,7 +582,7 @@ function selectedState(
     codex_thread_id: threadId,
     cwd: `/tmp/${sessionId}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected",
     created_at: createdAt,
     updated_at: createdAt,
@@ -622,7 +627,7 @@ function selectedState(
 
 function fakeModelClient(): CodexModelClient {
   return {
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     async listCatalog() {
       return {
         revision: "a".repeat(64),
@@ -655,7 +660,7 @@ function fakeModelClient(): CodexModelClient {
 
 function fakePlanClient(): CodexPlanClient {
   return {
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     async listCatalog() {
       return {
         revision: "b".repeat(64),

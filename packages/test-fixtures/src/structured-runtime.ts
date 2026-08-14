@@ -752,8 +752,8 @@ function compatibilityFixture(options: {
     source: "codex_app_server",
     state: options.state,
     mutation_policy: options.state === "ready" || options.state === "degraded" ? "allowed" : "blocked",
-    observed_version: "0.144.0",
-    binding_id: "codex-app-server-0.144.0:sha256:fixture",
+    observed_version: "0.147.0",
+    binding_id: "codex-app-server-0.147.0:sha256:fixture",
     capabilities: runtimeCapabilitySetSchema.parse(
       runtimeCapabilities.map((name) => {
         const state = options.capabilityOverrides?.[name] ?? "available";
@@ -776,7 +776,7 @@ function sessionFixture(id: string, name: string, overrides: Readonly<Record<str
     codex_thread_id: `thread-${id}`,
     cwd: `/home/simonli/work/${name}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: selectedFixtureTimestamp,
     archived_at: null,
     session_state: "active",

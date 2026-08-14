@@ -28,7 +28,7 @@ import {
 
 const temporaryDirectories: string[] = [];
 const at = "2026-07-15T19:00:00.000Z";
-const runtimeVersion = "0.144.0";
+const runtimeVersion = "0.147.0";
 const operationId = "op_session_start_vertical_001";
 const name = "vertical-session";
 const capabilities = [

@@ -40,7 +40,7 @@ describe("Codex compact client", () => {
 
     const result = await client.compactThread({ ...input, deadline });
     expect(result).toEqual({
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       connection_generation: 3,
       thread_id: input.thread_id,
       state: "accepted",
@@ -171,11 +171,11 @@ function fakePort(
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: acceptedAt,
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]
@@ -196,7 +196,7 @@ function compatibilityWithCompactState(state: "unavailable" | "unknown"): Runtim
 
 function disconnectedCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: acceptedAt,
     handshake: { state: "not_attempted" }
   });

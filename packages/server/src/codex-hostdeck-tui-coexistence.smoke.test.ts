@@ -307,7 +307,7 @@ describe.skipIf(!requireSmoke)(
           expect(expectedGenerationA).toBeGreaterThan(0);
           expect(connectionA.compatibility).toMatchObject({
             state: "ready",
-            observed_version: "0.144.0",
+            observed_version: "0.147.0",
             mutation_policy: "allowed"
           });
 
@@ -722,7 +722,7 @@ describe.skipIf(!requireSmoke)(
           await connectionB.connect(AbortSignal.timeout(10_000));
           expect(connectionB.compatibility).toMatchObject({
             state: "ready",
-            observed_version: "0.144.0",
+            observed_version: "0.147.0",
             mutation_policy: "allowed"
           });
           const threadsB = createCodexThreadClient(connectionB);
@@ -763,7 +763,7 @@ describe.skipIf(!requireSmoke)(
             observed_at: new Date().toISOString(),
             hostdeck_commit: currentCommit(),
             runtime: {
-              version: "0.144.0",
+              version: "0.147.0",
               exact_binding: true,
               app_server_process_count: 1,
               app_server_identity_stable: true,
@@ -970,7 +970,7 @@ interface CoexistenceEvidence {
   readonly observed_at: string;
   readonly hostdeck_commit: string;
   readonly runtime: {
-    readonly version: "0.144.0";
+    readonly version: "0.147.0";
     readonly exact_binding: true;
     readonly app_server_process_count: 1;
     readonly app_server_identity_stable: true;

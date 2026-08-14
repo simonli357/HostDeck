@@ -488,7 +488,7 @@ function sessionItem() {
     codex_thread_id: "thread-cross-screen-private",
     cwd: "/private/cross-screen-session",
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: observedAt,
     archived_at: null,
     session_state: "active",
@@ -534,8 +534,8 @@ function hostStatusFixture(): SelectedHostStatusResponse {
     compatibility: {
       state: "supported",
       evidence: "current",
-      observed_version: "0.144.0",
-      supported_version: "0.144.0",
+      observed_version: "0.147.0",
+      supported_version: "0.147.0",
       capability_state: "verified",
       checked_at: observedAt,
       recorded_at: observedAt

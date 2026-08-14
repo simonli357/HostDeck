@@ -83,7 +83,7 @@ describe.skipIf(!workerEnabled)("HostDeck restart continuity worker", () => {
     "executes one bounded process-lifetime phase",
     async () => {
       const environment = parseHostDeckRestartWorkerEnvironment(process.env);
-      expect(codexBindingDescriptor.codex_version).toBe("0.144.0");
+      expect(codexBindingDescriptor.codex_version).toBe("0.147.0");
       if (environment.mode === "service_initial") {
         await runServiceInitial(environment);
       } else if (environment.mode === "service_restart") {
@@ -145,7 +145,7 @@ async function runServiceInitial(
     await connection.connect(AbortSignal.timeout(10_000));
     expect(connection.compatibility).toMatchObject({
       state: "ready",
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       mutation_policy: "allowed"
     });
 
@@ -270,7 +270,7 @@ async function runServiceRestart(
       id: shared.session_id,
       codex_thread_id: shared.thread_id,
       cwd: environment.project_dir,
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       archived_at: null
     });
 
@@ -582,7 +582,7 @@ async function runForeground(
     await connection.connect(AbortSignal.timeout(10_000));
     expect(connection.compatibility).toMatchObject({
       state: "ready",
-      observed_version: "0.144.0"
+      observed_version: "0.147.0"
     });
     writeReadyReport(environment, resources, {
       thread_id: null,

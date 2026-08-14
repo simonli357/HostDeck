@@ -11,7 +11,7 @@ const checkedAt = "2026-07-09T21:00:00.000Z";
 describe("Codex generated binding compatibility", () => {
   it("allows mutation only for the reviewed version, binding, platform, and plan catalog", () => {
     const result = assessCodexCompatibility({
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       checked_at: checkedAt,
       handshake: initializedProbe()
     });
@@ -19,7 +19,7 @@ describe("Codex generated binding compatibility", () => {
     expect(result).toMatchObject({
       state: "ready",
       mutation_policy: "allowed",
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       binding_id: codexBindingDescriptor.binding_id,
       reason: null
     });
@@ -33,7 +33,7 @@ describe("Codex generated binding compatibility", () => {
         checked_at: checkedAt,
         handshake: initializedProbe()
       })
-    ).toMatchObject({ state: "incompatible", mutation_policy: "blocked", reason: expect.stringContaining("requires exactly 0.144.0") });
+    ).toMatchObject({ state: "incompatible", mutation_policy: "blocked", reason: expect.stringContaining("requires exactly 0.147.0") });
     expect(
       assessCodexCompatibility({
         observed_version: "nightly",
@@ -44,9 +44,9 @@ describe("Codex generated binding compatibility", () => {
   });
 
   it("blocks unreviewed schema identity before considering runtime readiness", () => {
-    const binding = cloneBinding({ binding_id: "codex-app-server-0.144.0-experimental:sha256:unreviewed" });
+    const binding = cloneBinding({ binding_id: "codex-app-server-0.147.0-experimental:sha256:unreviewed" });
     const result = assessCodexCompatibility({
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       checked_at: checkedAt,
       handshake: initializedProbe(),
       binding
@@ -64,7 +64,7 @@ describe("Codex generated binding compatibility", () => {
       }
     });
     const noPlanResult = assessCodexCompatibility({
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       checked_at: checkedAt,
       handshake: initializedProbe(),
       binding: noPlan
@@ -81,7 +81,7 @@ describe("Codex generated binding compatibility", () => {
       }
     });
     const noApprovalResult = assessCodexCompatibility({
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       checked_at: checkedAt,
       handshake: initializedProbe(),
       binding: noApproval
@@ -105,7 +105,7 @@ describe("Codex generated binding compatibility", () => {
   ] as const)("blocks mutation when required capability %s loses %s evidence", (capabilityName, category, marker) => {
     const binding = withoutEvidence(category, marker);
     const result = assessCodexCompatibility({
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       checked_at: checkedAt,
       handshake: initializedProbe(),
       binding
@@ -117,7 +117,7 @@ describe("Codex generated binding compatibility", () => {
 
   it("blocks an initialized runtime that does not advertise required plan modes", () => {
     const result = assessCodexCompatibility({
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       checked_at: checkedAt,
       handshake: initializedProbe({ collaboration_modes: ["Default"] })
     });
@@ -133,14 +133,14 @@ describe("Codex generated binding compatibility", () => {
   it("keeps failed or absent handshakes disconnected and mutation-blocked", () => {
     expect(
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         checked_at: checkedAt,
         handshake: { state: "not_attempted" }
       })
     ).toMatchObject({ state: "disconnected", mutation_policy: "blocked" });
     expect(
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         checked_at: checkedAt,
         handshake: { state: "failed", reason: "initialize timed out" }
       })
@@ -150,7 +150,7 @@ describe("Codex generated binding compatibility", () => {
   it("binds initialized platform identity to the selected host target", () => {
     expect(
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         checked_at: checkedAt,
         handshake: initializedProbe({ platform_os: "windows", platform_family: "windows" })
       })
@@ -161,7 +161,7 @@ describe("Codex generated binding compatibility", () => {
     });
     expect(
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         host_target: "windows-x64",
         checked_at: checkedAt,
         handshake: initializedProbe({
@@ -172,7 +172,7 @@ describe("Codex generated binding compatibility", () => {
     ).toMatchObject({ state: "ready", mutation_policy: "allowed" });
     expect(
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         host_target: "windows-x64",
         checked_at: checkedAt,
         handshake: initializedProbe()
@@ -184,7 +184,7 @@ describe("Codex generated binding compatibility", () => {
     });
     expect(() =>
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         host_target: "darwin-x64" as never,
         checked_at: checkedAt,
         handshake: initializedProbe()
@@ -195,7 +195,7 @@ describe("Codex generated binding compatibility", () => {
   it("rejects a connected app-server whose user agent reports a different runtime version", () => {
     expect(
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         checked_at: checkedAt,
         handshake: initializedProbe({ user_agent: "hostdeck/0.145.0 (Ubuntu 24.4.0; x86_64)" })
       })
@@ -210,7 +210,7 @@ describe("Codex generated binding compatibility", () => {
       }
     });
     const result = assessCodexCompatibility({
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       checked_at: checkedAt,
       handshake: initializedProbe(),
       binding: withoutUsage
@@ -221,7 +221,7 @@ describe("Codex generated binding compatibility", () => {
 
     const withoutCompactionItem = withoutEvidence("policy_evidence", "context_compaction_item_type");
     const compactResult = assessCodexCompatibility({
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       checked_at: checkedAt,
       handshake: initializedProbe(),
       binding: withoutCompactionItem
@@ -237,7 +237,7 @@ describe("Codex generated binding compatibility", () => {
     const before = JSON.stringify(codexBindingDescriptor);
     const results = Array.from({ length: 32 }, () =>
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         checked_at: checkedAt,
         handshake: initializedProbe()
       })
@@ -250,7 +250,7 @@ describe("Codex generated binding compatibility", () => {
   it("fails loudly when the compatibility result timestamp violates the normalized contract", () => {
     expect(() =>
       assessCodexCompatibility({
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         checked_at: "not-a-timestamp",
         handshake: initializedProbe()
       })
@@ -260,10 +260,10 @@ describe("Codex generated binding compatibility", () => {
 
 describe("Codex CLI version output", () => {
   it("parses the exact supported CLI output shape", () => {
-    expect(parseCodexCliVersionOutput("codex-cli 0.144.0\n")).toBe("0.144.0");
+    expect(parseCodexCliVersionOutput("codex-cli 0.147.0\n")).toBe("0.147.0");
   });
 
-  it.each(["0.144.0\n", "codex-cli nightly\n", "codex-cli 0.144.0 extra\n", ""])('rejects malformed output "%s"', (output) => {
+  it.each(["0.147.0\n", "codex-cli nightly\n", "codex-cli 0.147.0 extra\n", ""])('rejects malformed output "%s"', (output) => {
     expect(() => parseCodexCliVersionOutput(output)).toThrow(HostDeckCodexCompatibilityError);
   });
 });
@@ -273,7 +273,7 @@ function initializedProbe(
 ) {
   return {
     state: "initialized",
-    user_agent: "hostdeck/0.144.0 (Ubuntu 24.4.0; x86_64)",
+    user_agent: "hostdeck/0.147.0 (Ubuntu 24.4.0; x86_64)",
     platform_family: "unix",
     platform_os: "linux",
     collaboration_modes: ["Plan", "Default"],

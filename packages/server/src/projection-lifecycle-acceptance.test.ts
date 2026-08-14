@@ -146,7 +146,7 @@ describe("aggregate projection lifecycle acceptance", () => {
     const backgroundFailures: string[] = [];
     const reconnect = createCodexRuntimeReconnectController({
       transport,
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       resource_budget: budget,
       lifecycle,
       random: () => 0,
@@ -514,7 +514,7 @@ function runtimeTransport(): ScriptedCodexTransport {
       switch (message.method) {
         case "initialize":
           respond({
-            userAgent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+            userAgent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
             codexHome: "/tmp/aggregate-codex-home",
             platformFamily: "unix",
             platformOs: "linux"
@@ -565,6 +565,8 @@ function rawThread() {
     parentThreadId: null,
     preview: "",
     ephemeral: false,
+    section: null,
+    sectionEnteredAt: null,
     historyMode: "legacy",
     modelProvider: "openai",
     createdAt: unixSeconds(createdAt),
@@ -573,8 +575,9 @@ function rawThread() {
     status: { type: "idle" },
     path: `/tmp/${threadA}.jsonl`,
     cwd: `/tmp/${sessionA}`,
-    cliVersion: "0.144.0",
+    cliVersion: "0.147.0",
     source: "appServer",
+    canAcceptDirectInput: null,
     threadSource: "hostdeck:managed",
     agentNickname: null,
     agentRole: null,
@@ -599,7 +602,9 @@ function rawResume() {
     activePermissionProfile: null,
     reasoningEffort: null,
     multiAgentMode: "explicitRequestOnly",
-    initialTurnsPage: null
+    initialTurnsPage: null,
+    turnsBackwardsCursor: null,
+    itemsBackwardsCursor: null
   };
 }
 
@@ -610,7 +615,7 @@ function stateCandidate(sessionId: string, threadId: string) {
     codex_thread_id: threadId,
     cwd: `/tmp/${sessionId}`,
     runtime_source: "codex_app_server" as const,
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected" as const,
     created_at: createdAt,
     updated_at: createdAt,

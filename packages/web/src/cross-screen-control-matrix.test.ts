@@ -561,7 +561,7 @@ function detailSnapshot(
     codex_thread_id: threadId,
     cwd: "/private/cross-screen-controls",
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: timestamp,
     archived_at: null,
     session_state: "active",
@@ -927,8 +927,8 @@ function hostStatus(access: ReturnType<typeof pairedAccess>) {
     compatibility: {
       state: "supported",
       evidence: "current",
-      observed_version: "0.144.0",
-      supported_version: "0.144.0",
+      observed_version: "0.147.0",
+      supported_version: "0.147.0",
       capability_state: "verified",
       checked_at: timestamp,
       recorded_at: timestamp

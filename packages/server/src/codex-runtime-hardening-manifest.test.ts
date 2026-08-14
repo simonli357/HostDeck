@@ -32,7 +32,7 @@ describe("runtime hardening manifest", () => {
       outer_root: root,
       node_bin: process.execPath,
       vitest_entry: vitestEntry,
-      codex_bin: "/tmp/codex-0.144.0",
+      codex_bin: "/tmp/codex-0.147.0",
       base_env: {
         PATH: process.env.PATH,
         HOSTDECK_CODEX_BIN: "/private/wrong",
@@ -89,7 +89,7 @@ describe("runtime hardening manifest", () => {
       expect(entry.command.args).not.toContain("/private/wrong-report");
     }
     expect(manifest[1]?.command.env.HOSTDECK_CODEX_BIN).toBe(
-      "/tmp/codex-0.144.0"
+      "/tmp/codex-0.147.0"
     );
     expect(manifest[1]?.command.env.HOSTDECK_REQUIRE_CODEX_VERTICAL_SMOKE).toBe(
       "1"

@@ -161,7 +161,7 @@ describe("HostDeck foreground resource bootstrap", () => {
     });
     expect(resources.paths.database_path).toBe(layout.databasePath);
     expect(resources.codex_bin).toBe(layout.executable);
-    expect(resources.codex_version).toBe("0.144.0");
+    expect(resources.codex_version).toBe("0.147.0");
     expect(resources.resource_budget).toBe(defaultResourceBudget);
     expect(resources.database.open).toBe(true);
     expect(resources.database.readonly).toBe(false);
@@ -194,7 +194,7 @@ describe("HostDeck foreground resource bootstrap", () => {
     });
     expect(resources.snapshot()).toMatchObject({
       phase: "ready",
-      codex_version: "0.144.0",
+      codex_version: "0.147.0",
       database_open: true,
       lease_held: true,
       runtime_preparation: "ready",
@@ -686,7 +686,7 @@ function fixtureLayout(label: string): FixtureLayout {
   const executable = join(root, "codex-fixture");
   writeFileSync(
     executable,
-    "#!/bin/sh\nprintf 'codex-cli 0.144.0\\n'\n",
+    "#!/bin/sh\nprintf 'codex-cli 0.147.0\\n'\n",
     { mode: 0o700 }
   );
   chmodSync(executable, 0o700);

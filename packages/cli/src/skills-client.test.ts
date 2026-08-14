@@ -361,7 +361,7 @@ function createSkillsSnapshotInput() {
       session_id: sessionId,
       codex_thread_id: threadId
     },
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     connection_generation: 3,
     observed_at: "2026-07-15T14:05:00.000Z",
     state: "content" as const,

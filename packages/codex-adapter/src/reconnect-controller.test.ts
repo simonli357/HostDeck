@@ -848,7 +848,7 @@ function baseOptions(
 ) {
   return {
     transport,
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     resource_budget: resolveResourceBudget(overrides),
     lifecycle: lifecycle(),
     on_background_error: () => undefined
@@ -885,7 +885,7 @@ function respondingTransport(options: { readonly failInitializeAttempts?: number
           JSON.stringify({
             id: message.id,
             result: {
-              userAgent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+              userAgent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
               codexHome: "/tmp/codex-home",
               platformFamily: "unix",
               platformOs: "linux"

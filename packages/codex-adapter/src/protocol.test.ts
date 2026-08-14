@@ -24,9 +24,12 @@ describe("Codex wire envelope decoder", () => {
   });
 
   it("classifies selected, generated-unhandled, and unknown notifications", () => {
-    expect(decodeCodexInboundFrame('{"method":"turn/started","params":{"turn":{"id":"turn-1"}}}')).toMatchObject({
+    expect(
+      decodeCodexInboundFrame('{"emittedAtMs":1786734000123,"method":"turn/started","params":{"turn":{"id":"turn-1"}}}')
+    ).toMatchObject({
       kind: "notification",
-      classification: "selected"
+      classification: "selected",
+      emitted_at_ms: 1_786_734_000_123
     });
     expect(decodeCodexInboundFrame('{"method":"account/updated","params":{}}')).toMatchObject({
       kind: "notification",
@@ -67,6 +70,11 @@ describe("Codex wire envelope decoder", () => {
     '{"method":"turn/started","params":{},"id":null}',
     '{"method":"turn/started","params":{},"result":{}}',
     '{"method":"turn/started"}',
+    '{"emittedAtMs":-1,"method":"turn/started","params":{}}',
+    '{"emittedAtMs":1.5,"method":"turn/started","params":{}}',
+    '{"emittedAtMs":"now","method":"turn/started","params":{}}',
+    '{"emittedAtMs":1,"method":"turn/started","params":{},"extra":true}',
+    '{"emittedAtMs":1,"method":"future/request","id":9,"params":{}}',
     '{"id":1,"error":{"code":1.5,"message":"bad"}}',
     '{"id":1,"error":{"code":1,"message":"","secret":"x"}}'
   ])("rejects malformed or contradictory frame %s", (frame) => {

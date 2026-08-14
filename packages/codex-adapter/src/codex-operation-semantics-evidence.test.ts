@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { codexBindingDescriptor } from "./binding.js";
+
+const historicalBindingId =
+  "codex-app-server-0.144.0-experimental:sha256:e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24";
 
 const reportFiles = [
   "../../../artifacts/int-v1-006-goal-activation-observation.json",
@@ -20,7 +22,7 @@ describe("INT-V1-006 redacted exact-Codex evidence", () => {
       expect(report).toMatchObject({
         task: "INT-V1-006",
         codex_version: "0.144.0",
-        binding_id: codexBindingDescriptor.binding_id,
+        binding_id: historicalBindingId,
         isolation: {
           copied_auth_file_only: true,
           codex_home_temporary: true,

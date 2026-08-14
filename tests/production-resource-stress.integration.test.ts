@@ -74,7 +74,7 @@ import {
 } from "../packages/storage/src/index.js";
 
 const timestamp = "2026-07-20T20:00:00.000Z";
-const runtimeVersion = "0.144.0";
+const runtimeVersion = "0.147.0";
 const privatePrompt = ["RESOURCE", "STRESS", "PRIVATE", "PAYLOAD"].join("_");
 const sessionIds = Object.freeze([
   "sess_resource_alpha_001",

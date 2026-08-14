@@ -1197,11 +1197,11 @@ function activeTurnNormalizer(threadId: string, turnId: string) {
 }
 
 function selected(method: string, params: unknown): CodexConnectionNotification {
-  return { kind: "notification", method, params, classification: "selected" };
+  return { kind: "notification", method, params, classification: "selected", emitted_at_ms: null };
 }
 
 function optional(method: string, params: unknown): CodexConnectionNotification {
-  return { kind: "notification", method, params, classification: "generated_unhandled" };
+  return { kind: "notification", method, params, classification: "generated_unhandled", emitted_at_ms: null };
 }
 
 function normalizeEvent(result: ReturnType<ReturnType<typeof createCodexEventNormalizer>["normalize"]>): NormalizedCodexEvent {
@@ -1218,6 +1218,8 @@ function rawThread(threadId: string, status: unknown) {
     parentThreadId: null,
     preview: "",
     ephemeral: false,
+    section: null,
+    sectionEnteredAt: null,
     historyMode: "legacy",
     modelProvider: "openai",
     createdAt: 1_752_170_400,
@@ -1226,8 +1228,9 @@ function rawThread(threadId: string, status: unknown) {
     status,
     path: "/tmp/codex-thread.jsonl",
     cwd: "/tmp/hostdeck-normalizer",
-    cliVersion: "0.144.0",
+    cliVersion: "0.147.0",
     source: "vscode",
+    canAcceptDirectInput: null,
     threadSource: "hostdeck",
     agentNickname: null,
     agentRole: null,

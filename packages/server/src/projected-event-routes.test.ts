@@ -923,7 +923,7 @@ function selectedStateCandidate(
     codex_thread_id: "thread-event-route-001",
     cwd: "/home/simonli/work/event-route-session",
     runtime_source: "codex_app_server" as const,
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: options.recoveryRequired
       ? ("recovery_required" as const)
       : ("selected" as const),

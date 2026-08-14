@@ -256,7 +256,7 @@ function nativeFixture(calls: string[]): CodexNativeSessionClient {
     thread_id: threadId,
     cwd: "/tmp/native-loopback-project",
     source: "cli",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: "2026-08-12T18:00:00.000Z",
     updated_at: "2026-08-12T18:30:00.000Z",
     status: "idle",
@@ -272,7 +272,7 @@ function nativeFixture(calls: string[]): CodexNativeSessionClient {
     truncated_before: false
   });
   const client: CodexNativeSessionClient = {
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     async discover(input = {}) {
       const limit = input.limit ?? 50;
       calls.push(`discover:${limit}`);

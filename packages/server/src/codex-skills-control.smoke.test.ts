@@ -123,7 +123,7 @@ describe.skipIf(!requireSmoke)("exact Codex skills-control smoke", () => {
         expect(firstA.target).toEqual(targetA);
         expect(firstB.target).toEqual(targetB);
         expect(methods).toEqual(["skills/list", "skills/list", "skills/list"]);
-        expect(firstA.runtime_version).toBe("0.144.0");
+        expect(firstA.runtime_version).toBe("0.147.0");
         expect(firstA.connection_generation).toBe(connection.generation);
         expect(firstA.state).toBe("content");
         expect(firstB.state).toBe("content");

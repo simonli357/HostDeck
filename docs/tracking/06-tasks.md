@@ -16,8 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-111` Codex 0.147 binding and adapter rebase | ready | none | Rebase generated protocol truth and all selected controls before the shared broker consumes them. |
-| 2 | `DAT-V1-106` Automatic enrollment state | ready | none | Make native UUID enrollment and dual-id lookup durable before broker orchestration. |
+| 1 | `DAT-V1-106` Automatic enrollment state | in_progress | none | Make native UUID enrollment and dual-id lookup durable before broker orchestration. |
 
 `REL-V1-109` records the approved shared-session/Ubuntu rebaseline. The dependency chain then proceeds through contracts, binding/state, broker, automatic enrollment, selected API/CLI, live catalog UI, hardening, Ubuntu packaging, physical phone acceptance, and clean release acceptance. Completed adoption and Windows work remains historical; unfinished Windows and superseded aggregate tasks are deferred rather than release blockers.
 

@@ -1087,6 +1087,8 @@ function rawThread(fixture: RuntimeFixture): Record<string, unknown> {
     parentThreadId: null,
     preview: "",
     ephemeral: false,
+    section: null,
+    sectionEnteredAt: null,
     historyMode: "legacy",
     modelProvider: "openai",
     createdAt: unixSeconds("2026-07-16T12:00:00.000Z"),
@@ -1095,8 +1097,9 @@ function rawThread(fixture: RuntimeFixture): Record<string, unknown> {
     status: fixture.status,
     path: `/tmp/${fixture.thread_id}.jsonl`,
     cwd: fixture.cwd,
-    cliVersion: "0.144.0",
+    cliVersion: "0.147.0",
     source: fixture.source,
+    canAcceptDirectInput: null,
     threadSource: "hostdeck:managed",
     agentNickname: null,
     agentRole: null,
@@ -1150,7 +1153,9 @@ function rawResume(fixture: RuntimeFixture): Record<string, unknown> {
     activePermissionProfile: null,
     reasoningEffort: fixture.resume_effort,
     multiAgentMode: "explicitRequestOnly",
-    initialTurnsPage: null
+    initialTurnsPage: null,
+    turnsBackwardsCursor: null,
+    itemsBackwardsCursor: null
   };
 }
 
@@ -1178,7 +1183,7 @@ function stateCandidate(
     codex_thread_id: threadId,
     cwd: `/tmp/${sessionId}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected",
     created_at: durableCreatedAt,
     updated_at: durableUpdatedAt,
@@ -1283,11 +1288,11 @@ function settings(mode: "default" | "plan", model: string, effort: string | null
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: checkedAt,
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]

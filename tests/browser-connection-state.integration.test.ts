@@ -854,7 +854,7 @@ async function createHarness(mode: HarnessMode): Promise<ConnectionServerHarness
 }
 
 class ConnectionPromptTurnClient implements CodexTurnClient {
-  readonly runtime_version = "0.144.0";
+  readonly runtime_version = "0.147.0";
   readonly startCalls: CodexTurnStartInput[] = [];
   readonly steerCalls: CodexTurnSteerInput[] = [];
   readonly interruptCalls: CodexTurnInterruptInput[] = [];
@@ -907,7 +907,7 @@ function connectionPromptState() {
     codex_thread_id: promptThreadId,
     cwd: "/workspace/hostdeck",
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected",
     created_at: timestamp,
     updated_at: timestamp,
@@ -1020,7 +1020,7 @@ function connectionPromptRuntime() {
     source: "codex_app_server",
     state: "ready",
     mutation_policy: "allowed",
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     binding_id: "binding-connection-prompt-001",
     capabilities: [
       "thread_lifecycle",
@@ -1175,7 +1175,7 @@ function sessionReadItem(): SelectedSessionReadItem {
       codex_thread_id: "thread-connection-integration",
       cwd: "/workspace/hostdeck",
       runtime_source: "codex_app_server",
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       created_at: timestamp,
       archived_at: null,
       session_state: "active",

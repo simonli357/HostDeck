@@ -25,7 +25,7 @@ test("loads one frozen exact clean-environment manifest", () => {
   assert.equal(manifest.base_image.version, "24.04");
   assert.equal(manifest.node.version, "22.22.2");
   assert.equal(manifest.pnpm_version, "10.29.2");
-  assert.equal(manifest.codex.version, "0.144.0");
+  assert.equal(manifest.codex.version, "0.147.0");
   assert.equal(manifest.tailscale.version, "1.98.8");
   assert(Object.isFrozen(manifest));
   assert(Object.isFrozen(manifest.bounds));
@@ -367,7 +367,7 @@ function validEvidence() {
       user_manager: "running"
     },
     toolchain: {
-      codex: "0.144.0",
+      codex: "0.147.0",
       codex_integrity_verified: true,
       corepack: "0.34.5",
       git: "2.43.0",

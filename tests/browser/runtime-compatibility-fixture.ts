@@ -48,7 +48,7 @@ export async function installRuntimeCompatibilityHost(
   let outcome: RuntimeCompatibilityHostOutcome = "success";
   let recordedAt = defaultRecordedAt;
   let observedVersion = "0.143.1";
-  let supportedVersion = "0.144.0";
+  let supportedVersion = "0.147.0";
   let pendingResolution:
     | ((result: Exclude<RuntimeCompatibilityHostOutcome, "pending">) => void)
     | null = null;

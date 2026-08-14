@@ -42,7 +42,7 @@ describe("Codex reconnect controller integration", () => {
     const callbackWrites: Promise<unknown>[] = [];
     const controller = createCodexRuntimeReconnectController({
       transport,
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       resource_budget: resolveResourceBudget({
         protocol_reconnect_initial_delay_ms: 10,
         protocol_reconnect_max_delay_ms: 100
@@ -179,7 +179,7 @@ function respondingTransport(): ScriptedCodexTransport {
           JSON.stringify({
             id: message.id,
             result: {
-              userAgent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+              userAgent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
               codexHome: "/tmp/codex-home",
               platformFamily: "unix",
               platformOs: "linux"
@@ -232,7 +232,7 @@ function selectedState(): SelectedSessionState {
       codex_thread_id: target.codex_thread_id,
       cwd: "/tmp/approval-project",
       runtime_source: "codex_app_server",
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       disposition: "selected",
       created_at: observedAt,
       updated_at: observedAt,
@@ -245,7 +245,7 @@ function selectedState(): SelectedSessionState {
         codex_thread_id: target.codex_thread_id,
         cwd: "/tmp/approval-project",
         runtime_source: "codex_app_server",
-        runtime_version: "0.144.0",
+        runtime_version: "0.147.0",
         created_at: observedAt,
         archived_at: null,
         session_state: "active",

@@ -64,6 +64,13 @@ const sessionSourceSchema = z.union([
   z.object({ subAgent: subAgentSourceSchema }).strict()
 ]);
 
+const threadSectionSchema = z
+  .object({
+    id: codexThreadIdSchema,
+    name: boundedNonemptyStringSchema(240)
+  })
+  .strict();
+
 export const rawThreadSchema = z
   .object({
     id: codexThreadIdSchema,
@@ -73,6 +80,8 @@ export const rawThreadSchema = z
     parentThreadId: codexThreadIdSchema.nullable(),
     preview: boundedStringSchema(maximumTextLength),
     ephemeral: z.boolean(),
+    section: threadSectionSchema.nullable(),
+    sectionEnteredAt: unixSecondsSchema.nullable(),
     historyMode: z.enum(["legacy", "paginated"]),
     modelProvider: boundedNonemptyStringSchema(120),
     createdAt: unixSecondsSchema,
@@ -83,6 +92,7 @@ export const rawThreadSchema = z
     cwd: absoluteCwdSchema,
     cliVersion: boundedNonemptyStringSchema(64),
     source: sessionSourceSchema,
+    canAcceptDirectInput: z.boolean().nullable(),
     threadSource: boundedStringSchema(240).nullable(),
     agentNickname: boundedStringSchema(240).nullable(),
     agentRole: boundedStringSchema(240).nullable(),

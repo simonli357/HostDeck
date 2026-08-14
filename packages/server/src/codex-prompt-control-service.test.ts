@@ -530,7 +530,7 @@ function fakeTurns(): FakeTurns {
   const startCalls: CodexTurnStartInput[] = [];
   const steerCalls: CodexTurnSteerInput[] = [];
   return {
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     startError: null,
     steerError: null,
     startResult: null,
@@ -671,7 +671,7 @@ function selectedState(
     codex_thread_id: threadId as SelectedSessionState["mapping"]["codex_thread_id"],
     cwd: `/tmp/${sessionId}` as SelectedSessionState["mapping"]["cwd"],
     runtime_source: "codex_app_server" as const,
-    runtime_version: "0.144.0" as SelectedSessionState["mapping"]["runtime_version"],
+    runtime_version: "0.147.0" as SelectedSessionState["mapping"]["runtime_version"],
     created_at: selectedTimestamp,
     archived_at: archivedAt
   };

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "codexVersion": "0.144.0",
+  "codexVersion": "0.147.0",
   "experimentalApi": true,
   "generationArgs": [
     "app-server",
@@ -8,7 +8,7 @@
     "--experimental",
     "--out"
   ],
-  "fileCount": 671,
-  "treeSha256": "e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24",
-  "bindingId": "codex-app-server-0.144.0-experimental:sha256:e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24"
+  "fileCount": 723,
+  "treeSha256": "673c02b5a758e082cb02c15f36bf4f37e88501470fd430ad232bebd754e8689c",
+  "bindingId": "codex-app-server-0.147.0-experimental:sha256:673c02b5a758e082cb02c15f36bf4f37e88501470fd430ad232bebd754e8689c"
 }

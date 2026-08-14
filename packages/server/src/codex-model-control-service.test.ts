@@ -426,7 +426,7 @@ function createHarness(options: { maxPendingSelections?: number; includeSecondSt
 function fakeModels(): FakeModels {
   const startCalls: Array<Record<string, unknown>> = [];
   return {
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     catalog: catalog([modelA, modelB]),
     current: { runtime_model: "runtime-a", reasoning_effort: "high" },
     listError: null,
@@ -523,7 +523,7 @@ function selectedState(sessionId: string, threadId: string, turnState = "idle", 
     codex_thread_id: threadId as SelectedSessionState["mapping"]["codex_thread_id"],
     cwd: `/tmp/${sessionId}` as SelectedSessionState["mapping"]["cwd"],
     runtime_source: "codex_app_server" as const,
-    runtime_version: "0.144.0" as SelectedSessionState["mapping"]["runtime_version"],
+    runtime_version: "0.147.0" as SelectedSessionState["mapping"]["runtime_version"],
     created_at: selectedTimestamp,
     archived_at: archivedAt
   };

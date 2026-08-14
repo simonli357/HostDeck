@@ -913,7 +913,7 @@ function selectedProbeState() {
     codex_thread_id: probeThreadId,
     cwd: "/tmp/hostdeck-composition-probe",
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected",
     created_at: fixedTime,
     updated_at: fixedTime,
@@ -955,7 +955,7 @@ function selectedProbeRuntime() {
     source: "codex_app_server",
     state: "ready",
     mutation_policy: "allowed",
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     binding_id: "binding-composition-probe-001",
     capabilities: runtimeCapabilities.map((name) => ({
       name,

@@ -587,11 +587,11 @@ function adoptionPort(
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: checkedAt,
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]
@@ -601,7 +601,7 @@ function readyCompatibility(): RuntimeCompatibility {
 
 function disconnectedCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: checkedAt,
     handshake: { state: "not_attempted" }
   });
@@ -616,6 +616,8 @@ function rawThread(overrides: Record<string, unknown> = {}): Record<string, unkn
     parentThreadId: null,
     preview: "",
     ephemeral: false,
+    section: null,
+    sectionEnteredAt: null,
     historyMode: "legacy",
     modelProvider: "openai",
     createdAt: unixSeconds("2026-08-12T14:00:00.000Z"),
@@ -624,8 +626,9 @@ function rawThread(overrides: Record<string, unknown> = {}): Record<string, unkn
     status: { type: "idle" },
     path: null,
     cwd: "/tmp/native-project",
-    cliVersion: "0.144.0",
+    cliVersion: "0.147.0",
     source: "cli",
+    canAcceptDirectInput: null,
     threadSource: null,
     agentNickname: null,
     agentRole: null,
@@ -687,6 +690,8 @@ function rawResumeResult(overrides: Record<string, unknown> = {}): Record<string
     reasoningEffort: "high",
     multiAgentMode: "explicitRequestOnly",
     initialTurnsPage: null,
+    turnsBackwardsCursor: null,
+    itemsBackwardsCursor: null,
     ...overrides
   };
 }

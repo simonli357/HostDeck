@@ -15,7 +15,7 @@ describe("selected usage contracts", () => {
 
     expect(parsed).toMatchObject({
       target: { session_id: "sess_usage_a", codex_thread_id: "thread-usage-a" },
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       connection_generation: 4,
       account: { scope: "account" },
       thread: { state: "observed", scope: "thread", turn_id: "turn-usage-a" },
@@ -119,7 +119,7 @@ function snapshotCandidate() {
       session_id: "sess_usage_a",
       codex_thread_id: "thread-usage-a"
     },
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     connection_generation: 4,
     measured_at: measuredAt,
     account: {

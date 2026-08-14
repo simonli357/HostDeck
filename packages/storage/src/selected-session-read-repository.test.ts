@@ -584,7 +584,7 @@ function seedSession(db: Database.Database, options: SeedSessionOptions): void {
       INSERT INTO selected_sessions (
         id, name, codex_thread_id, cwd, runtime_source, runtime_version,
         disposition, created_at, updated_at, archived_at
-      ) VALUES (?, ?, ?, ?, 'codex_app_server', '0.144.0', ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, 'codex_app_server', '0.147.0', ?, ?, ?, ?)
     `
   ).run(
     options.id,

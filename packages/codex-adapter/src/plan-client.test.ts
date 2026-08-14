@@ -176,11 +176,11 @@ function fakePort(handler: (request: CodexRequestInput) => unknown | Promise<unk
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: checkedAt,
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]
@@ -201,7 +201,7 @@ function compatibilityWithPlanState(state: "unavailable" | "unknown"): RuntimeCo
 
 function disconnectedCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: checkedAt,
     handshake: { state: "not_attempted" }
   });

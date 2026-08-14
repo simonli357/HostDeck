@@ -603,7 +603,7 @@ interface Harness {
 
 function createHarness(options: { readonly max_tracked_approvals?: number } = {}): Harness {
   const approvals: FakeApprovalClient = {
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     generation: 1,
     respondCalls: [],
     respondError: null,
@@ -750,7 +750,7 @@ function selectedState(freshness = "current", archived = false): SelectedSession
       codex_thread_id: target.codex_thread_id,
       cwd: "/tmp/approval-project",
       runtime_source: "codex_app_server",
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       disposition: "selected",
       created_at: observedAt,
       updated_at: observedAt,
@@ -763,7 +763,7 @@ function selectedState(freshness = "current", archived = false): SelectedSession
         codex_thread_id: target.codex_thread_id,
         cwd: "/tmp/approval-project",
         runtime_source: "codex_app_server",
-        runtime_version: "0.144.0",
+        runtime_version: "0.147.0",
         created_at: observedAt,
         archived_at: archivedAt,
         session_state: archived ? "archived" : "active",

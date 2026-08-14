@@ -309,7 +309,7 @@ describe("Mission Control projection", () => {
       urgent: true
     });
     expect(projection.notice?.body).toContain("Codex 0.145.0");
-    expect(projection.notice?.body).toContain("HostDeck supports 0.144.0");
+    expect(projection.notice?.body).toContain("HostDeck supports 0.147.0");
     expect(projection.sections.flatMap(({ rows }) => rows).map(({ item }) => item.session.name))
       .toContain("drift-readable");
     expect(state.writeEligibility).toMatchObject({
@@ -1069,8 +1069,8 @@ function hostCompatibility(
     return {
       state: "disconnected",
       evidence: "last_known",
-      observed_version: "0.144.0",
-      supported_version: "0.144.0",
+      observed_version: "0.147.0",
+      supported_version: "0.147.0",
       capability_state: "unverified",
       checked_at: compatibilityTimestamp,
       recorded_at: compatibilityTimestamp
@@ -1080,8 +1080,8 @@ function hostCompatibility(
     return {
       state: "degraded",
       evidence: "current",
-      observed_version: "0.144.0",
-      supported_version: "0.144.0",
+      observed_version: "0.147.0",
+      supported_version: "0.147.0",
       capability_state: "limited",
       checked_at: compatibilityTimestamp,
       recorded_at: compatibilityTimestamp
@@ -1091,8 +1091,8 @@ function hostCompatibility(
     return {
       state: versionDrift ? "version_drift" : "incompatible",
       evidence: "current",
-      observed_version: versionDrift ? "0.145.0" : "0.144.0",
-      supported_version: "0.144.0",
+      observed_version: versionDrift ? "0.145.0" : "0.147.0",
+      supported_version: "0.147.0",
       capability_state: "blocked",
       checked_at: compatibilityTimestamp,
       recorded_at: compatibilityTimestamp
@@ -1101,8 +1101,8 @@ function hostCompatibility(
   return {
     state: "supported",
     evidence: "current",
-    observed_version: "0.144.0",
-    supported_version: "0.144.0",
+    observed_version: "0.147.0",
+    supported_version: "0.147.0",
     capability_state: "verified",
     checked_at: compatibilityTimestamp,
     recorded_at: compatibilityTimestamp
@@ -1133,7 +1133,7 @@ function sessionItem(
     codex_thread_id: `thread-${id}`,
     cwd: options.cwd ?? `/workspace/${name}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: timestamp,
     archived_at: sessionState === "archived" ? timestamp : null,
     session_state: sessionState,

@@ -615,7 +615,7 @@ function initialApproval(timing: Readonly<{
 function physicalUsageSnapshot(): UsageSnapshot {
   return usageSnapshotSchema.parse({
     target: managedTarget(),
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     connection_generation: 4,
     measured_at: timestamp,
     account: {
@@ -659,7 +659,7 @@ function physicalUsageSnapshot(): UsageSnapshot {
 function physicalSkillsSnapshot(): SkillsSnapshot {
   return skillsSnapshotSchema.parse({
     target: managedTarget(),
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     connection_generation: 4,
     observed_at: timestamp,
     state: "content",

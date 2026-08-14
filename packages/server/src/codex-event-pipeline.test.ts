@@ -141,7 +141,8 @@ describe("ordered Codex event pipeline", () => {
           kind: "notification",
           method: "configWarning",
           params: { summary: "not retained" },
-          classification: "generated_unhandled"
+          classification: "generated_unhandled",
+          emitted_at_ms: null
         })
       ).resolves.toMatchObject({ kind: "optional_diagnostic", sequence: 1 });
 
@@ -192,7 +193,8 @@ describe("ordered Codex event pipeline", () => {
             kind: "notification",
             method: "configWarning",
             params: { summary: "not retained" },
-            classification: "generated_unhandled"
+            classification: "generated_unhandled",
+            emitted_at_ms: null
           },
           7
         )
@@ -613,7 +615,7 @@ describe("ordered Codex event pipeline", () => {
 });
 
 function selected(method: string, params: unknown): CodexConnectionNotification {
-  return { kind: "notification", method, params, classification: "selected" };
+  return { kind: "notification", method, params, classification: "selected", emitted_at_ms: null };
 }
 
 function stateCandidate(id: string, threadId: string, archivedAt: string | null = null) {
@@ -623,7 +625,7 @@ function stateCandidate(id: string, threadId: string, archivedAt: string | null 
     codex_thread_id: threadId,
     cwd: `/tmp/${id}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected",
     created_at: createdAt,
     updated_at: createdAt,

@@ -159,11 +159,24 @@ async function startNativeTui(
     8_000,
     () => `Native Codex TUI did not render before timeout (pane=${lastPane}): ${lastOutput || "empty"}`
   );
-  await runFile("tmux", ["-S", tmuxSocketPath, "send-keys", "-l", "-t", "native:0.0", "!pwd"], {
-    env: environment
-  });
-  await new Promise((resolve) => setTimeout(resolve, 100));
-  await runFile("tmux", ["-S", tmuxSocketPath, "send-keys", "-t", "native:0.0", "C-m"], {
+  for (const key of "!pwd") {
+    await runFile("tmux", ["-S", tmuxSocketPath, "send-keys", "-l", "-t", "native:0.0", key], {
+      env: environment
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  await waitFor(
+    async () => {
+      shellOutput = (await runFile("tmux", ["-S", tmuxSocketPath, "capture-pane", "-p", "-t", "native:0.0", "-S", "-200"], {
+        env: environment
+      })).stdout;
+      return shellOutput.includes("! pwd") && shellOutput.includes("Shell mode");
+    },
+    5_000,
+    () => `Native Codex local shell command did not render before timeout: ${shellOutput || "empty"}`
+  );
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  await runFile("tmux", ["-S", tmuxSocketPath, "send-keys", "-t", "native:0.0", "Enter"], {
     env: environment
   });
   await waitFor(

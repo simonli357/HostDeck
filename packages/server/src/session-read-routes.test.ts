@@ -534,7 +534,7 @@ function readItem(
       name: id.slice(5),
       recent_summary: "Bounded public summary.",
       runtime_source: "codex_app_server",
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       session_state: "active",
       settings: {
         collaboration_mode: "default",
@@ -679,7 +679,7 @@ function seedRealSession(
       INSERT INTO selected_sessions (
         id, name, codex_thread_id, cwd, runtime_source, runtime_version,
         disposition, created_at, updated_at, archived_at
-      ) VALUES (?, ?, ?, '/workspace/hostdeck', 'codex_app_server', '0.144.0', 'selected', ?, ?, NULL)
+      ) VALUES (?, ?, ?, '/workspace/hostdeck', 'codex_app_server', '0.147.0', 'selected', ?, ?, NULL)
     `
   ).run(id, id.slice(5), `thread-${id}`, timestamp, updatedAt);
   db.prepare(

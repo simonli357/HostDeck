@@ -469,7 +469,7 @@ function projection(options: ProjectionOptions = {}) {
     name: id.slice(5),
     recent_summary: "A bounded public summary.",
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     session_state: options.sessionState ?? (archived ? "archived" : "active"),
     settings: {
       collaboration_mode: "default",

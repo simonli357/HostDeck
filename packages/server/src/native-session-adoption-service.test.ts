@@ -78,12 +78,12 @@ describe("native session administration service", () => {
         id: "sess_native_001",
         name: "existing-work",
         codex_thread_id: threadId,
-        runtime_version: "0.144.0",
+        runtime_version: "0.147.0",
         disposition: "selected"
       },
       projection: {
         session: {
-          runtime_version: "0.144.0",
+          runtime_version: "0.147.0",
           session_state: "active",
           turn_state: "idle",
           freshness: "current",
@@ -265,7 +265,8 @@ describe("native session administration service", () => {
         kind: "notification",
         method: "thread/status/changed",
         params: { threadId, status: { type: "idle" } },
-        classification: "selected"
+        classification: "selected",
+        emitted_at_ms: null
       })
     ).resolves.toMatchObject({ kind: "committed" });
 
@@ -367,7 +368,8 @@ describe("native session administration service", () => {
       kind: "notification",
       method: "thread/status/changed",
       params: { threadId, status: { type: "idle" } },
-      classification: "selected"
+      classification: "selected",
+      emitted_at_ms: null
     });
     await publisherEntered.promise;
     let unmanageSettled = false;
@@ -391,7 +393,8 @@ describe("native session administration service", () => {
         kind: "notification",
         method: "thread/status/changed",
         params: { threadId, status: { type: "idle" } },
-        classification: "selected"
+        classification: "selected",
+        emitted_at_ms: null
       })
     ).resolves.toMatchObject({ kind: "unmanaged_observation" });
 
@@ -409,7 +412,8 @@ describe("native session administration service", () => {
         kind: "notification",
         method: "thread/status/changed",
         params: { threadId, status: { type: "idle" } },
-        classification: "selected"
+        classification: "selected",
+        emitted_at_ms: null
       })
     ).resolves.toMatchObject({ kind: "committed" });
     expect(fixture.states.listEvents("sess_native_002").events.at(-1)).toMatchObject({
@@ -484,7 +488,7 @@ function createFixture(options: FixtureOptions = {}): Fixture {
 }
 
 class FakeNativeClient implements CodexNativeSessionClient {
-  readonly runtime_version = "0.144.0";
+  readonly runtime_version = "0.147.0";
   readonly identities: NativeCodexThreadIdentity[] = [identity(threadId, "/tmp/project-a")];
   readonly snapshotCalls: string[] = [];
   readonly resumeCalls: string[] = [];
@@ -529,7 +533,7 @@ function identity(id: string, cwd: string): NativeCodexThreadIdentity {
     thread_id: id as never,
     cwd: cwd as never,
     source: "cli",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: "2026-08-12T14:00:00.000Z" as never,
     updated_at: "2026-08-12T15:00:00.000Z" as never,
     status: "idle",

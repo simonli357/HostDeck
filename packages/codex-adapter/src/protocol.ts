@@ -37,6 +37,7 @@ export type DecodedCodexInboundMessage =
       readonly method: string;
       readonly params: unknown;
       readonly classification: CodexMethodClassification;
+      readonly emitted_at_ms: number | null;
     }
   | {
       readonly kind: "server_request";
@@ -83,7 +84,11 @@ export function decodeCodexInboundFrame(
   const hasError = Object.hasOwn(value, "error");
 
   if (hasMethod) {
-    assertExactKeys(value, hasId ? ["id", "method", "params"] : ["method", "params"]);
+    const hasEmittedAt = Object.hasOwn(value, "emittedAtMs");
+    assertExactKeys(
+      value,
+      hasId ? ["id", "method", "params"] : hasEmittedAt ? ["emittedAtMs", "method", "params"] : ["method", "params"]
+    );
     const method = parseMethod(value.method);
     const params = Object.hasOwn(value, "params") ? value.params : undefined;
     if (hasResult || hasError) throw protocolError("Codex method messages cannot also contain result or error.");
@@ -105,6 +110,7 @@ export function decodeCodexInboundFrame(
       kind: "notification",
       method,
       params,
+      emitted_at_ms: hasEmittedAt ? parseEmittedAtMilliseconds(value.emittedAtMs) : null,
       classification: selectedNotificationSet.has(method)
         ? "selected"
         : generatedServerNotificationSet.has(method)
@@ -120,6 +126,13 @@ export function decodeCodexInboundFrame(
   const id = parseRequestId(value.id);
   if (hasResult) return { kind: "response", id, result: value.result, error: null };
   return { kind: "response", id, result: null, error: parseRpcError(value.error) };
+}
+
+function parseEmittedAtMilliseconds(candidate: unknown): number {
+  if (typeof candidate !== "number" || !Number.isSafeInteger(candidate) || candidate < 0) {
+    throw protocolError("Codex notification emittedAtMs must be a non-negative safe integer.");
+  }
+  return candidate;
 }
 
 export function encodeCodexClientRequest(method: string, id: number, params: unknown): string {

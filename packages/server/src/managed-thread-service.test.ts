@@ -71,7 +71,7 @@ describe("managed Codex thread start saga", () => {
         codex_thread_id: "thread-managed-1",
         cwd: "/tmp/project-a",
         runtime_source: "codex_app_server",
-        runtime_version: "0.144.0",
+        runtime_version: "0.147.0",
         disposition: "selected",
         archived_at: null
       },
@@ -852,7 +852,7 @@ function serviceFor(threads: CodexThreadClient, states: SelectedStateRepository)
 }
 
 class FakeThreadClient implements CodexThreadClient {
-  runtime_version = "0.144.0";
+  runtime_version = "0.147.0";
   readonly records: CodexThreadRecord[] = [];
   start_calls = 0;
   materialize_calls = 0;
@@ -969,7 +969,7 @@ function nativeAdoptionCandidate() {
         codex_thread_id: "thread-native-managed",
         cwd: "/tmp/native-project",
         runtime_source: "codex_app_server" as const,
-        runtime_version: "0.144.0",
+        runtime_version: "0.147.0",
         disposition: "selected" as const,
         created_at: "2026-07-09T20:00:00.000Z",
         updated_at: capturedAt,
@@ -982,7 +982,7 @@ function nativeAdoptionCandidate() {
           codex_thread_id: "thread-native-managed",
           cwd: "/tmp/native-project",
           runtime_source: "codex_app_server" as const,
-          runtime_version: "0.144.0",
+          runtime_version: "0.147.0",
           created_at: "2026-07-09T20:00:00.000Z",
           archived_at: null,
           session_state: "active" as const,

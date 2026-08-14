@@ -33,7 +33,7 @@ import {
 const directories: string[] = [];
 const timestamp = "2026-07-16T10:00:00.000Z";
 const archivedAt = "2026-07-16T10:00:01.000Z";
-const runtimeVersion = "0.144.0";
+const runtimeVersion = "0.147.0";
 const localOrigin = "http://127.0.0.1:3777";
 const localHeaders = Object.freeze({ host: new URL(localOrigin).host });
 const alphaSessionId = "sess_admission_cross_alpha";

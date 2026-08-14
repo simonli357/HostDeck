@@ -93,6 +93,7 @@ const threadListResultKeys = ["backwardsCursor", "data", "nextCursor"] as const;
 const threadKeys = [
   "agentNickname",
   "agentRole",
+  "canAcceptDirectInput",
   "cliVersion",
   "createdAt",
   "cwd",
@@ -108,6 +109,8 @@ const threadKeys = [
   "path",
   "preview",
   "recencyAt",
+  "section",
+  "sectionEnteredAt",
   "sessionId",
   "source",
   "status",
@@ -122,6 +125,7 @@ const resumeResultKeys = [
   "cwd",
   "initialTurnsPage",
   "instructionSources",
+  "itemsBackwardsCursor",
   "model",
   "modelProvider",
   "multiAgentMode",
@@ -129,7 +133,8 @@ const resumeResultKeys = [
   "runtimeWorkspaceRoots",
   "sandbox",
   "serviceTier",
-  "thread"
+  "thread",
+  "turnsBackwardsCursor"
 ] as const;
 const allowedMethods = new Set(["thread/list", "thread/read", "thread/resume", "thread/turns/list"]);
 const maximumResumePaths = 256;
@@ -593,6 +598,12 @@ function eligibleIdentity(raw: ParsedRawThread): NativeCodexThreadIdentity | nul
 function validateResumeEnvelope(result: Record<string, unknown>): void {
   if (result.initialTurnsPage !== null) {
     throw invalidPayload("Codex native thread/resume returned unrequested turn history.");
+  }
+  if (result.turnsBackwardsCursor !== null) {
+    parseCursor(result.turnsBackwardsCursor, "Codex native resume turns backwards cursor");
+  }
+  if (result.itemsBackwardsCursor !== null) {
+    parseCursor(result.itemsBackwardsCursor, "Codex native resume items backwards cursor");
   }
   parsePrintableString(result.modelProvider, "Codex native model provider", 120);
   if (result.serviceTier !== null) parsePrintableString(result.serviceTier, "Codex native service tier", 120);

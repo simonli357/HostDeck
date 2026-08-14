@@ -37,7 +37,7 @@ describe("normalized Codex usage client", () => {
 
     const result = await client.readAccount(deadline);
     expect(result).toEqual({
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       connection_generation: 3,
       observed_at: observedAt,
       account: {
@@ -213,11 +213,11 @@ function rawSummary(): Record<string, unknown> {
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: observedAt,
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.144.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]
@@ -238,7 +238,7 @@ function compatibilityWithUsageState(state: "unavailable" | "unknown"): RuntimeC
 
 function disconnectedCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     checked_at: observedAt,
     handshake: { state: "not_attempted" }
   });

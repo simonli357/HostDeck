@@ -33,7 +33,7 @@ import {
 const directories: string[] = [];
 const timestamp = "2026-07-15T21:00:00.000Z";
 const archiveTimestamp = "2026-07-15T21:00:01.000Z";
-const runtimeVersion = "0.144.0";
+const runtimeVersion = "0.147.0";
 const sessionId = "sess_archive_vertical_001";
 const threadId = "thread-archive-vertical-001";
 const operationId = "op_session_archive_vertical_001";

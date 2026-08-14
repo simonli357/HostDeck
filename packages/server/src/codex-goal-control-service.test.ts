@@ -374,7 +374,7 @@ function createHarness(
 function fakeGoals(initial: CodexThreadGoal | null): FakeGoals {
   const mutations: Array<Record<string, unknown>> = [];
   return {
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     current: initial,
     mutationError: null,
     mutationGate: null,
@@ -463,7 +463,7 @@ function selectedState(sessionId: string, threadId: string, turnState = "idle", 
     codex_thread_id: threadId,
     cwd: `/tmp/${sessionId}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected",
     created_at: now,
     updated_at: now,

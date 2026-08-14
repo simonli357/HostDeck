@@ -11815,7 +11815,7 @@ function createPhysicalSessionReads(
       ) VALUES (
         '${physicalUiSessionId}', '${physicalUiSessionName}',
         '${physicalUiThreadId}', '/workspace/hostdeck',
-        'codex_app_server', '0.144.0', 'selected', ?, ?, NULL
+        'codex_app_server', '0.147.0', 'selected', ?, ?, NULL
       )
     `
   ).run(createdAt, updatedAt);
@@ -11854,7 +11854,7 @@ function createPhysicalSessionReads(
           id, name, codex_thread_id, cwd, runtime_source, runtime_version,
           disposition, created_at, updated_at, archived_at
         ) VALUES (?, ?, ?, '/workspace/hostdeck', 'codex_app_server',
-          '0.144.0', 'selected', ?, ?, NULL)
+          '0.147.0', 'selected', ?, ?, NULL)
       `
     );
     const insertProjection = db.prepare(
@@ -12117,7 +12117,7 @@ function physicalStreamFailureCode(candidate: unknown): string {
 }
 
 class PhysicalPromptTurnClient implements PhysicalPromptTurnPort {
-  readonly runtime_version = "0.144.0";
+  readonly runtime_version = "0.147.0";
   readonly startCalls: PhysicalPromptStartInput[] = [];
 
   async startTurn(
@@ -12160,7 +12160,7 @@ function physicalPromptCompatibility(now: () => Date) {
     source: "codex_app_server",
     state: "ready",
     mutation_policy: "allowed",
-    observed_version: "0.144.0",
+    observed_version: "0.147.0",
     binding_id: "binding-physical-prompt-001",
     capabilities: [
       "thread_lifecycle",

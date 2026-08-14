@@ -31,7 +31,7 @@ const supervisorScenarioEvidenceSchema = z
     hostdeck_commit: fullCommitSchema,
     runtime: z
       .object({
-        version: z.literal("0.144.0"),
+        version: z.literal("0.147.0"),
         exact_binding: z.literal(true),
         app_server_process_count: z.literal(2)
       })
@@ -84,7 +84,7 @@ const restartEvidenceSchema = z
       .strict(),
     runtime: z
       .object({
-        version: z.literal("0.144.0"),
+        version: z.literal("0.147.0"),
         exact_binding: z.literal(true),
         service_runtime_pid_stable: z.literal(true),
         service_socket_identity_stable: z.literal(true),
@@ -150,7 +150,7 @@ const coexistenceEvidenceSchema = z
     hostdeck_commit: fullCommitSchema,
     runtime: z
       .object({
-        version: z.literal("0.144.0"),
+        version: z.literal("0.147.0"),
         exact_binding: z.literal(true),
         app_server_process_count: z.literal(1),
         app_server_identity_stable: z.literal(true),
@@ -318,7 +318,7 @@ const aggregateEvidenceSchema = z
     hostdeck_commit: fullCommitSchema,
     runtime: z
       .object({
-        version: z.literal("0.144.0"),
+        version: z.literal("0.147.0"),
         exact_binding: z.literal(true),
         exact_scenario_count: z.literal(3),
         exact_app_server_lifetime_count: z.literal(6)

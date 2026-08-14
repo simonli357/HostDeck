@@ -1166,7 +1166,7 @@ function stateCandidate() {
     codex_thread_id: "thread-projection-001",
     cwd: "/home/simonli/work/projection-session",
     runtime_source: "codex_app_server" as const,
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected" as const,
     created_at: createdAt,
     updated_at: createdAt,

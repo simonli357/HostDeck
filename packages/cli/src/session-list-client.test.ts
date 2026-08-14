@@ -305,7 +305,7 @@ function sessionItem(
       name: id.slice(5),
       recent_summary: "Private summary must not appear in human output.",
       runtime_source: "codex_app_server" as const,
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       session_state: "active" as const,
       settings: {
         collaboration_mode: "default" as const,

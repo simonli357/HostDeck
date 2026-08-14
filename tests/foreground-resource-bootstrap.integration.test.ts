@@ -55,7 +55,7 @@ describe("foreground resource bootstrap Linux boundary", () => {
     });
     expect(first.snapshot()).toMatchObject({
       phase: "ready",
-      codex_version: "0.144.0",
+      codex_version: "0.147.0",
       database_open: true,
       lease_held: true,
       runtime_preparation: "ready",
@@ -177,7 +177,7 @@ import { createServer } from "node:net";
 
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === "--version") {
-  process.stdout.write("codex-cli 0.144.0\\n");
+  process.stdout.write("codex-cli 0.147.0\\n");
   process.exit(0);
 }
 if (args.length !== 3 || args[0] !== "app-server" || args[1] !== "--listen" || !args[2].startsWith("unix://")) process.exit(64);

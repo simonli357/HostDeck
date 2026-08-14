@@ -43,7 +43,7 @@ import {
 const directories: string[] = [];
 const timestamp = "2026-07-16T08:00:00.000Z";
 const auditTimestamp = "2026-07-16T08:00:01.000Z";
-const runtimeVersion = "0.144.0";
+const runtimeVersion = "0.147.0";
 const generation = 1;
 const sessionId = "sess_approval_vertical_001";
 const threadId = codexThreadIdSchema.parse("thread-approval-vertical-001");

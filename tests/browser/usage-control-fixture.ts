@@ -136,7 +136,7 @@ export function usageSnapshot(variant: UsageSnapshotVariant): UsageSnapshot {
       session_id: sessionDetailBrowserSessionId,
       codex_thread_id: "thread-private-browser-detail"
     },
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     connection_generation: 4,
     measured_at: timestamp,
     account: {

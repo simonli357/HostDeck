@@ -143,7 +143,7 @@ describe("selected host health contracts", () => {
       {
         ...supportedCompatibility(),
         state: "version_drift",
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         capability_state: "blocked"
       },
       {
@@ -152,7 +152,7 @@ describe("selected host health contracts", () => {
         observed_version: "0.145.0",
         capability_state: "blocked"
       },
-      { ...unknownCompatibility(), observed_version: "0.144.0" },
+      { ...unknownCompatibility(), observed_version: "0.147.0" },
       {
         ...disconnectedCompatibility(),
         recorded_at: "2026-07-16T19:59:00.000Z"
@@ -690,8 +690,8 @@ function supportedCompatibility() {
   return {
     state: "supported" as const,
     evidence: "current" as const,
-    observed_version: "0.144.0",
-    supported_version: "0.144.0",
+    observed_version: "0.147.0",
+    supported_version: "0.147.0",
     capability_state: "verified" as const,
     checked_at: timestamp,
     recorded_at: laterTimestamp
@@ -712,7 +712,7 @@ function unknownCompatibility() {
     state: "unknown" as const,
     evidence: "unobserved" as const,
     observed_version: null,
-    supported_version: "0.144.0",
+    supported_version: "0.147.0",
     capability_state: "unverified" as const,
     checked_at: null,
     recorded_at: null

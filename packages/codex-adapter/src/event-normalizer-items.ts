@@ -151,6 +151,8 @@ const nativeHistoryUserInputPolicy = Object.freeze({
   text: "retain",
   image: "omit",
   localImage: "omit",
+  audio: "omit",
+  localAudio: "omit",
   skill: "omit",
   mention: "omit"
 } as const satisfies Record<UserInput["type"], "omit" | "retain">);

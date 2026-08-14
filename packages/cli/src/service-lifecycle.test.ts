@@ -1295,7 +1295,7 @@ function createSourcePackage(
   const manifestSha = seed.repeat(64).slice(0, 64);
   const contentSha = sha256(`${version}:${seed}`);
   writeFileSync(join(root, "hostdeck-package.json"), `${JSON.stringify({
-    codex_version: "0.144.0",
+    codex_version: "0.147.0",
     package_version: version,
     manifest_sha256: manifestSha,
     content_sha256: contentSha
@@ -1305,7 +1305,7 @@ function createSourcePackage(
   });
   chmodSync(join(root, "dist", "shell.js"), 0o755);
   return Object.freeze({
-    codex_version: "0.144.0",
+    codex_version: "0.147.0",
     content_sha256: contentSha,
     manifest_sha256: manifestSha,
     package_version: version,

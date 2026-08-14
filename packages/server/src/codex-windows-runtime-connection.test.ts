@@ -143,7 +143,7 @@ describe("Codex Windows runtime connection", () => {
     const backgroundErrors: unknown[] = [];
     const reconnect = createCodexRuntimeReconnectController({
       transport: owner.transport,
-      observed_version: "0.144.0",
+      observed_version: "0.147.0",
       host_target: "windows-x64",
       resource_budget: defaultResourceBudget,
       lifecycle,
@@ -487,7 +487,7 @@ function respondingTransport(): ScriptedCodexTransport {
           JSON.stringify({
             id: message.id,
             result: {
-              userAgent: "hostdeck/0.144.0 (Windows 11; x86_64)",
+              userAgent: "hostdeck/0.147.0 (Windows 11; x86_64)",
               codexHome: "/tmp/codex-home",
               platformFamily: "windows",
               platformOs: "windows"

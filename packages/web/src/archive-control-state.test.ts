@@ -547,7 +547,7 @@ function context(input: Readonly<{
     codex_thread_id: input.projectedThreadId ?? threadId,
     cwd: "/private/archive-component",
     runtime_source: "codex_app_server",
-    runtime_version: input.runtimeVersion ?? "0.144.0",
+    runtime_version: input.runtimeVersion ?? "0.147.0",
     created_at: input.createdAt ?? timestamp,
     archived_at: archived ? laterTimestamp : null,
     session_state: sessionState,
@@ -671,14 +671,14 @@ function hostStatus(
     ? {
         state: "supported" as const,
         evidence: "current" as const,
-        observed_version: "0.144.0",
+        observed_version: "0.147.0",
         capability_state: "verified" as const
       }
     : compatibility === "degraded"
       ? {
           state: "degraded" as const,
           evidence: "current" as const,
-          observed_version: "0.144.0",
+          observed_version: "0.147.0",
           capability_state: "limited" as const
         }
       : compatibility === "incompatible"
@@ -691,7 +691,7 @@ function hostStatus(
         : {
             state: "disconnected" as const,
             evidence: "last_known" as const,
-            observed_version: "0.144.0",
+            observed_version: "0.147.0",
             capability_state: "unverified" as const
           };
   const parsed = selectedHostStatusResponseSchema.parse({
@@ -711,8 +711,8 @@ function hostStatus(
     compatibility: {
       state: "supported",
       evidence: "current",
-      observed_version: "0.144.0",
-      supported_version: "0.144.0",
+      observed_version: "0.147.0",
+      supported_version: "0.147.0",
       capability_state: "verified",
       checked_at: timestamp,
       recorded_at: timestamp

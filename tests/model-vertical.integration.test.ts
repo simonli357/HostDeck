@@ -43,7 +43,7 @@ import {
 const directories: string[] = [];
 const timestamp = "2026-07-16T05:00:00.000Z";
 const auditTimestamp = "2026-07-16T05:00:01.000Z";
-const runtimeVersion = "0.144.0";
+const runtimeVersion = "0.147.0";
 const sessionId = "sess_model_vertical_001";
 const threadId = "thread-model-vertical-001";
 const secondSessionId = "sess_model_vertical_002";

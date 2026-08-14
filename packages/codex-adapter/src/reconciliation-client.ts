@@ -123,6 +123,7 @@ const resubscribeMethods = Object.freeze([
 const threadKeys = [
   "agentNickname",
   "agentRole",
+  "canAcceptDirectInput",
   "cliVersion",
   "createdAt",
   "cwd",
@@ -138,6 +139,8 @@ const threadKeys = [
   "path",
   "preview",
   "recencyAt",
+  "section",
+  "sectionEnteredAt",
   "sessionId",
   "source",
   "status",
@@ -454,6 +457,8 @@ function parseThread(
   parseNullableThreadId(value.forkedFromId, "forkedFromId");
   parseNullableThreadId(value.parentThreadId, "parentThreadId");
   if (typeof value.ephemeral !== "boolean") throw invalidPayload("Codex thread ephemeral flag is invalid.");
+  validateThreadSection(value.section);
+  if (value.sectionEnteredAt !== null) unixSecondsToIso(value.sectionEnteredAt, "thread sectionEnteredAt");
   if (value.historyMode !== "legacy" && value.historyMode !== "paginated") {
     throw invalidPayload("Codex thread history mode is invalid.");
   }
@@ -463,6 +468,9 @@ function parseThread(
   if (value.recencyAt !== null) unixSecondsToIso(value.recencyAt, "thread recencyAt");
   if (value.path !== null) parseAbsolutePath(value.path, "Codex thread path");
   parsePrintableString(value.cliVersion, "Codex thread CLI version", 120);
+  if (value.canAcceptDirectInput !== null && typeof value.canAcceptDirectInput !== "boolean") {
+    throw invalidPayload("Codex thread direct-input capability is invalid.");
+  }
   parseNullablePrintableString(value.agentNickname, "Codex thread agent nickname", 240);
   parseNullablePrintableString(value.agentRole, "Codex thread agent role", 240);
   validateGitInfo(value.gitInfo);
@@ -483,6 +491,14 @@ function parseThread(
     preview: parseBoundedText(value.preview, "Codex thread preview", 12_000, true),
     archived
   });
+}
+
+function validateThreadSection(candidate: unknown): void {
+  if (candidate === null) return;
+  const value = requireRecord(candidate, "Codex thread section must be an object.");
+  assertExactKeys(value, ["id", "name"], "Codex thread section fields are invalid.");
+  parsePayloadThreadId(value.id);
+  parsePrintableString(value.name, "Codex thread section name", 240);
 }
 
 function parseLatestTurn(candidate: unknown): CodexReconciliationLatestTurn {

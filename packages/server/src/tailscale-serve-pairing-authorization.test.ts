@@ -1322,7 +1322,7 @@ function seedStartupAggregateSession(
         disposition, created_at, updated_at, archived_at
       ) VALUES (
         'sess_startup_aggregate', 'startup-aggregate', 'thread-startup-aggregate',
-        '/workspace/hostdeck', 'codex_app_server', '0.144.0', 'selected', ?, ?, NULL
+        '/workspace/hostdeck', 'codex_app_server', '0.147.0', 'selected', ?, ?, NULL
       )
     `
   ).run(createdAt, updatedAt);

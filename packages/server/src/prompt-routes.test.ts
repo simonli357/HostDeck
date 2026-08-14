@@ -50,7 +50,7 @@ import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit
 
 const temporaryDirectories: string[] = [];
 const timestamp = "2026-07-15T20:00:00.000Z";
-const runtimeVersion = "0.144.0";
+const runtimeVersion = "0.147.0";
 const sessionId = "sess_prompt_route_001";
 const threadId = "thread-prompt-route-001";
 const privatePrompt = "PROMPT_ROUTE_PRIVATE_SENTINEL continue the selected task";

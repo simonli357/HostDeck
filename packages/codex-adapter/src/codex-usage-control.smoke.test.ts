@@ -49,7 +49,7 @@ describe.skipIf(!requireSmoke)("exact Codex structured usage smoke", () => {
         const usage = createCodexUsageClient(connection);
         const snapshot = await usage.readAccount();
 
-        expect(snapshot.runtime_version).toBe("0.144.0");
+        expect(snapshot.runtime_version).toBe("0.147.0");
         expect(snapshot.connection_generation).toBe(connection.generation);
         expect(snapshot.account.scope).toBe("account");
         expect(snapshot.account.daily_buckets === null || snapshot.account.daily_buckets.length <= 2_000).toBe(true);

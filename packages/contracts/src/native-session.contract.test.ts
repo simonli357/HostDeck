@@ -223,7 +223,7 @@ function nativeIdentity() {
     thread_id: threadId,
     cwd: "/tmp/native-session-contract",
     source: "cli" as const,
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: createdAt,
     updated_at: updatedAt,
     status: "idle" as const,

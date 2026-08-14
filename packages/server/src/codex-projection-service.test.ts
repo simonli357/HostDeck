@@ -475,7 +475,7 @@ function event(normalizer: ReturnType<typeof createCodexEventNormalizer>, method
 }
 
 function selected(method: string, params: unknown): CodexConnectionNotification {
-  return { kind: "notification", method, params, classification: "selected" };
+  return { kind: "notification", method, params, classification: "selected", emitted_at_ms: null };
 }
 
 function stateCandidate(id: string, threadId: string, archivedAt: string | null = null) {
@@ -485,7 +485,7 @@ function stateCandidate(id: string, threadId: string, archivedAt: string | null 
     codex_thread_id: threadId,
     cwd: `/tmp/${id}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     disposition: "selected",
     created_at: createdAt,
     updated_at: createdAt,
@@ -533,6 +533,8 @@ function rawThread(threadId: string, status: unknown) {
     parentThreadId: null,
     preview: "",
     ephemeral: false,
+    section: null,
+    sectionEnteredAt: null,
     historyMode: "legacy",
     modelProvider: "openai",
     createdAt: 1_752_170_400,
@@ -541,8 +543,9 @@ function rawThread(threadId: string, status: unknown) {
     status,
     path: "/tmp/codex-thread.jsonl",
     cwd: "/tmp/hostdeck-projector",
-    cliVersion: "0.144.0",
+    cliVersion: "0.147.0",
     source: "vscode",
+    canAcceptDirectInput: null,
     threadSource: "hostdeck",
     agentNickname: null,
     agentRole: null,

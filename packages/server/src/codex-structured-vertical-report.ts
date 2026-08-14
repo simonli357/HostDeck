@@ -36,7 +36,7 @@ const structuredVerticalReportSchema = z
     hostdeck_commit: fullCommitSchema,
     runtime: z
       .object({
-        version: z.literal("0.144.0"),
+        version: z.literal("0.147.0"),
         exact_binding: z.literal(true),
         app_server_process_count: z.literal(1),
         connection_generation_count: z.literal(1)
@@ -120,7 +120,7 @@ export function createStructuredVerticalReport(
     observed_at: input.observed_at,
     hostdeck_commit: input.hostdeck_commit,
     runtime: {
-      version: "0.144.0",
+      version: "0.147.0",
       exact_binding: true,
       app_server_process_count: 1,
       connection_generation_count: 1

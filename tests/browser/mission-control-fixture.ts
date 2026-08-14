@@ -220,8 +220,8 @@ function readyHostStatus(variant: MissionApiVariant) {
     compatibility: {
       state: "supported",
       evidence: "current",
-      observed_version: "0.144.0",
-      supported_version: "0.144.0",
+      observed_version: "0.147.0",
+      supported_version: "0.147.0",
       capability_state: "verified",
       checked_at: timestamp,
       recorded_at: timestamp
@@ -416,7 +416,7 @@ function session(
       codex_thread_id: `thread-${id}`,
       cwd: options.cwd ?? `/workspace/${name}`,
       runtime_source: "codex_app_server",
-      runtime_version: "0.144.0",
+      runtime_version: "0.147.0",
       created_at: timestamp,
       archived_at: sessionState === "archived" ? timestamp : null,
       session_state: sessionState,

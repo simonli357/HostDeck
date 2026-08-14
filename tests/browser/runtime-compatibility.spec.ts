@@ -31,7 +31,7 @@ const variantCases = [
     variant: "supported",
     title: "Codex compatible",
     source: "Current laptop check",
-    installed: "0.144.0",
+    installed: "0.147.0",
     capability: "Verified",
     evidence: "Current",
     stateCell: "Current",
@@ -41,7 +41,7 @@ const variantCases = [
     variant: "degraded_current",
     title: "Codex compatibility limited",
     source: "Current laptop check",
-    installed: "0.144.0",
+    installed: "0.147.0",
     capability: "Limited",
     evidence: "Current",
     stateCell: "Degraded",
@@ -51,7 +51,7 @@ const variantCases = [
     variant: "degraded_last_known",
     title: "Codex compatibility is stale",
     source: "Last known laptop check",
-    installed: "0.144.0",
+    installed: "0.147.0",
     capability: "Unverified",
     evidence: "Last known",
     stateCell: "Degraded",
@@ -61,7 +61,7 @@ const variantCases = [
     variant: "incompatible",
     title: "Codex interface incompatible",
     source: "Current laptop check",
-    installed: "0.144.0",
+    installed: "0.147.0",
     capability: "Blocked",
     evidence: "Current",
     stateCell: "Incompatible",
@@ -81,7 +81,7 @@ const variantCases = [
     variant: "unknown_last_known",
     title: "Codex compatibility unknown",
     source: "Last known laptop check",
-    installed: "0.144.0",
+    installed: "0.147.0",
     capability: "Unverified",
     evidence: "Last known",
     stateCell: "Unknown",
@@ -91,7 +91,7 @@ const variantCases = [
     variant: "disconnected",
     title: "Codex runtime disconnected",
     source: "Last known laptop check",
-    installed: "0.144.0",
+    installed: "0.147.0",
     capability: "Unverified",
     evidence: "Last known",
     stateCell: "Disconnected",
@@ -168,7 +168,7 @@ test("renders every selected state and evidence product through one complete Foc
       .toHaveText(selected.source);
     await expect(rail.getByRole("heading", { name: selected.title })).toBeVisible();
     await expectFact(rail, "Installed", selected.installed);
-    await expectFact(rail, "HostDeck supports", "0.144.0");
+    await expectFact(rail, "HostDeck supports", "0.147.0");
     await expectFact(rail, "Controls", selected.capability);
     await expectFact(rail, "Evidence", selected.evidence);
     await expect(rail.getByText(/Checked Jul 27, 2026|Not checked/u)).toBeVisible();
@@ -227,7 +227,7 @@ test("downgrades retained browser data and synchronously purges it after authori
     .toBeVisible();
   await expect(rail.locator("dl")).toHaveCount(0);
   await expect(rail.getByRole("button")).toHaveCount(0);
-  await expect(rail).not.toContainText("0.144.0");
+  await expect(rail).not.toContainText("0.147.0");
   await rail.scrollIntoViewIfNeeded();
   await capture(page, "authority-purged-390x844.png");
 
@@ -365,7 +365,7 @@ test("keeps readable Session Detail visible while compatibility blocks unsafe co
   const rail = compatibilityRail(sheet);
   await expect(rail.getByRole("heading", { name: "Codex update required" })).toBeVisible();
   await expectFact(rail, "Installed", "0.143.1");
-  await expectFact(rail, "HostDeck supports", "0.144.0");
+  await expectFact(rail, "HostDeck supports", "0.147.0");
   expect(detail.promptRequests()).toHaveLength(0);
   expect(unsafeSessionMutations(detail.requests)).toEqual([]);
   expect(host.requests.every((request) => request.method() === "GET")).toBe(true);
@@ -382,7 +382,7 @@ test("contains long compatibility truth across phone, tablet, desktop, short-hei
   const host = await installRuntimeCompatibilityHost(page, "version_drift");
   host.setVersions(
     "0.143.1-experimental-mobile-runtime-compatibility-a",
-    "0.144.0-hostdeck-selected-mobile-runtime-20260727"
+    "0.147.0-hostdeck-selected-mobile-runtime-20260727"
   );
   await page.goto("/");
   const sheet = await openHostAccess(page);

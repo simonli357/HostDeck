@@ -28,7 +28,7 @@ import {
 const roots: string[] = [];
 const sessionId = "sess_resume_reader_001";
 const threadId = "thread-resume-reader-001";
-const runtimeVersion = "0.144.0";
+const runtimeVersion = "0.147.0";
 const createdAt = "2026-07-15T12:00:00.000Z";
 const updatedAt = "2026-07-15T12:01:00.000Z";
 const socketPath = "/run/user/1000/hostdeck/app-server.sock";

@@ -68,10 +68,26 @@ describe.skipIf(!requireSmoke)("installed Codex Unix IPC smoke", () => {
 });
 
 function summarizeTransportEvent(event: CodexTransportEvent): string {
-  if (event.type === "message") return `message:${Buffer.byteLength(event.text, "utf8")}`;
+  if (event.type === "message") return summarizeInboundFrame(event.text);
   if (event.type === "error") return `error:${event.error.code}`;
   if (event.type === "close") return `close:${event.code}:${event.clean}:${event.reason}`;
   return `open:${event.generation}`;
+}
+
+function summarizeInboundFrame(frame: string): string {
+  const bytes = Buffer.byteLength(frame, "utf8");
+  try {
+    const parsed = JSON.parse(frame) as unknown;
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return `message:${bytes}:non_object`;
+    const value = parsed as Record<string, unknown>;
+    const resultKeys =
+      value.result !== null && typeof value.result === "object" && !Array.isArray(value.result)
+        ? Object.keys(value.result as Record<string, unknown>).sort().join(",")
+        : typeof value.result;
+    return `message:${bytes}:keys=${Object.keys(value).sort().join(",")}:method=${typeof value.method === "string" ? value.method : typeof value.method}:result=${resultKeys}`;
+  } catch {
+    return `message:${bytes}:invalid_json`;
+  }
 }
 
 async function waitForSocket(socketPath: string, child: ChildProcess, readStderr: () => string): Promise<void> {

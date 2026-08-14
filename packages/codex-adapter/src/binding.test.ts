@@ -11,13 +11,13 @@ import {
 describe("Codex generated binding ownership", () => {
   it("exposes one immutable reviewed identity and selected protocol surface", () => {
     expect(codexBindingManifest).toMatchObject({
-      codexVersion: "0.144.0",
+      codexVersion: "0.147.0",
       experimentalApi: true,
-      fileCount: 671,
-      treeSha256: "e1a1a5cff3ab91862f9215dd06538eae1ea0b00bae48cbb7d87061faaee27e24"
+      fileCount: 723,
+      treeSha256: "673c02b5a758e082cb02c15f36bf4f37e88501470fd430ad232bebd754e8689c"
     });
     expect(codexBindingDescriptor.binding_id).toBe(
-      `codex-app-server-0.144.0-experimental:sha256:${codexBindingManifest.treeSha256}`
+      `codex-app-server-0.147.0-experimental:sha256:${codexBindingManifest.treeSha256}`
     );
     expect(Object.isFrozen(codexBindingManifest)).toBe(true);
     expect(Object.isFrozen(codexBindingManifest.generationArgs)).toBe(true);
@@ -48,9 +48,9 @@ describe("Codex generated binding ownership", () => {
 
   it("derives immutable complete method catalogs from each generated discriminated union", () => {
     const catalogs = [
-      [generatedClientRequestMethods, 125],
+      [generatedClientRequestMethods, 136],
       [generatedClientNotificationMethods, 1],
-      [generatedServerNotificationMethods, 69],
+      [generatedServerNotificationMethods, 72],
       [generatedServerRequestMethods, 11]
     ] as const;
     for (const [catalog, expectedCount] of catalogs) {

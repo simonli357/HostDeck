@@ -71,7 +71,7 @@
     "@axe-core/playwright": "4.12.1",
     "@biomejs/biome": "2.5.3",
     "@cyclonedx/cyclonedx-library": "10.1.1",
-    "@openai/codex": "0.144.0",
+    "@openai/codex": "0.147.0",
     "@playwright/test": "1.61.1",
     "@types/node": "26.1.1",
     "ajv": "8.17.1",

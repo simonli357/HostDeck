@@ -251,7 +251,7 @@ describe("Session Detail projection", () => {
       urgent: true
     });
     expect(projection.notices[0]?.body).toContain("Codex 0.145.0");
-    expect(projection.notices[0]?.body).toContain("HostDeck supports 0.144.0");
+    expect(projection.notices[0]?.body).toContain("HostDeck supports 0.147.0");
     expect(projection.timeline.map(({ body }) => body)).toContain("Readable diagnostic activity");
     expect(state.writeEligibility).toMatchObject({
       eligible: false,
@@ -907,7 +907,7 @@ function sessionItem(
     codex_thread_id: "thread-private-detail",
     cwd: "/private/private-workspace/api-refactor",
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: timestamp,
     archived_at: null,
     session_state: "active",
@@ -1188,7 +1188,7 @@ function versionDriftHostStatus(): SelectedHostStatusResponse {
       state: "version_drift",
       evidence: "current",
       observed_version: "0.145.0",
-      supported_version: "0.144.0",
+      supported_version: "0.147.0",
       capability_state: "blocked",
       checked_at: timestamp,
       recorded_at: timestamp
@@ -1235,8 +1235,8 @@ function interruptHostStatus() {
     compatibility: {
       state: "supported",
       evidence: "current",
-      observed_version: "0.144.0",
-      supported_version: "0.144.0",
+      observed_version: "0.147.0",
+      supported_version: "0.147.0",
       capability_state: "verified",
       checked_at: timestamp,
       recorded_at: timestamp
@@ -1301,7 +1301,7 @@ function usageSnapshot(): UsageSnapshot {
       session_id: sessionId,
       codex_thread_id: "thread-private-detail"
     },
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     connection_generation: 1,
     measured_at: timestamp,
     account: {
@@ -1327,7 +1327,7 @@ function skillsSnapshot(): SkillsSnapshot {
       session_id: sessionId,
       codex_thread_id: "thread-private-detail"
     },
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     connection_generation: 1,
     observed_at: timestamp,
     state: "empty",

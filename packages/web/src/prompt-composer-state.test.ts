@@ -758,7 +758,7 @@ function sessionItem(options: {
     codex_thread_id: "thread-private-prompt-composer",
     cwd: "/private/prompt-composer",
     runtime_source: "codex_app_server",
-    runtime_version: "0.144.0",
+    runtime_version: "0.147.0",
     created_at: timestamp,
     archived_at: archived ? "2026-07-25T18:05:00.000Z" : null,
     session_state: archived ? "archived" : "active",

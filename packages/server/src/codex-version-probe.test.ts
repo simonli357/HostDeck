@@ -28,7 +28,7 @@ describe("production Codex version probe", () => {
         "[ \"$#\" -eq 1 ] || exit 91",
         "[ \"$1\" = \"--version\" ] || exit 92",
         "[ \"$PWD\" = \"/\" ] || exit 93",
-        "printf 'codex-cli 0.144.0\\n'"
+        "printf 'codex-cli 0.147.0\\n'"
       ].join("\n")
     );
     const drift = executable(
@@ -36,15 +36,15 @@ describe("production Codex version probe", () => {
       "printf 'codex-cli 0.145.0\\n'"
     );
 
-    await expect(observe(exact)).resolves.toBe("0.144.0");
+    await expect(observe(exact)).resolves.toBe("0.147.0");
     await expect(observe(drift)).resolves.toBe("0.145.0");
   });
 
   it.each([
-    ["stderr", "printf 'private' >&2\nprintf 'codex-cli 0.144.0\\n'", "output_invalid"],
-    ["malformed", "printf 'codex 0.144.0\\n'", "output_invalid"],
-    ["extra", "printf 'codex-cli 0.144.0\\nextra\\n'", "output_invalid"],
-    ["nonzero", "printf 'codex-cli 0.144.0\\n'\nexit 7", "command_failed"],
+    ["stderr", "printf 'private' >&2\nprintf 'codex-cli 0.147.0\\n'", "output_invalid"],
+    ["malformed", "printf 'codex 0.147.0\\n'", "output_invalid"],
+    ["extra", "printf 'codex-cli 0.147.0\\nextra\\n'", "output_invalid"],
+    ["nonzero", "printf 'codex-cli 0.147.0\\n'\nexit 7", "command_failed"],
     ["signaled", "kill -TERM $$", "command_failed"]
   ])("rejects %s command behavior without exposing output", async (label, body, code) => {
     const path = executable(label, body);

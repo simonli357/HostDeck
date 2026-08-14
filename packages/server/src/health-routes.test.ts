@@ -443,8 +443,8 @@ describe("selected health and host-status routes", () => {
       compatibility: {
         state: "supported",
         evidence: "current",
-        observed_version: "0.144.0",
-        supported_version: "0.144.0",
+        observed_version: "0.147.0",
+        supported_version: "0.147.0",
         capability_state: "verified",
         checked_at: new Date(initialTime - 1_000).toISOString(),
         recorded_at: new Date(initialTime).toISOString()

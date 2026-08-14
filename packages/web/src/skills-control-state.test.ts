@@ -49,7 +49,7 @@ describe("skills-control state", () => {
       captureRevision: 1,
       capture: {
         observedAt: timestamp,
-        runtimeVersion: "0.144.0",
+        runtimeVersion: "0.147.0",
         freshness: "current"
       },
       snapshotState: "content",
@@ -515,7 +515,7 @@ function skillsSnapshot(
       session_id: input.targetSessionId ?? sessionId,
       codex_thread_id: input.targetThreadId ?? threadId
     },
-    runtime_version: input.runtimeVersion ?? "0.144.0",
+    runtime_version: input.runtimeVersion ?? "0.147.0",
     connection_generation: 4,
     observed_at: timestamp,
     state,
@@ -555,7 +555,7 @@ function context(
     codex_thread_id: input.projectedThreadId ?? threadId,
     cwd: "/private/skills-component",
     runtime_source: "codex_app_server",
-    runtime_version: input.runtimeVersion ?? "0.144.0",
+    runtime_version: input.runtimeVersion ?? "0.147.0",
     created_at: timestamp,
     archived_at: null,
     session_state: freshness === "current" ? "active" : "stale",

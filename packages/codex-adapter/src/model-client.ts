@@ -120,6 +120,7 @@ const resumeResultKeys = [
   "cwd",
   "initialTurnsPage",
   "instructionSources",
+  "itemsBackwardsCursor",
   "model",
   "modelProvider",
   "multiAgentMode",
@@ -127,7 +128,8 @@ const resumeResultKeys = [
   "runtimeWorkspaceRoots",
   "sandbox",
   "serviceTier",
-  "thread"
+  "thread",
+  "turnsBackwardsCursor"
 ] as const;
 
 export function createCodexModelClient(port: CodexModelRequestPort, options: CodexModelClientOptions = {}): CodexModelClient {
@@ -229,6 +231,8 @@ class DefaultCodexModelClient implements CodexModelClient {
       "Codex thread/resume result must be an object."
     );
     assertExactKeys(result, resumeResultKeys, "Codex thread/resume fields are invalid.");
+    parseNullablePrintableString(result.turnsBackwardsCursor, "Codex turns backwards cursor", 2_048);
+    parseNullablePrintableString(result.itemsBackwardsCursor, "Codex items backwards cursor", 2_048);
     const thread = requireRecord(result.thread, "Codex thread/resume thread must be an object.");
     if (parsePayloadThreadId(thread.id) !== parsedThreadId) throw invalidPayload("Codex thread/resume returned a different thread id.");
     const responseCwd = parsePayloadCwd(result.cwd);
