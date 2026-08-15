@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `INT-V1-114` Shared-runtime hardening | ready | none | Harden identity, ownership, lifecycle, races, resources, failures, privacy, and real two-client multi-project behavior before packaging. |
+| 1 | `INT-V1-114` Shared-runtime hardening | in_progress | none | Harden identity, ownership, lifecycle, races, resources, failures, privacy, and real two-client multi-project behavior before packaging. |
 
 `REL-V1-109` records the approved shared-session/Ubuntu rebaseline. The dependency chain then proceeds through contracts, binding/state, broker, automatic enrollment, selected API/CLI, live catalog UI, hardening, Ubuntu packaging, physical phone acceptance, and clean release acceptance. Completed adoption and Windows work remains historical; unfinished Windows and superseded aggregate tasks are deferred rather than release blockers.
 

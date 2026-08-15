@@ -376,6 +376,8 @@ The Fastify runtime owner therefore exposes exact `beginDrain`, `closeSse`, `clo
 4. Cross-validate exact runtime/commit, deterministic inventory, five model turns, one compact, structured control coverage, lifecycle ownership, event integrity, privacy declarations, and zero-resource cleanup before atomically publishing `INT-V1-091` evidence.
 5. Keep binding regeneration and the static app-server-only production boundary as required adjacent gates. Passing this aggregate does not compose Fastify, SSE, service packaging, or remote-phone behavior.
 
+`INT-V1-114` adds the selected shared-runtime aggregate: bind one clean commit to a fixed hostile inventory for standard-socket ownership, automatic enrollment, dual identity, API/catalog/UI continuity, pending mutation truth, and cleanup; then run one no-retry exact-0.147 headless three-project start/resume/reconnect/crash lifecycle. The report may retain only bounded counts and booleans, must prove no terminal-emulator/browser process launch, and publishes only after zero owned process, socket, tmux, subscriber, database, and temporary-root residue.
+
 ## Failure And Concurrency Matrix
 
 | Case | Required behavior | Test owner |
