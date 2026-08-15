@@ -1148,7 +1148,10 @@ async function remoteReadOrUnavailable<T>(operation: () => Promise<T>): Promise<
   try {
     return { value: await operation(), unavailable: false };
   } catch (error) {
-    if (error instanceof HostDeckCodexAdapterError && error.code === "remote_error") {
+    if (
+      error instanceof HostDeckCodexAdapterError &&
+      (error.code === "remote_error" || error.code === "request_timeout")
+    ) {
       return { value: null, unavailable: true };
     }
     throw error;

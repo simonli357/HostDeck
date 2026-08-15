@@ -442,6 +442,100 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
     }
   });
 
+  it("admits the runtime with explicit stale state when optional reconciliation reads time out", async () => {
+    const harness = createHarness();
+    try {
+      const failures = [
+        ["read", "thread/read"],
+        ["goal", "thread/goal/get"],
+        ["turn", "thread/turns/list"]
+      ] as const;
+      for (const [id] of failures) {
+        harness.repository.create(
+          stateCandidate(`sess_timeout_${id}`, `thread-timeout-${id}`)
+        );
+      }
+      const base = scriptedRuntime(
+        failures.map(([id]) =>
+          runtimeThread(`thread-timeout-${id}`, `/tmp/sess_timeout_${id}`)
+        ),
+        11
+      );
+      const runtime: ScriptedRuntime = {
+        ...base,
+        async request(input) {
+          const failure = failures.find(
+            ([id, method]) =>
+              input.method === method &&
+              threadIdFromRequest(input) === `thread-timeout-${id}`
+          );
+          if (failure !== undefined) {
+            throw new HostDeckCodexAdapterError(
+              "request_timeout",
+              "private optional read timeout",
+              { outcome: "unknown", retry_safe: true }
+            );
+          }
+          return base.request(input);
+        }
+      };
+      const deadline = testDeadline();
+      try {
+        const reconciliation = await reconcile(
+          harness.lifecycle,
+          runtime,
+          deadline,
+          11,
+          null
+        );
+        await resubscribe(
+          harness.lifecycle,
+          runtime,
+          deadline,
+          reconciliation,
+          11,
+          null
+        );
+        await ready(
+          harness.lifecycle,
+          runtime,
+          deadline,
+          reconciliation,
+          11,
+          null
+        );
+      } finally {
+        deadline.dispose();
+      }
+
+      for (const [id] of failures) {
+        expect(
+          harness.repository.require(`sess_timeout_${id}`).projection.session
+        ).toMatchObject({
+          session_state: "unknown",
+          turn_state: "unknown",
+          freshness: "stale",
+          freshness_reason: "Managed Codex thread details are unavailable."
+        });
+      }
+      expect(
+        runtime.requests.filter((request) => request.method === "thread/resume")
+      ).toEqual([]);
+      expect(harness.lifecycle.snapshot()).toMatchObject({
+        phase: "ready",
+        issues: {
+          archived: 0,
+          contradictions: 0,
+          missing: 0,
+          stale: 3,
+          unavailable: 3
+        }
+      });
+    } finally {
+      harness.close();
+    }
+  });
+
   it("persists every recoverable active and idle turn category before exact resubscription", async () => {
     const harness = createHarness();
     const cases = [
