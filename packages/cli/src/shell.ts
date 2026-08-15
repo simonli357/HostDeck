@@ -1995,6 +1995,7 @@ function combineProcessBoundaryErrors(
 }
 
 if (import.meta.main) {
+  const processLifetime = setInterval(() => undefined, 60_000);
   try {
     await main(process.argv.slice(2), {
       packageRoot: cliModulePackageRoot,
@@ -2012,6 +2013,8 @@ if (import.meta.main) {
     } catch {
       // There is no remaining reliable process output channel.
     }
+  } finally {
+    clearInterval(processLifetime);
   }
 }
 

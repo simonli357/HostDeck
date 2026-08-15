@@ -122,6 +122,7 @@ export async function mainHostDeckServiceHost(
   args = process.argv.slice(2),
   options: HostDeckServiceHostOptions = {}
 ): Promise<0 | 1> {
+  const processLifetime = setInterval(() => undefined, 60_000);
   try {
     await runHostDeckServiceHost(args, {
       ...options,
@@ -142,6 +143,8 @@ export async function mainHostDeckServiceHost(
       // No reliable process output channel remains.
     }
     return 1;
+  } finally {
+    clearInterval(processLifetime);
   }
 }
 
