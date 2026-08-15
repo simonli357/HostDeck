@@ -109,6 +109,7 @@ describe.skipIf(!requireSmoke)(
       "preserves one managed thread and ordered pipeline across both client teardown directions",
       async () => {
         assertEvidencePath(evidencePath);
+        const hostDeckCommit = currentCommit();
         rmSync(evidencePath, { force: true });
         const version = parseCodexCliVersionOutput(
           execFileSync(codexBin, ["--version"], {
@@ -776,7 +777,7 @@ describe.skipIf(!requireSmoke)(
             schema_version: 1,
             task: "INT-V1-031",
             observed_at: new Date().toISOString(),
-            hostdeck_commit: currentCommit(),
+            hostdeck_commit: hostDeckCommit,
             runtime: {
               version: "0.147.0",
               exact_binding: true,
