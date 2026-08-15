@@ -150,6 +150,7 @@ export interface SharedCodexBrokerAttachment {
 const minimumLifecycleTimeoutMs = 100;
 const maximumLifecycleTimeoutMs = 300_000;
 const maximumExecutablePathBytes = 4_096;
+const failedStartCleanupTimeoutMs = 5_000;
 
 export function resolveSharedCodexEndpointLocation(
   input: ResolveSharedCodexEndpointInput
@@ -206,6 +207,7 @@ export async function startSharedCodexBroker(
   let session: SharedCodexBrokerHostSession | null = null;
   let result: SharedCodexBrokerAttachment | null = null;
   let failure: HostDeckSharedCodexBrokerError | null = null;
+  let startedOwnedBroker = false;
 
   try {
     session = await host.open({
@@ -232,6 +234,8 @@ export async function startSharedCodexBroker(
         signal: deadline.signal,
         timeout_ms: deadline.remaining()
       });
+      startedOwnedBroker =
+        observation.state === "active" && observation.ownership === "owned";
     }
     if (observation.state !== "active") {
       throw brokerError(
@@ -285,6 +289,12 @@ export async function startSharedCodexBroker(
     failure = normalizeFailure(cause, deadline);
   }
   deadline.close();
+  failure = await cleanupFailedOwnedStart(
+    session,
+    startedOwnedBroker,
+    failure,
+    parsed.startup_timeout_ms
+  );
   failure = closeSession(session, failure);
   if (failure !== null) throw failure;
   if (result === null) {
@@ -296,6 +306,42 @@ export async function startSharedCodexBroker(
     );
   }
   return result;
+}
+
+async function cleanupFailedOwnedStart(
+  session: SharedCodexBrokerHostSession | null,
+  startedOwnedBroker: boolean,
+  primary: HostDeckSharedCodexBrokerError | null,
+  startupTimeoutMs: number
+): Promise<HostDeckSharedCodexBrokerError | null> {
+  if (!startedOwnedBroker || primary === null || session === null) {
+    return primary;
+  }
+  try {
+    await session.stopOwned({
+      signal: new AbortController().signal,
+      timeout_ms: Math.min(startupTimeoutMs, failedStartCleanupTimeoutMs)
+    });
+    return primary;
+  } catch (cause) {
+    const cleanup = brokerError(
+      "stop_failed",
+      "stop",
+      "The shared Codex broker started by a failed operation could not be stopped.",
+      failedEndpoint("Failed shared broker startup cleanup failed."),
+      cause
+    );
+    return brokerError(
+      primary.code,
+      primary.stage,
+      primary.message,
+      primary.endpoint,
+      new AggregateError(
+        [primary, cleanup],
+        "Shared Codex broker startup and owned cleanup failed."
+      )
+    );
+  }
 }
 
 export async function stopOwnedSharedCodexBroker(

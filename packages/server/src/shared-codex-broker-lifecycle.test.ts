@@ -162,6 +162,35 @@ describe("shared Codex broker lifecycle", () => {
     expect(fixture.stopOwned).not.toHaveBeenCalled();
   });
 
+  it("owner-safely stops only a broker started by failed compatibility admission", async () => {
+    const startedFixture = hostFixture(
+      [Object.freeze({ state: "absent" })],
+      owned
+    );
+    await expectBrokerError(
+      startSharedCodexBroker(startInput("attach_or_start"), {
+        host: startedFixture.host,
+        compatibilityProbe: async () => {
+          throw new Error("protocol mismatch");
+        }
+      }),
+      "broker_incompatible"
+    );
+    expect(startedFixture.stopOwned).toHaveBeenCalledOnce();
+
+    const existingFixture = hostFixture([owned]);
+    await expectBrokerError(
+      startSharedCodexBroker(startInput("attach_or_start"), {
+        host: existingFixture.host,
+        compatibilityProbe: async () => {
+          throw new Error("protocol mismatch");
+        }
+      }),
+      "broker_incompatible"
+    );
+    expect(existingFixture.stopOwned).not.toHaveBeenCalled();
+  });
+
   it("rejects a socket replacement across compatibility admission", async () => {
     const fixture = hostFixture([
       attached,
