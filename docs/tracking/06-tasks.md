@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `IFC-V1-111` Shared-session API/CLI composition | in_progress | none | Make automatic native-UUID sessions the only selected control-plane path and remove superseded adoption administration. |
+| 1 | `IFC-V1-112` Live session catalog | ready | none | Publish bounded replay/live Mission Control updates so shared sessions appear without polling or manual refresh. |
 
 `REL-V1-109` records the approved shared-session/Ubuntu rebaseline. The dependency chain then proceeds through contracts, binding/state, broker, automatic enrollment, selected API/CLI, live catalog UI, hardening, Ubuntu packaging, physical phone acceptance, and clean release acceptance. Completed adoption and Windows work remains historical; unfinished Windows and superseded aggregate tasks are deferred rather than release blockers.
 
