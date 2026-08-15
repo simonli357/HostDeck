@@ -277,7 +277,14 @@ async function start(
 async function waitForSocket(path: string): Promise<void> {
   const deadline = Date.now() + 3_000;
   while (Date.now() <= deadline) {
-    if (existsSync(path) && lstatSync(path).isSocket()) return;
+    if (
+      existsSync(path) &&
+      lstatSync(path).isSocket() &&
+      mode(path) === 0o600 &&
+      (await canConnect(path))
+    ) {
+      return;
+    }
     await delay(20);
   }
   throw new Error("Fake broker socket did not become ready.");
