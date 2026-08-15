@@ -687,6 +687,8 @@ function renderHostDeckUnit(input: ValidatedInput): string {
   lines.push(
     `Environment=${encodeSystemdWord(`HOSTDECK_CODEX_BIN=${input.codexBin}`, false)}`,
     "UMask=0077",
+    "RuntimeDirectory=hostdeck",
+    "RuntimeDirectoryMode=0700",
     `ExecStart=${encodeSystemdWord(input.nodeBin, false)} ${encodeSystemdWord(input.serviceHostPath, true)}`,
     ...hostDeckServicePolicy(),
     "",
