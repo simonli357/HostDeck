@@ -635,8 +635,10 @@ export function computeOwnedOutputIdentity(root, packageDescriptors) {
     }
     const allowedRootEntries = new Set(["dist", "node_modules", "package.json"]);
     if (descriptor.name === "@hostdeck/cli") {
+      allowedRootEntries.add("bin");
       allowedRootEntries.add(productionPackageManifestName);
       allowedRootEntries.add(productionPackageVerifierName);
+      allowedRootEntries.add("runtime");
       allowedRootEntries.add("web");
     }
     for (const entry of readdirSync(resolvedPackagePath, { withFileTypes: true })) {
