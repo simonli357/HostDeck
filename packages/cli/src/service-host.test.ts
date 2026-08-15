@@ -104,6 +104,48 @@ describe("IFC-V1-086 packaged service-host process", () => {
     expect(owner.closeCalls).toBe(0);
   });
 
+  it("uses one canonical systemd-owned runtime directory and rejects ambiguous values", async () => {
+    const layout = fixtureLayout("systemd-runtime");
+    const runtimeDirectory = join(layout.runtimeHome, "service", "hostdeck");
+    const owner = fakeServiceOwner(layout.origin);
+    let observedRuntimeDirectory: string | null = null;
+    const running = runHostDeckServiceHost([], {
+      env: Object.freeze({
+        ...layout.env,
+        RUNTIME_DIRECTORY: runtimeDirectory
+      }),
+      packageRoot: layout.packageRoot,
+      startService: async (input) => {
+        observedRuntimeDirectory = input.runtime_dir;
+        return owner.service;
+      },
+      writeReady: () => undefined
+    });
+
+    await vi.waitFor(() => expect(observedRuntimeDirectory).toBe(runtimeDirectory));
+    owner.finishClosed();
+    await expect(running).resolves.toBe("");
+
+    for (const candidate of [
+      "relative/runtime",
+      `${runtimeDirectory}:${join(layout.runtimeHome, "second")}`,
+      `${runtimeDirectory}/../hostdeck`
+    ]) {
+      const startService = vi.fn();
+      await expect(
+        runHostDeckServiceHost([], {
+          env: Object.freeze({
+            ...layout.env,
+            RUNTIME_DIRECTORY: candidate
+          }),
+          packageRoot: layout.packageRoot,
+          startService
+        })
+      ).rejects.toThrow("RUNTIME_DIRECTORY must name one canonical absolute path");
+      expect(startService).not.toHaveBeenCalled();
+    }
+  });
+
   it("closes on readiness-output failure and rejects contradictory terminal state", async () => {
     const outputLayout = fixtureLayout("output-failure");
     const outputOwner = fakeServiceOwner(outputLayout.origin);

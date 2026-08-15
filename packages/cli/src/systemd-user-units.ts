@@ -685,10 +685,9 @@ function renderHostDeckUnit(input: ValidatedInput): string {
     lines.push(`EnvironmentFile=-${encodeSystemdFilePath(input.environmentFile)}`);
   }
   lines.push(
-    'Environment="XDG_RUNTIME_DIR=%t/%N"',
     `Environment=${encodeSystemdWord(`HOSTDECK_CODEX_BIN=${input.codexBin}`, false)}`,
     "UMask=0077",
-    "RuntimeDirectory=%N/hostdeck",
+    "RuntimeDirectory=hostdeck-service/hostdeck",
     "RuntimeDirectoryMode=0700",
     `ExecStart=${encodeSystemdWord(input.nodeBin, false)} ${encodeSystemdWord(input.serviceHostPath, true)}`,
     ...hostDeckServicePolicy(),

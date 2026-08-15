@@ -62,7 +62,10 @@ export async function runHostDeckServiceHost(
     loopback_port: Number(config.baseUrl.port),
     observe_issue: () => undefined,
     resource_budget: defaultResourceBudget,
-    runtime_dir: config.runtimeDir,
+    runtime_dir: resolveServiceRuntimeDirectory(
+      env.RUNTIME_DIRECTORY,
+      config.runtimeDir
+    ),
     state_dir: config.stateDir,
     static_build_root: join(packageRoot, "web"),
     static_package_version: loadRuntimePackageVersion(packageRoot),
@@ -151,6 +154,24 @@ function assertNoServiceArguments(candidate: unknown): asserts candidate is [] {
   ) {
     throw new TypeError("HostDeck service process does not accept arguments.");
   }
+}
+
+function resolveServiceRuntimeDirectory(
+  candidate: string | undefined,
+  fallback: string
+): string {
+  if (candidate === undefined) return fallback;
+  if (
+    candidate.length < 2 ||
+    candidate.length > 4_096 ||
+    !candidate.startsWith("/") ||
+    candidate.includes(":") ||
+    candidate.includes("\0") ||
+    resolve(candidate) !== candidate
+  ) {
+    throw new TypeError("RUNTIME_DIRECTORY must name one canonical absolute path.");
+  }
+  return candidate;
 }
 
 function assertInjectedServiceOwner(
