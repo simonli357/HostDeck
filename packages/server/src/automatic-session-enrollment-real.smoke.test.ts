@@ -12,7 +12,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
   type CodexAppServerConnection,
   type CodexConnectionNotification,
@@ -40,6 +40,7 @@ import {
   createAutomaticSessionEnrollmentService
 } from "./automatic-session-enrollment-service.js";
 import { createCodexEventPipeline } from "./codex-event-pipeline.js";
+import { assertPrivateLifecycleDirectory } from "./codex-runtime-lifecycle-files.js";
 import { createSessionCatalogStateReader } from "./session-catalog-state-reader.js";
 import {
   startSharedCodexBroker,
@@ -730,10 +731,25 @@ function resolveReportContext(): SharedRuntimeReportContext | null {
   if (candidate === undefined) return null;
   if (
     !isAbsolute(candidate) ||
+    resolve(candidate) !== candidate ||
     basename(candidate) !== "multi-project-report.json" ||
-    resolve(dirname(candidate)) !== resolve(tmpdir()) ||
     existsSync(candidate)
   ) {
+    throw new TypeError("Shared runtime real report path is invalid.");
+  }
+  const reportDirectory = dirname(candidate);
+  try {
+    assertPrivateLifecycleDirectory(reportDirectory);
+    const relationship = relative(realpathSync(tmpdir()), reportDirectory);
+    if (
+      relationship === "" ||
+      relationship === ".." ||
+      relationship.startsWith("../") ||
+      isAbsolute(relationship)
+    ) {
+      throw new TypeError("Shared runtime report directory is invalid.");
+    }
+  } catch {
     throw new TypeError("Shared runtime real report path is invalid.");
   }
   const expectedCommit = process.env.HOSTDECK_EXPECTED_COMMIT;
