@@ -132,6 +132,29 @@ describe("IFC-V1-113 shared Codex broker service host", () => {
     expect(stopBroker).toHaveBeenCalledOnce();
   });
 
+  it("treats cancellation during a supervision probe as a clean service stop", async () => {
+    const controller = new AbortController();
+    const startBroker = vi
+      .fn()
+      .mockResolvedValueOnce(attachment("owned", 11))
+      .mockImplementationOnce(async () => {
+        controller.abort(new Error("stop"));
+        throw brokerError("aborted");
+      });
+    const stopBroker = vi.fn(async () => absentEndpoint());
+
+    await expect(
+      runHostDeckBrokerHost([], {
+        ...baseOptions(controller.signal),
+        sleep: async () => undefined,
+        startBroker,
+        stopBroker
+      })
+    ).resolves.toBe("HostDeck Codex broker ready (owned).\n");
+    expect(startBroker).toHaveBeenCalledTimes(2);
+    expect(stopBroker).toHaveBeenCalledOnce();
+  });
+
   it("waits boundedly for broker readiness before the dependent unit starts", async () => {
     const startBroker = vi
       .fn()
@@ -229,6 +252,7 @@ function absentEndpoint(): SharedCodexEndpoint {
 
 function brokerError(
   code:
+    | "aborted"
     | "broker_absent"
     | "broker_not_owned"
     | "ownership_ambiguous"

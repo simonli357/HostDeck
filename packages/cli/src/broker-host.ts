@@ -126,6 +126,7 @@ export async function runHostDeckBrokerHost(
           ports.startBroker
         );
       } catch (error) {
+        if (signal.aborted) break;
         await handleUnavailableBroker(
           error,
           observed,
