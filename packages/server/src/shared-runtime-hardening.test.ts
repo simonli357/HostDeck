@@ -107,10 +107,10 @@ function deterministicReport(repositoryRoot: string) {
         title: `case ${String(index)}`
       }
     ],
-    endTime: index + 2,
+    endTime: index + 2.875,
     message: "",
     name: resolve(repositoryRoot, path),
-    startTime: index + 1,
+    startTime: index + 1.125,
     status: "passed"
   }));
   return {

@@ -6,6 +6,7 @@ import { sharedRuntimeHardeningDeterministicTests } from "./shared-runtime-harde
 const fullCommitSchema = z.string().regex(/^[0-9a-f]{40}$/u);
 const safeCountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const positiveCountSchema = safeCountSchema.min(1);
+const timestampSchema = z.number().finite().min(0).max(Number.MAX_SAFE_INTEGER);
 const zeroCleanupSchema = z
   .object({
     app_servers_remaining: z.literal(0),
@@ -92,10 +93,10 @@ const vitestAssertionSchema = z
 const vitestFileSchema = z
   .object({
     assertionResults: z.array(vitestAssertionSchema).min(1).max(4_096),
-    endTime: safeCountSchema,
+    endTime: timestampSchema,
     message: z.literal(""),
     name: z.string().min(1).max(8_192),
-    startTime: safeCountSchema,
+    startTime: timestampSchema,
     status: z.literal("passed")
   })
   .strict()
