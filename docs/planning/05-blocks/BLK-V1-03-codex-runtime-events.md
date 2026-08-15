@@ -58,8 +58,8 @@ No fake-Codex or fake-tmux test can satisfy these gates.
 | Aggregate runtime lifecycle acceptance | `INT-V1-032` | Done: fixed deterministic plus exact 0.144.0 subprocess matrix passes ownership/reconnect/crash/restart/TUI/integrity/privacy/cleanup acceptance with no retry. |
 | Legacy tmux disposition | `INT-V1-008` | Done: package/runtime/CLI reachability is removed, migration data stays inert, and bounded confirmed local reset is proven. |
 | Reopened runtime hardening | `INT-V1-091` | Done: fixed deterministic and exact structured/lifecycle evidence is commit-bound, privacy-bounded, no-retry, and cleanup-complete. |
-| Native thread interoperability | `INT-V1-106` to `INT-V1-109` | Reopened: exact spike, adapter, service, and end-to-end hardening are required. |
-| Shared ordinary-Codex runtime | `INT-V1-110` to `INT-V1-114` | Required: exact 0.147.0 proof/binding, standard broker, automatic enrollment, plain TUI continuity, race/failure/resource hardening. Prior adoption path becomes historical. |
+| Native thread interoperability | `INT-V1-106` to `INT-V1-109` | Done as historical evidence; the adoption/handoff workflow is superseded by the shared ordinary-Codex runtime. |
+| Shared ordinary-Codex runtime | `INT-V1-110` to `INT-V1-114` | Done: exact 0.147.0 binding, standard broker, automatic enrollment, plain TUI continuity, and race/failure/resource hardening pass one clean-commit aggregate. |
 
 Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to preserve historical links; title/scope are rebaselined).
 
@@ -71,4 +71,4 @@ Owning backlog: `docs/tracking/backlog/tmux-output.md` (filename retained to pre
 - Restart/disconnect marks stale, interrupted, boundary, and incomplete outcomes truthfully.
 - App-server remains private to the user, has unambiguous ownership, and survives HostDeck-only stop/restart.
 - Legacy tmux path has one explicit disposition and is absent from the selected production path.
-- `INT-V1-091` passes and the block matrix links L2/L3 current evidence.
+- `INT-V1-114` passes and the block matrix links current L3 evidence.
