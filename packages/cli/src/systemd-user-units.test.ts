@@ -175,7 +175,7 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
     expect(matches(hostDeck, /^ExecStart=/gmu)).toHaveLength(1);
     expect(codex).not.toContain("RuntimeDirectory=");
     expect(combined).not.toContain("XDG_RUNTIME_DIR=");
-    expect(hostDeck).toContain("RuntimeDirectory=hostdeck-service/hostdeck\n");
+    expect(hostDeck).toContain("RuntimeDirectory=hostdeck-service\n");
     expect(hostDeck).toContain("RuntimeDirectoryMode=0700\n");
     expect(hostDeck).toContain("Wants=hostdeck-codex.service\n");
     expect(hostDeck).toContain("After=hostdeck-codex.service\n");
@@ -742,7 +742,7 @@ function expectedHostDeckUnit(layout: FixtureLayout): string {
     `EnvironmentFile=-${encodeFilePath(layout.environmentFile)}`,
     `Environment=${encodeWord(`HOSTDECK_CODEX_BIN=${layout.codexBin}`, false)}`,
     "UMask=0077",
-    "RuntimeDirectory=hostdeck-service/hostdeck",
+    "RuntimeDirectory=hostdeck-service",
     "RuntimeDirectoryMode=0700",
     `ExecStart=${encodeWord(layout.nodeBin, false)} ${encodeWord(layout.serviceHostPath, true)}`,
     ...expectedServicePolicy(),
