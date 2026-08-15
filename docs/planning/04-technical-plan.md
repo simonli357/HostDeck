@@ -25,7 +25,7 @@ The architecture is acceptable for V1 only when all of the following are true:
 - App-server schema/version drift, state-directory conflicts, invalid permissions, failed retention, and impossible lifecycle transitions fail visibly.
 - Phone Mission Control and Session Detail can be built entirely from typed API contracts without parsing terminal text.
 - The Ubuntu 24.04 x64 package bundles the pinned Node runtime and target-built native modules, runs as the interactive user, and passes install/upgrade/rollback/uninstall evidence without requiring a source checkout or development toolchain.
-- Public Ubuntu artifacts are versioned and integrity-bound; release metadata includes checksums/SBOM/provenance and the selected signature policy, and publication fails closed when platform, version, commit, test, or identity disagrees.
+- Public Ubuntu artifacts are versioned and integrity-bound; release metadata includes checksums/SBOM/provenance, and `DEC-033` requires keyless GitHub/Sigstore artifact attestation from the pinned tag workflow. Publication fails closed when attestation, platform, version, commit, test, or identity disagrees.
 
 ## System Architecture
 

@@ -14,7 +14,7 @@ For the shortest phone setup, use `docs/delivery/12-quick-connect.md`.
 | Part | V1 requirement |
 | --- | --- |
 | Laptop | Ubuntu 24.04/Linux x86-64, online and awake, with the current-user HostDeck services running. |
-| Codex | Exact reviewed `codex-cli 0.144.0`. A different version leaves HostDeck in read-only compatibility diagnostics. |
+| Codex | Exact reviewed `codex-cli 0.147.0`. A different version leaves HostDeck in read-only compatibility diagnostics. |
 | Private network | Tailscale 1.98.8 on the laptop and phone. Both must be signed into the same saved personal HostDeck profile while remote access is in use. |
 | Company Tailscale use | A company profile may remain saved on the laptop, but only one profile is active at a time. HostDeck never switches profiles or changes company Serve state. |
 | Phone | Android Chrome with Internet access through cellular or unrelated Wi-Fi and an active Tailscale VPN. USB is not needed for ordinary use. |
@@ -30,12 +30,13 @@ profile, and running both HostDeck user services.
    HostDeck profile on the laptop and select it on both devices. Keep any company
    profile saved but inactive during HostDeck use.
 2. From a verified HostDeck package, run `service install` with the absolute path
-   to exact Codex 0.144.0. Installation verifies and publishes the package,
+   to exact Codex 0.147.0. Installation verifies and publishes the package,
    installs `~/.local/bin/codexdeck`, and enables the HostDeck user unit without
    starting either service.
-3. Run `service start`, then `status`. The Codex user service owns its private
-   Unix socket, and HostDeck owns only its loopback listener. Startup does not
-   expose remote access.
+3. Run `broker start`, verify `broker status`, then run `service start` and
+   `service status`. The Codex broker owns the standard current-user socket;
+   HostDeck owns only its loopback listener. Startup does not expose remote
+   access.
 4. While the saved HostDeck Tailscale profile is active, run `remote enable`, then
    `remote status`. Continue only when it reports `Remote access: ready` and
    `Laptop action required: no`.
@@ -67,22 +68,20 @@ is 90 days. Create a new link when an authority expires or is revoked.
 | Inspect event details | Open an eligible event's details. | HostDeck shows a bounded normalized projection and labels redacted, truncated, unknown, or replay-boundary limits. |
 | Interrupt a turn | Open **Session actions**, choose **Interrupt**, review the exact turn and consequence, then confirm once. | The active turn is interrupted; the session and its files are not deleted. |
 | Archive a session | Open **Session actions**, choose **Archive**, review the target, then confirm once. | The managed session leaves the active list. Archive does not delete project files or conversation history. |
-| Resume on laptop | Open **Session actions**, choose **Resume on laptop**, and copy the exact command. Run it in a laptop terminal. | The normal Codex TUI resumes the same thread through the private Codex Unix socket that HostDeck observes. No terminal runs on the phone. |
+| Resume on laptop | Open **Session actions**, choose **Resume on laptop**, and copy the exact command. Run it in a laptop terminal. | Normal `codex resume NATIVE_UUID` resumes the same thread through the shared broker HostDeck observes. No terminal runs on the phone. |
 | Review access | Open **Host and access**. | Connection, permission, expiry, page security, host compatibility, remote state, stream state, and paired devices remain separate. |
 | Revoke a device | In **Host and access**, choose the revoke icon for the exact device and confirm. | That browser loses protected reads and writes immediately. Revoking this phone closes its current dashboard authority. |
 | Lock remote writes | In **Host and access**, choose the host lock action and confirm. | Every paired phone becomes read-only. Monitoring remains available; unlock is laptop-only. |
 
-Start a new managed session from the laptop with `codexdeck start`. To use an
-existing eligible Codex CLI session, close its standalone client, run
-`codexdeck discover`, then run `codexdeck adopt THREAD_ID --name NAME
---confirm-handoff`. Refresh Mission Control and use the adopted session normally.
-Its Codex thread id and history remain unchanged; HostDeck stores only bounded
-projection state. Use the returned session id with `codexdeck resume SESSION_ID`
-for the laptop TUI while managed, or quiet the session and run
-`codexdeck unmanage SESSION_ID --confirm` to remove only its
-HostDeck membership. The phone does not expose discovery, arbitrary path entry, or
-a shell. Closing Chrome, losing phone network, or switching the laptop away from
-the HostDeck profile does not cancel Codex work.
+Start or resume work with ordinary Codex commands after the broker is ready:
+`codex` in the project directory or `codex resume NATIVE_UUID`. Eligible loaded
+project sessions appear in Mission Control automatically, keep their native UUID
+and history, and remain the same session on laptop and phone. `codexdeck start`
+and `codexdeck resume` remain packaged conveniences, but discovery, adoption,
+handoff, and unmanage commands are no longer part of the workflow. The phone does
+not expose arbitrary path entry or a shell. Closing Chrome, stopping only
+HostDeck, losing phone network, or switching the laptop away from the HostDeck
+profile does not cancel broker or Codex work.
 
 ## Profile Switching
 
@@ -109,10 +108,12 @@ the HostDeck profile does not cancel Codex work.
 
 ## Safe Shutdown And Removal
 
-To stop remote use while preserving the installation, switch to the HostDeck
-profile, run `remote disable`, verify remote status is disabled, then run
-`service stop`. `remote disable` removes only the exact HostDeck-owned Serve
-mapping.
+To stop remote use while preserving Codex work, switch to the HostDeck profile,
+run `remote disable`, verify remote status is disabled, then run `service stop`.
+`remote disable` removes only the exact HostDeck-owned Serve mapping, and
+`service stop` leaves the broker and ordinary Codex clients running. Run
+`broker stop` separately only when intentionally stopping the shared Codex
+runtime.
 
 Before uninstalling, disable remote access while HostDeck is still running, then
 stop and uninstall the service. Uninstall removes HostDeck-owned releases, units,
@@ -138,8 +139,8 @@ HostDeck user data.
 | Host is locked | On the laptop, run `codexdeck unlock`, then let the phone refresh current state. | Remote unlock is intentionally unavailable. No queued phone mutation crosses the lock transition. |
 | Session state is stale or the activity stream is reconnecting | Wait for `Current` truth or use the offered safe refresh. Observe the result before sending another mutation. | HostDeck does not auto-resend prompts, controls, approvals, interrupts, archives, or device actions. |
 | A mutation result is unknown | Reopen or refresh the relevant state and determine whether the requested change occurred. | Unknown post-dispatch outcomes are not retry permission. |
-| Host compatibility says update required or incompatible | Verify the installed service uses exact Codex 0.144.0. Install or select the reviewed binary, then restart the HostDeck service and recheck status. | HostDeck does not emulate unsupported commands or dispatch through a different Codex version. |
-| No sessions appear | Start a managed session with `codexdeck start --name ... --cwd ...`, or close an eligible standalone Codex CLI session and adopt its exact id with `codexdeck discover` followed by confirmed `codexdeck adopt`. Then refresh Mission Control. | Discovery and adoption are laptop-only. V1 has no phone file picker, shell, arbitrary working-directory input, transcript copy, or concurrent standalone-client takeover. |
+| Host compatibility says update required or incompatible | Verify the installed service uses exact Codex 0.147.0. Install or select the reviewed binary, then restart the broker and HostDeck service and recheck status. | HostDeck does not emulate unsupported commands or dispatch through a different Codex version. |
+| No sessions appear | Verify `broker status` and `service status`, then run ordinary `codex` in an eligible project directory or `codex resume NATIVE_UUID`. Wait for the live catalog update; refresh only if the stream reports recovery is required. | V1 has no phone file picker, shell, arbitrary working-directory input, transcript copy, or manual adoption fallback. |
 | Resume command cannot be copied | Confirm the page is on trusted HTTPS and allow the browser's clipboard action, then reopen **Resume on laptop**. | The command is a laptop-only handoff and may contain a private socket/thread target; do not retain it in screenshots or support logs. |
 | Phone is lost or no longer trusted | On the laptop, list devices, identify the exact bounded device id, and run confirmed revoke. Lock remote writes first when immediate global containment is needed. | Tailscale membership alone is not HostDeck authorization. |
 | Laptop sleeps, shuts down, or loses Internet | Wake and reconnect the laptop, start the user service if needed, restore the HostDeck profile, and check remote status. | V1 has no hosted relay; Codex work cannot be reached while the laptop is offline. |
@@ -170,15 +171,15 @@ HostDeck user data.
   laptop. Simultaneous HostDeck and company profiles are not supported.
 - The laptop must remain awake, online, and running HostDeck. V1 has no relay,
   push notifications, background phone service, or offline command queue.
-- HostDeck V1 supports exact Codex 0.144.0 only. Version drift is diagnostic and
+- HostDeck V1 supports exact Codex 0.147.0 only. Version drift is diagnostic and
   read-only until a reviewed compatibility update is shipped.
 - V1 does not provide remote unlock, automatic profile switching, automatic Serve
   repair, voice, bulk operations, a mobile terminal, file editing, or Git diff UI.
 
 ## Evidence
 
-- Package and current-user lifecycle:
-  `artifacts/ifc-v1-058-clean-environment-parity.md`.
+- Shared-runtime package and current-user lifecycle:
+  `artifacts/ifc-v1-113-ubuntu-shared-runtime-package.md`.
 - Private Serve, profile switching, pairing, lock, recovery, and cleanup:
   `artifacts/ifc-v1-079-remote-ingress-acceptance.md`.
 - Production phone pairing and host/access UI:

@@ -10,6 +10,7 @@ connects through private Tailscale HTTPS. USB is needed only for debug automatio
 2. On the laptop, start HostDeck and enable its private Serve route:
 
 ```bash
+~/.local/bin/codexdeck broker start
 ~/.local/bin/codexdeck service start
 ~/.local/bin/codexdeck remote enable
 ~/.local/bin/codexdeck remote status
@@ -30,20 +31,25 @@ the clean `https://...ts.net` address; no new pairing link or USB connection is
 needed until the device expires or is revoked.
 
 The laptop must remain awake, online, on the HostDeck Tailscale profile, and
-running both HostDeck user services. Never enable Funnel, expose a router port,
-install a custom CA, or use the laptop's LAN address.
+running both the broker and HostDeck services. Never enable Funnel, expose a
+router port, install a custom CA, or use the laptop's LAN address.
 
 ## Use HostDeck
 
-Create a session for each project on the laptop:
+Start Codex normally in a project, or resume an existing native session:
 
 ```bash
-~/.local/bin/codexdeck start --name MyProject --cwd /absolute/path/to/project
+cd /absolute/path/to/project
+codex
+# Later, from any laptop terminal:
+codex resume NATIVE_CODEX_UUID
 ```
 
-Then open the saved HostDeck tab on the phone, tap the session, write a prompt,
-and tap Send. Use `/model`, `/goal`, and `/plan` for the main controls; the
-overflow menu contains the remaining session tools.
+The same session appears in Mission Control automatically. Open the saved
+HostDeck address on the phone, tap the session, write a prompt, and tap Send.
+Phone and laptop activity stay on the same Codex thread. Use `/model`, `/goal`,
+and `/plan` for the main controls; the overflow menu contains the remaining
+session tools.
 
 USB is not needed for normal use. If switching to the company Tailscale
 profile, first run `codexdeck remote disable`. When returning, select the saved

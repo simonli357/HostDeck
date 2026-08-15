@@ -149,6 +149,7 @@ pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
 HOSTDECK_CODEX_BIN="$(readlink -f "$(command -v codex)")" pnpm smoke:codex-shared-broker
 pnpm smoke:codex-shared-sessions
+HOSTDECK_CODEX_BIN="$(readlink -f "$(command -v codex)")" pnpm smoke:codex-tui-coexistence
 HOSTDECK_CODEX_BIN="$(readlink -f "$(command -v codex)")" pnpm test:shared-runtime-hardening
 pnpm smoke:codex-threads
 ```
@@ -205,6 +206,7 @@ HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-interrupt
 HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-vertical
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:codex-shared-broker
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:codex-shared-sessions
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:codex-tui-coexistence
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm test:shared-runtime-hardening
 HOSTDECK_REQUIRE_PRODUCTION_COMPOSITION_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm exec vitest run packages/server/src/production-application-composition.smoke.test.ts --maxWorkers=1
 HOSTDECK_REQUIRE_PRODUCTION_SERVE_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm exec vitest run packages/server/src/production-foreground-serve.smoke.test.ts --maxWorkers=1

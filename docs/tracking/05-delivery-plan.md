@@ -6,7 +6,7 @@ Owns milestone, module maturity, production passes, and release truth.
 
 - Current pass: shared ordinary-Codex foundation under `DEC-031`, followed by Ubuntu-only release hardening under `DEC-032`.
 - Release state: no-go. The prior private-runtime/adoption product is runnable but is not the selected session-continuity architecture.
-- Next exit: complete `IFC-V1-113` and package one immutable Ubuntu candidate for physical phone and clean-host acceptance.
+- Next exit: run `FE-V1-108` physical shared-session acceptance on the immutable Ubuntu candidate, then complete clean-host `REL-V1-110`.
 
 ## Milestones
 
@@ -16,7 +16,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | M1 Shared-session rebaseline | Exact 0.147.0 standard socket, native/public identity, automatic enrollment, live catalog, Ubuntu-only release graph. | `REL-V1-109`; owner docs and planning checker agree. | Complete |
 | M2 Shared runtime | Binding/state, standard broker, loaded-before/created-after enrollment, ordinary TUI coexistence, removed adoption flow. | `INT-V1-110` to `INT-V1-114`, `FND-V1-103`, `DAT-V1-106`, `IFC-V1-111`. | Complete |
 | M3 Live mobile surface | Catalog SSE and Focus Rail Mission Control integration. | `IFC-V1-112`, `FE-V1-107`; browser/manual inspection passes without refresh/poll fallback. | Complete |
-| M4 Ubuntu candidate | Deterministic package and independent broker/HostDeck systemd user lifecycle. | `IFC-V1-113`; install/upgrade/rollback/uninstall and supply-chain gates pass. | Todo |
+| M4 Ubuntu candidate | Deterministic package and independent broker/HostDeck systemd user lifecycle. | `IFC-V1-113`; install/upgrade/rollback/uninstall and supply-chain gates pass. | Complete |
 | M5 Physical and clean release | Unrelated-network Android bidirectional shared-session workflow plus clean Ubuntu install-to-uninstall aggregate. | `FE-V1-108`, `REL-V1-110`, then human `REL-V1-010`. | Todo |
 
 ## Module Maturity
@@ -45,7 +45,7 @@ Owns milestone, module maturity, production passes, and release truth.
 | Exact shared Codex runtime | Complete | `INT-V1-110` to `INT-V1-114` |
 | Selected API/CLI and live catalog | Complete | `IFC-V1-111`, `IFC-V1-112`, `FE-V1-107` |
 | Remote HTTPS/app authorization | Retained complete | Existing Tailscale Serve/pairing/security evidence; rerun on candidate in `FE-V1-108` |
-| Ubuntu package/lifecycle/supply chain | Todo | `IFC-V1-113` |
+| Ubuntu package/lifecycle/supply chain | Complete | `IFC-V1-113` |
 | Physical phone shared-session workflow | Todo | `FE-V1-108` |
 | Clean Ubuntu aggregate and docs | Todo | `REL-V1-110` |
 | Final go/no-go | Blocked | `REL-V1-010` and human acceptance |
