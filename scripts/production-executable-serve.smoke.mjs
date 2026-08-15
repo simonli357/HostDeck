@@ -11,7 +11,8 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  symlinkSync
+  symlinkSync,
+  writeFileSync
 } from "node:fs";
 import { request as requestHttp } from "node:http";
 import { createServer } from "node:net";
@@ -46,11 +47,15 @@ const stateHome = join(root, "state-home");
 const stateDir = join(stateHome, "hostdeck");
 const databasePath = join(stateDir, "hostdeck.sqlite");
 const runtimeHome = join(root, "runtime-home");
-const runtimeDir = join(runtimeHome, "hostdeck");
-const socketPath = join(runtimeDir, "app-server.sock");
 const codexHome = join(root, "codex-home");
+const controlDir = join(codexHome, "app-server-control");
+const socketPath = join(controlDir, "app-server-control.sock");
+const ownerPath = join(controlDir, "hostdeck-broker-owner.json");
 const commandDir = join(root, "bin");
+const command = join(packageRoot, sourceManifest.command.path);
+const bundledNode = join(packageRoot, sourceManifest.runtime.bundle.path);
 let activeRun = null;
+let brokerIdentity = null;
 
 try {
   cpSync(sourcePackage, packageRoot, {
@@ -69,8 +74,12 @@ try {
     mkdirSync(path, { mode: 0o700, recursive: true });
     chmodSync(path, 0o700);
   }
-  symlinkSync(process.execPath, join(commandDir, "node"));
-  const command = join(packageRoot, manifest.command.path);
+  writeFileSync(
+    join(codexHome, "config.toml"),
+    "check_for_update_on_startup = false\n[features]\nplugins = false\n",
+    { mode: 0o600 }
+  );
+  symlinkSync(bundledNode, join(commandDir, "node"));
   const port = await availableLoopbackPort();
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -141,8 +150,9 @@ try {
           headers: { accept: "text/event-stream" }
         }
       );
-      assert.equal(stream.status, 503);
-      assert.equal((await stream.json()).error.code, "service_overloaded");
+      const streamBody = await stream.json();
+      assert.equal(stream.status, 503, JSON.stringify(streamBody));
+      assert.equal(streamBody.error.code, "service_overloaded");
 
       const mutation = await requestLoopback(
         `http://127.0.0.1:${port}/api/v1/sessions`,
@@ -162,6 +172,10 @@ try {
       assert.equal(mutation.status, 409);
       assert.equal((await mutation.json()).error.code, "incompatible_runtime");
       assert.equal(existsSync(socketPath), false);
+    } else {
+      const currentBrokerIdentity = assertOwnedStandardBroker();
+      brokerIdentity ??= currentBrokerIdentity;
+      assert.equal(currentBrokerIdentity, brokerIdentity);
     }
 
     assert.equal(run.child.kill("SIGTERM"), true);
@@ -179,8 +193,27 @@ try {
     );
     assert.equal(result.stderr, "");
     assert.equal(result.stdout.includes(root), false);
-    assert.equal(existsSync(socketPath), false);
+    assert.equal(existsSync(socketPath), !expectDiagnostic);
+    assert.equal(existsSync(ownerPath), !expectDiagnostic);
+    if (!expectDiagnostic) {
+      assert.equal(assertOwnedStandardBroker(), brokerIdentity);
+    }
     await assertLoopbackPortAvailable(port);
+  }
+
+  if (!expectDiagnostic) {
+    const stopped = stopPackagedBroker();
+    assert.equal(stopped.action, "stop");
+    assert.deepEqual(stopped.endpoint, {
+      generation: 0,
+      kind: "standard_unix",
+      observed_version: null,
+      ownership: "none",
+      reason: null,
+      state: "absent"
+    });
+    assert.equal(existsSync(socketPath), false);
+    assert.equal(existsSync(ownerPath), false);
   }
 
   assert.equal(findFiles(codexHome).some((path) => path.endsWith(".jsonl")), false);
@@ -204,10 +237,61 @@ try {
         "Executable serve cleanup did not terminate the child process."
       );
     }
+    if (existsSync(ownerPath)) stopPackagedBroker();
   } finally {
     makeWritable(root);
     rmSync(root, { force: true, recursive: true });
   }
+}
+
+function assertOwnedStandardBroker() {
+  const controlStats = lstatSync(controlDir);
+  const socketStats = lstatSync(socketPath, { bigint: true });
+  const ownerStats = lstatSync(ownerPath);
+  assert.equal(controlStats.isDirectory(), true);
+  assert.equal(controlStats.mode & 0o7777, 0o700);
+  assert.equal(socketStats.isSocket(), true);
+  assert.equal(Number(socketStats.mode & 0o7777n), 0o600);
+  assert.equal(ownerStats.isFile(), true);
+  assert.equal(ownerStats.mode & 0o7777, 0o600);
+  const owner = JSON.parse(readFileSync(ownerPath, "utf8"));
+  assert.equal(owner.schema, 1);
+  assert.equal(Number.isSafeInteger(owner.pid) && owner.pid > 0, true);
+  assert.equal(owner.process_group_id, owner.pid);
+  assert.equal(
+    owner.socket_identity,
+    `${socketStats.dev.toString()}:${socketStats.ino.toString()}`
+  );
+  process.kill(owner.pid, 0);
+  return `${owner.pid}:${owner.start_ticks}`;
+}
+
+function stopPackagedBroker() {
+  const result = spawnSync(command, ["broker", "stop", "--json"], {
+    cwd: root,
+    encoding: "utf8",
+    env: serveEnvironment(),
+    maxBuffer: 256 * 1_024,
+    timeout: 30_000
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.signal, null);
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout.includes(root), false);
+  return JSON.parse(result.stdout);
+}
+
+function serveEnvironment() {
+  return {
+    CODEX_HOME: codexHome,
+    HOME: homeDir,
+    HOSTDECK_CODEX_BIN: codexBin,
+    PATH: commandDir,
+    XDG_CONFIG_HOME: configHome,
+    XDG_RUNTIME_DIR: runtimeHome,
+    XDG_STATE_HOME: stateHome
+  };
 }
 
 function startServe(command, port) {
@@ -224,15 +308,7 @@ function startServe(command, port) {
     ],
     {
       cwd: root,
-      env: {
-        CODEX_HOME: codexHome,
-        HOME: homeDir,
-        HOSTDECK_CODEX_BIN: codexBin,
-        PATH: commandDir,
-        XDG_CONFIG_HOME: configHome,
-        XDG_RUNTIME_DIR: runtimeHome,
-        XDG_STATE_HOME: stateHome
-      },
+      env: serveEnvironment(),
       stdio: ["ignore", "pipe", "pipe"]
     }
   );
