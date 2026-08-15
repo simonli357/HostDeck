@@ -17,6 +17,13 @@ import type {
   ProjectionReplayLiveHandoff,
   ProjectionReplayLiveHandoffService
 } from "./projection-replay-live-handoff.js";
+import {
+  assertSseSubscriberAdmissionService,
+  createSseSubscriberAdmissionService,
+  HostDeckSseSubscriberAdmissionError,
+  type SseSubscriberAdmissionLease,
+  type SseSubscriberAdmissionService
+} from "./sse-subscriber-admission.js";
 
 export type ProjectionSubscriberErrorCode =
   | "aborted"
@@ -81,6 +88,7 @@ export interface OpenProjectionSubscriberStreamInput {
 }
 
 export interface CreateProjectionSubscriberStreamServiceInput {
+  readonly admission?: SseSubscriberAdmissionService;
   readonly handoff: ProjectionReplayLiveHandoffService;
   readonly observe_failure: ProjectionSubscriberFailureObserver;
   readonly resource_budget: ResourceBudget;
@@ -128,6 +136,7 @@ export interface ProjectionSubscriberStreamService {
 }
 
 interface ParsedServiceInput {
+  readonly admission: SseSubscriberAdmissionService;
   readonly handoff: ProjectionReplayLiveHandoffService;
   readonly observeFailure: ProjectionSubscriberFailureObserver;
   readonly resourceBudget: ResourceBudget;
@@ -196,6 +205,7 @@ type TerminalState =
   | { readonly kind: "failed"; readonly failure: ProjectionSubscriberFailure };
 
 interface SubscriberRecord {
+  readonly admissionLease: SseSubscriberAdmissionLease;
   readonly controller: AbortController;
   deviceId: string | null;
   readonly externalSignal: AbortSignal;
@@ -416,8 +426,10 @@ function openStream(
     throw new HostDeckProjectionSubscriberError("aborted");
   }
   admit(runtime, input);
+  const admissionLease = reserveSharedAdmission(runtime, input);
   const controller = new AbortController();
   const record: SubscriberRecord = {
+    admissionLease,
     abortListenerAttached: true,
     clearBuffered: () => undefined,
     controller,
@@ -834,6 +846,9 @@ function release(runtime: ServiceRuntime, record: SubscriberRecord): void {
     if (count === 1) runtime.deviceCounts.delete(deviceId);
     else runtime.deviceCounts.set(deviceId, count - 1);
   }
+  if (!record.admissionLease.release()) {
+    throw new Error("Projection subscriber shared admission accounting is inconsistent.");
+  }
 }
 
 function recordTerminal(runtime: ServiceRuntime, terminal: TerminalState): void {
@@ -1082,9 +1097,16 @@ function snapshot(runtime: ServiceRuntime): ProjectionSubscriberStreamSnapshot {
 }
 
 function parseServiceInput(candidate: unknown): ParsedServiceInput {
+  const candidateKeys =
+    candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)
+      ? Reflect.ownKeys(Object.getOwnPropertyDescriptors(candidate))
+      : [];
+  const hasAdmission = candidateKeys.includes("admission");
   const value = readExactDataObject(
     candidate,
-    ["handoff", "observe_failure", "resource_budget"],
+    hasAdmission
+      ? ["admission", "handoff", "observe_failure", "resource_budget"]
+      : ["handoff", "observe_failure", "resource_budget"],
     "invalid_config"
   );
   const handoff = readExactDataObject(
@@ -1098,14 +1120,46 @@ function parseServiceInput(candidate: unknown): ParsedServiceInput {
   try {
     assertResolvedResourceBudget(value.resource_budget);
     assertSafeRetentionProducts(value.resource_budget);
+    if (hasAdmission) assertSseSubscriberAdmissionService(value.admission);
   } catch {
     throw new HostDeckProjectionSubscriberError("invalid_config");
   }
   return Object.freeze({
+    admission: hasAdmission
+      ? value.admission as SseSubscriberAdmissionService
+      : createSseSubscriberAdmissionService(value.resource_budget),
     handoff: value.handoff as ProjectionReplayLiveHandoffService,
     observeFailure: value.observe_failure as ProjectionSubscriberFailureObserver,
     resourceBudget: value.resource_budget
   });
+}
+
+function reserveSharedAdmission(
+  runtime: ServiceRuntime,
+  input: ParsedOpenInput
+): SseSubscriberAdmissionLease {
+  try {
+    return runtime.parsed.admission.reserve({
+      device_id: input.deviceId,
+      subscriber_id: input.subscriberId
+    });
+  } catch (error) {
+    runtime.counters.admissionRejections = increment(
+      runtime.counters.admissionRejections
+    );
+    if (error instanceof HostDeckSseSubscriberAdmissionError) {
+      if (error.code === "device_limit") {
+        throw new HostDeckProjectionSubscriberError("subscriber_device_limit");
+      }
+      if (error.code === "duplicate_subscriber") {
+        throw new HostDeckProjectionSubscriberError("subscriber_exists");
+      }
+      if (error.code === "global_limit") {
+        throw new HostDeckProjectionSubscriberError("subscriber_global_limit");
+      }
+    }
+    throw new HostDeckProjectionSubscriberError("invalid_config");
+  }
 }
 
 function assertSafeRetentionProducts(resourceBudget: ResourceBudget): void {

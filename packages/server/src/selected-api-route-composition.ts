@@ -123,6 +123,12 @@ import {
   createHostDeckSessionArchiveRouteRegistration,
   hostDeckSessionArchiveRouteRegistrationId
 } from "./session-archive-routes.js";
+import { assertSessionCatalogHub } from "./session-catalog-hub.js";
+import {
+  type CreateHostDeckSessionCatalogRouteRegistrationInput,
+  createHostDeckSessionCatalogRouteRegistration,
+  hostDeckSessionCatalogRouteRegistrationId
+} from "./session-catalog-routes.js";
 import {
   type CreateHostDeckSessionReadRouteRegistrationInput,
   createHostDeckSessionReadRouteRegistration,
@@ -178,6 +184,7 @@ export interface HostDeckSelectedApiRuntimes {
 }
 
 export interface HostDeckSelectedApiSessions {
+  readonly catalog: CreateHostDeckSessionCatalogRouteRegistrationInput["catalog"];
   readonly managed:
     & CreateHostDeckSessionStartRouteRegistrationInput["sessions"]
     & CreateHostDeckSessionArchiveRouteRegistrationInput["sessions"];
@@ -222,6 +229,7 @@ interface ParsedComposition {
   readonly archiveSubscribers: CreateHostDeckSessionArchiveRouteRegistrationInput["subscribers"];
   readonly audit: CreateHostDeckSessionStartRouteRegistrationInput["audit"];
   readonly compatibility: CreateHostDeckHealthRouteRegistrationInput["compatibility"];
+  readonly catalog: CreateHostDeckSessionCatalogRouteRegistrationInput["catalog"];
   readonly controls: HostDeckSelectedApiControls;
   readonly csrf: CreateHostDeckCsrfRouteRegistrationInput["csrf"];
   readonly deviceList: CreateHostDeckDeviceListRouteRegistrationInput["devices"];
@@ -284,7 +292,7 @@ const runtimeKeys = [
   "sessionArchive",
   "sessionStart"
 ] as const;
-const sessionKeys = ["managed", "read", "resume", "subscribers"] as const;
+const sessionKeys = ["catalog", "managed", "read", "resume", "subscribers"] as const;
 const stateKeys = ["get", "listEvents", "require"] as const;
 const deviceKeys = ["list", "revoke"] as const;
 const registrationKeys = ["id", "register", "surface"] as const;
@@ -316,6 +324,7 @@ export const hostDeckSelectedApiRouteCompositionDescriptor: readonly HostDeckSel
     descriptor(hostDeckSessionStartRouteRegistrationId, "api", ["session_start"]),
     descriptor(hostDeckProjectedEventRouteRegistrationId, "api", ["session_events"]),
     descriptor(hostDeckProjectionStreamRouteRegistrationId, "sse", ["session_event_stream"]),
+    descriptor(hostDeckSessionCatalogRouteRegistrationId, "sse", ["session_catalog_stream"]),
     descriptor(hostDeckResumeRouteRegistrationId, "api", ["session_resume_metadata"]),
     descriptor(hostDeckSessionArchiveRouteRegistrationId, "api", ["session_archive"]),
     descriptor(hostDeckPromptRouteRegistrationId, "api", ["prompt_dispatch"]),
@@ -371,6 +380,10 @@ export function createHostDeckSelectedApiRouteComposition(
     createHostDeckProjectionStreamRouteRegistration({
       observe_error: parsed.observeSseError,
       subscribers: parsed.subscribers
+    }),
+    createHostDeckSessionCatalogRouteRegistration({
+      catalog: parsed.catalog,
+      observe_error: parsed.observeSseError
     }),
     createHostDeckResumeRouteRegistration({ resume: parsed.resume }),
     createHostDeckSessionArchiveRouteRegistration({
@@ -522,6 +535,7 @@ function parseCompositionInput(input: unknown): ParsedComposition {
   assertHostDeckPairingPolicy(values.pairing);
   assertHostDeckSecurityMutationAuditExecutor(values.securityAudit);
   assertProjectionSubscriberStreamService(sessions.subscribers);
+  assertSessionCatalogHub(sessions.catalog);
   assertRemoteService(values.remote);
   if (typeof values.now !== "function" || typeof values.observeSseError !== "function") {
     throw new TypeError("Selected API route composition callbacks are invalid.");
@@ -571,6 +585,7 @@ function parseCompositionInput(input: unknown): ParsedComposition {
     archiveSubscribers: functionView(sessions.subscribers, ["archive_session"]),
     audit: values.audit,
     compatibility: health.compatibility,
+    catalog: sessions.catalog,
     controls: parsedControls,
     csrf: values.csrf,
     deviceList: functionView(devices, ["list"]),
@@ -632,9 +647,9 @@ function assertCompositionDescriptor(
   manifest: readonly SelectedApiRouteManifestEntry[]
 ): void {
   if (
-    manifest.length !== 35 ||
+    manifest.length !== 36 ||
     !Object.isFrozen(manifest) ||
-    hostDeckSelectedApiRouteCompositionDescriptor.length !== 22 ||
+    hostDeckSelectedApiRouteCompositionDescriptor.length !== 23 ||
     !Object.isFrozen(hostDeckSelectedApiRouteCompositionDescriptor)
   ) {
     throw new TypeError("Selected API route composition descriptor is invalid.");
@@ -666,9 +681,9 @@ function assertCompositionDescriptor(
   }
   if (
     apiCount !== 21 ||
-    sseCount !== 1 ||
-    new Set(manifestIds).size !== 35 ||
-    new Set(describedIds).size !== 35 ||
+    sseCount !== 2 ||
+    new Set(manifestIds).size !== 36 ||
+    new Set(describedIds).size !== 36 ||
     describedIds.length !== manifestIds.length ||
     describedIds.some((id) => !manifestIds.includes(id))
   ) {

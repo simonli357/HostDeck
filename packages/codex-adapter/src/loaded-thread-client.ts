@@ -424,7 +424,7 @@ function normalizeCandidate(candidate: unknown): LoadedThreadCandidate {
     parent_thread_id: parentThreadId,
     forked_from_id: forkedFromId,
     name: raw.name,
-    project_cue: projectCue(cwd),
+    project_cue: codexLoadedThreadProjectCue(cwd),
     cwd,
     source,
     ephemeral: raw.ephemeral,
@@ -525,7 +525,7 @@ function deriveRootThreadId(
   return session.success && session.data !== threadId ? session.data : parentThreadId;
 }
 
-function projectCue(cwd: string): string {
+export function codexLoadedThreadProjectCue(cwd: string): string {
   const trimmed = cwd.replace(/[\\/]+$/u, "");
   const separator = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
   const leaf = trimmed.slice(separator + 1);

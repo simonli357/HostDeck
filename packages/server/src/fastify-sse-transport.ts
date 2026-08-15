@@ -38,6 +38,7 @@ export interface HostDeckSseEventSource {
 }
 
 export interface CreateHostDeckSseTransportRegistrationInput {
+  readonly eventSchema: z.ZodType;
   readonly id: string;
   readonly observeError: HostDeckSseFailureObserver;
   readonly paramsSchema?: z.ZodType;
@@ -143,6 +144,7 @@ export function createHostDeckSseTransportRegistration(
           const readable = createHostDeckSseReadable({
             after,
             cleanupTimeoutMs: context.resourceBudget.sse_disconnect_cleanup_timeout_ms,
+            eventSchema: parsed.eventSchema,
             eventMaxBytes: context.resourceBudget.sse_event_max_bytes,
             expectedSessionId: optionalSessionId(request.params),
             iterable,
@@ -223,6 +225,7 @@ export function createHostDeckSseTransportRegistration(
 }
 
 interface ParsedRegistrationInput {
+  readonly eventSchema: z.ZodType;
   readonly id: string;
   readonly observeError: HostDeckSseFailureObserver;
   readonly openSource: HostDeckSseEventSource["open"];
@@ -240,8 +243,8 @@ function parseRegistrationInput(input: unknown): ParsedRegistrationInput {
     throw new TypeError("HostDeck SSE transport registration input must be a plain object.");
   }
   const keys = Object.keys(value).sort();
-  const allowedKeys = ["id", "observeError", "paramsSchema", "path", "source"];
-  const requiredKeys = ["id", "observeError", "path", "source"];
+  const allowedKeys = ["eventSchema", "id", "observeError", "paramsSchema", "path", "source"];
+  const requiredKeys = ["eventSchema", "id", "observeError", "path", "source"];
   if (
     keys.some((key) => !allowedKeys.includes(key)) ||
     requiredKeys.some((key) => !Object.hasOwn(value, key))
@@ -262,6 +265,9 @@ function parseRegistrationInput(input: unknown): ParsedRegistrationInput {
   if (value.paramsSchema !== undefined && !(value.paramsSchema instanceof z.ZodType)) {
     throw new TypeError("HostDeck SSE transport params schema must be a Zod schema.");
   }
+  if (!(value.eventSchema instanceof z.ZodType)) {
+    throw new TypeError("HostDeck SSE event schema must be a Zod schema.");
+  }
   if (value.path.includes(":") && value.paramsSchema === undefined) {
     throw new TypeError("HostDeck SSE parameterized routes require a Zod params schema.");
   }
@@ -272,6 +278,7 @@ function parseRegistrationInput(input: unknown): ParsedRegistrationInput {
     throw new TypeError("HostDeck SSE transport requires an error observer.");
   }
   return Object.freeze({
+    eventSchema: value.eventSchema,
     id: value.id,
     observeError: value.observeError,
     openSource: value.source.open.bind(value.source),

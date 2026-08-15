@@ -48,7 +48,8 @@ import {
   createSettingsRepository,
   type RuntimeCompatibilityRepository,
   runStartupAuditOrphanReconciliation,
-  runStartupRetentionMaintenance
+  runStartupRetentionMaintenance,
+  type SelectedStateRepository
 } from "@hostdeck/storage";
 import {
   createHostDeckApplicationShutdown,
@@ -59,6 +60,7 @@ import {
   type AutomaticSessionEnrollmentService,
   createAutomaticSessionEnrollmentService
 } from "./automatic-session-enrollment-service.js";
+import { createCatalogPublishingStateRepository } from "./catalog-publishing-state-repository.js";
 import {
   type CodexApprovalControlService,
   createCodexApprovalControlService
@@ -143,6 +145,12 @@ import {
   createHostDeckSelectedWriteAdmissionPolicy
 } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
+import {
+  createSessionCatalogHub,
+  type SessionCatalogHub
+} from "./session-catalog-hub.js";
+import { createSessionCatalogStateReader } from "./session-catalog-state-reader.js";
+import { createSseSubscriberAdmissionService } from "./sse-subscriber-admission.js";
 import { createNativeTailscalePlatformCommandAdapter } from "./tailscale-command-adapter.js";
 import {
   createRealTailscaleReadCommandRunner,
@@ -171,6 +179,7 @@ export type HostDeckProductionApplicationPhase =
 
 export const hostDeckProductionApplicationIssueSources = Object.freeze([
   "approval",
+  "catalog",
   "fanout",
   "process",
   "projection",
@@ -206,9 +215,9 @@ export interface HostDeckProductionListenerHealthPort {
 
 export interface HostDeckProductionApplicationSnapshot {
   readonly phase: HostDeckProductionApplicationPhase;
-  readonly route_registration_count: 23;
+  readonly route_registration_count: 24;
   readonly api_registration_count: 21;
-  readonly sse_registration_count: 1;
+  readonly sse_registration_count: 2;
   readonly static_registration_count: 1;
   readonly reported_issue_count: number;
   readonly observer_failure_count: number;
@@ -317,13 +326,8 @@ export function createHostDeckProductionApplication(
     );
   }
 
-  const stateRepository = createSelectedStateRepository(db);
+  const durableStateRepository = createSelectedStateRepository(db);
   const sessionReadRepository = createSelectedSessionReadRepository(db);
-  const targetState = createTargetStateView(stateRepository);
-  const targetSessionRead = createTargetSessionReadView(
-    stateRepository,
-    sessionReadRepository
-  );
   const auditRepository = createSelectedAuditRepository(db);
   const compatibilityRepository = createRuntimeCompatibilityRepository(db);
   const compatibilityStatus = createHostDeckRuntimeCompatibilityRecordReader({
@@ -360,6 +364,36 @@ export function createHostDeckProductionApplication(
     "compatibility_unchecked"
   ]);
   localHealth.update("listener", "degraded", ["listener_not_ready"]);
+
+  const sseAdmission = createSseSubscriberAdmissionService(budget);
+  const catalog = createSessionCatalogHub({
+    admission: sseAdmission,
+    authorize: authorizeSelectedSessionRead,
+    reader: createSessionCatalogStateReader({
+      max_sessions: budget.protocol_thread_max_loaded_reads,
+      states: durableStateRepository
+    }),
+    resource_budget: budget
+  });
+  catalog.initialize(0);
+  const stateRepository = createCatalogPublishingStateRepository({
+    catalog,
+    observe_failure(error) {
+      attemptLocalHealthUpdate(
+        "fanout",
+        "failed",
+        ["fanout_failed"],
+        "catalog"
+      );
+      report("catalog", errorCode(error, "publication_failed"));
+    },
+    states: durableStateRepository
+  });
+  const targetState = createTargetStateView(stateRepository);
+  const targetSessionRead = createTargetSessionReadView(
+    stateRepository,
+    sessionReadRepository
+  );
 
   const authentication = createHostDeckRequestAuthenticationPolicy({
     authenticateDeviceToken: (authenticationInput) =>
@@ -432,21 +466,13 @@ export function createHostDeckProductionApplication(
     publish
   });
   const handoff = createProjectionReplayLiveHandoffService({
-    authorize: ({ authorization }) => {
-      const result = selectedRequestAuthenticationContextSchema.safeParse(
-        authorization
-      );
-      return result.success &&
-          (result.data.state === "local_admin" ||
-            result.data.state === "paired_device")
-        ? Object.freeze({ ok: true as const })
-        : Object.freeze({ ok: false as const });
-    },
+    authorize: authorizeSelectedSessionRead,
     fanout,
     resource_budget: budget,
     state: stateRepository
   });
   const subscribers = createProjectionSubscriberStreamService({
+    admission: sseAdmission,
     handoff,
     observe_failure: (failure) => report("subscriber", failure.code),
     resource_budget: budget
@@ -723,7 +749,9 @@ export function createHostDeckProductionApplication(
         if (failed !== undefined) {
           throw new TypeError(`Automatic enrollment failed with ${failed.failure}.`);
         }
-        return await healthAwareReconciliation.reconcile(input);
+        const reconciled = await healthAwareReconciliation.reconcile(input);
+        catalog.reconcile(input.generation);
+        return reconciled;
       } finally {
         enrollmentRuntime = null;
       }
@@ -827,6 +855,7 @@ export function createHostDeckProductionApplication(
     }),
     securityAudit,
     sessions: Object.freeze({
+      catalog,
       managed: createHostDeckBoundFunctionView(managedSessions, ["archive", "read", "start"]),
       read: targetSessionRead,
       resume,
@@ -886,7 +915,7 @@ export function createHostDeckProductionApplication(
     }),
     resource_budget: budget,
     storage: resources.shutdown.storage,
-    subscribers: createSubscriberShutdownPort(subscribers),
+    subscribers: createSubscriberShutdownPort(subscribers, catalog),
     supervisor: resources.shutdown.supervisor,
     writes: writeShutdown
   });
@@ -1021,9 +1050,9 @@ export function createHostDeckProductionApplication(
   const snapshot = (): HostDeckProductionApplicationSnapshot =>
     Object.freeze({
       phase,
-      route_registration_count: 23 as const,
+      route_registration_count: 24 as const,
       api_registration_count: 21 as const,
-      sse_registration_count: 1 as const,
+      sse_registration_count: 2 as const,
       static_registration_count: 1 as const,
       reported_issue_count: issues.count,
       observer_failure_count: issues.observerFailures,
@@ -1064,6 +1093,23 @@ export function assertHostDeckProductionApplication(
       "HostDeck production application must be created by its composition factory."
     );
   }
+}
+
+function authorizeSelectedSessionRead(input: {
+  readonly authorization: unknown;
+}): { readonly ok: true } | { readonly ok: false } {
+  const result = selectedRequestAuthenticationContextSchema.safeParse(
+    input.authorization
+  );
+  const authorized =
+    result.success &&
+    (result.data.state === "local_admin" ||
+      result.data.state === "paired_device" ||
+      (result.data.state === "unpaired" &&
+        result.data.network_mode === "loopback"));
+  return authorized
+    ? Object.freeze({ ok: true as const })
+    : Object.freeze({ ok: false as const });
 }
 
 function parseCompositionInput(input: unknown): ParsedCompositionInput {
@@ -1481,12 +1527,14 @@ function createProjectionShutdownPort(input: {
 }
 
 function createSubscriberShutdownPort(
-  subscribers: ProjectionSubscriberStreamService
+  subscribers: ProjectionSubscriberStreamService,
+  catalog: SessionCatalogHub
 ): Readonly<{ readonly close: (deadline: OperationDeadline) => void }> {
   return Object.freeze({
     close(deadline) {
       deadline.throwIfAborted();
       subscribers.close();
+      catalog.close();
     }
   });
 }
@@ -1538,7 +1586,7 @@ function createListenerHealthPort(
 }
 
 function createTargetStateView(
-  repository: ReturnType<typeof createSelectedStateRepository>
+  repository: SelectedStateRepository
 ) {
   return Object.freeze({
     get(targetId: string) {
@@ -1558,7 +1606,7 @@ function createTargetStateView(
 }
 
 function createTargetSessionReadView(
-  state: ReturnType<typeof createSelectedStateRepository>,
+  state: SelectedStateRepository,
   sessions: ReturnType<typeof createSelectedSessionReadRepository>
 ) {
   return Object.freeze({
@@ -1575,8 +1623,8 @@ function assertRouteInventory(
 ): void {
   const selectedCount = hostDeckSelectedApiRouteCompositionDescriptor.length;
   if (
-    registrations.length !== 23 ||
-    selectedCount !== 22 ||
+    registrations.length !== 24 ||
+    selectedCount !== 23 ||
     registrations.slice(0, selectedCount).some((registration, index) => {
       const expected = hostDeckSelectedApiRouteCompositionDescriptor[index];
       return (
@@ -1587,11 +1635,11 @@ function assertRouteInventory(
     }) ||
     registrations.at(-1)?.id !== hostDeckProductionStaticRegistrationId ||
     registrations.at(-1)?.surface !== "static" ||
-    new Set(registrations.map((registration) => registration.id)).size !== 23 ||
+    new Set(registrations.map((registration) => registration.id)).size !== 24 ||
     registrations.filter((registration) => registration.surface === "api")
       .length !== 21 ||
     registrations.filter((registration) => registration.surface === "sse")
-      .length !== 1 ||
+      .length !== 2 ||
     registrations.filter((registration) => registration.surface === "static")
       .length !== 1
   ) {

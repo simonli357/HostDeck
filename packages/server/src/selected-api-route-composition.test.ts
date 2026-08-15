@@ -46,6 +46,8 @@ import {
 import { selectedApiRouteManifest } from "./selected-api-route-manifest.js";
 import { createHostDeckSelectedWriteAdmissionPolicy } from "./selected-write-admission-policy.js";
 import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit-executor.js";
+import { createSessionCatalogHub } from "./session-catalog-hub.js";
+import { createSseSubscriberAdmissionService } from "./sse-subscriber-admission.js";
 import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-trust.js";
 
 interface CompositionFixture {
@@ -69,14 +71,31 @@ const probeThreadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const probeDeviceToken = "W".repeat(43);
 const privateProbeSentinel = "HOSTDECK_COMPOSITION_PRIVATE_PROBE";
 
+function createTestCatalog() {
+  const catalog = createSessionCatalogHub({
+    admission: createSseSubscriberAdmissionService(defaultResourceBudget),
+    authorize: () => Object.freeze({ ok: true as const }),
+    create_stream_id: () => "catalog_composition_fixture",
+    initial_cursor: 0,
+    now: () => new Date(fixedTime),
+    reader: {
+      read: () => Object.freeze([]),
+      readOne: () => null
+    },
+    resource_budget: defaultResourceBudget
+  });
+  catalog.initialize(0);
+  return catalog;
+}
+
 afterEach(() => {
   for (const fixture of fixtures.splice(0).reverse()) fixture.close();
 });
 
 describe("IFC-V1-046 selected API production route composition", () => {
-  it("freezes an exact 22-registrar descriptor over all 35 manifest rows", () => {
+  it("freezes an exact 23-registrar descriptor over all 36 manifest rows", () => {
     expect(Object.isFrozen(hostDeckSelectedApiRouteCompositionDescriptor)).toBe(true);
-    expect(hostDeckSelectedApiRouteCompositionDescriptor).toHaveLength(22);
+    expect(hostDeckSelectedApiRouteCompositionDescriptor).toHaveLength(23);
     expect(
       hostDeckSelectedApiRouteCompositionDescriptor.filter(
         (entry) => entry.surface === "api"
@@ -86,7 +105,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
       hostDeckSelectedApiRouteCompositionDescriptor.filter(
         (entry) => entry.surface === "sse"
       )
-    ).toHaveLength(1);
+    ).toHaveLength(2);
 
     const registrationIds = hostDeckSelectedApiRouteCompositionDescriptor.map(
       (entry) => entry.registrationId
@@ -94,8 +113,8 @@ describe("IFC-V1-046 selected API production route composition", () => {
     const manifestIds = hostDeckSelectedApiRouteCompositionDescriptor.flatMap(
       (entry) => entry.manifestIds
     );
-    expect(new Set(registrationIds).size).toBe(22);
-    expect(new Set(manifestIds).size).toBe(35);
+    expect(new Set(registrationIds).size).toBe(23);
+    expect(new Set(manifestIds).size).toBe(36);
     expect([...manifestIds].sort()).toEqual(
       selectedApiRouteManifest.map((entry) => entry.id).sort()
     );
@@ -137,7 +156,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
       fixture.input
     );
     expect(Object.isFrozen(registrations)).toBe(true);
-    expect(registrations).toHaveLength(22);
+    expect(registrations).toHaveLength(23);
     expect(
       registrations.map(({ id, surface }) => ({ id, surface }))
     ).toEqual(
@@ -154,7 +173,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
     ).toThrow("Selected API route composition already owns this admission policy.");
   });
 
-  it("registers exactly the canonical 35 method/path pairs in a ready Fastify app", async () => {
+  it("registers exactly the canonical 36 method/path pairs in a ready Fastify app", async () => {
     const fixture = createFixture();
     const app = createHostDeckFastifyApp({
       observeInternalError: () => undefined,
@@ -178,7 +197,7 @@ describe("IFC-V1-046 selected API production route composition", () => {
           .map((entry) => `${entry.method} ${entry.path}`)
           .sort()
       );
-      expect(inventory).toHaveLength(35);
+      expect(inventory).toHaveLength(36);
       expect(inventory.every((entry) => Object.isFrozen(entry))).toBe(true);
       expect(inventory.some((entry) => entry.method === "HEAD")).toBe(false);
       expect(
@@ -434,6 +453,20 @@ describe("IFC-V1-046 selected API production route composition", () => {
           registrationIdForManifest(probe.manifestId)
         );
       }
+
+      const catalogRequest = localApp.inject({
+        headers: {
+          accept: "text/event-stream",
+          host: "127.0.0.1:48765"
+        },
+        method: "GET",
+        url: "/api/v1/sessions/catalog/stream"
+      });
+      setTimeout(() => local.input.sessions.catalog.close(), 0);
+      await catalogRequest;
+      exercisedRegistrationIds.add(
+        registrationIdForManifest("session_catalog_stream")
+      );
 
       for (const operationId of [
         "op_composition_probe_start_001",
@@ -824,6 +857,7 @@ function createHandlerProbeFixture(): HandlerProbeFixture {
     },
     securityAudit,
     sessions: {
+      catalog: createTestCatalog(),
       managed: {
         archive: () => requireProbe("sessions.managed.archive"),
         read: () => invoke("sessions.managed.read", selectedState),
@@ -1080,6 +1114,7 @@ function createFixture(): CompositionFixture {
     },
     securityAudit,
     sessions: {
+      catalog: createTestCatalog(),
       managed: { archive: fail, read: fail, start: fail },
       read: { get: fail, list: fail },
       resume: { read: fail },

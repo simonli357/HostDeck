@@ -26,6 +26,7 @@ const expectedRouteIds = [
   "session_detail",
   "session_events",
   "session_event_stream",
+  "session_catalog_stream",
   "session_resume_metadata",
   "session_archive",
   "prompt_dispatch",
@@ -76,11 +77,11 @@ const expectedMutationActions = [
 ] as const;
 
 describe("selected API route manifest", () => {
-  it("freezes exactly the shared-session 35-route V1 inventory", () => {
+  it("freezes exactly the shared-session 36-route V1 inventory", () => {
     expect(selectedApiRouteManifest.map((route) => route.id)).toEqual(expectedRouteIds);
-    expect(selectedApiRouteManifest).toHaveLength(35);
-    expect(new Set(selectedApiRouteManifest.map((route) => route.id)).size).toBe(35);
-    expect(new Set(selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`)).size).toBe(35);
+    expect(selectedApiRouteManifest).toHaveLength(36);
+    expect(new Set(selectedApiRouteManifest.map((route) => route.id)).size).toBe(36);
+    expect(new Set(selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`)).size).toBe(36);
     expect(new Set(selectedApiRouteManifest.map((route) => route.family))).toEqual(
       new Set(selectedApiRouteFamilies)
     );
@@ -166,7 +167,8 @@ describe("selected API route manifest", () => {
       }
 
       if (route.transport === "sse") {
-        expect(route).toMatchObject({ method: "GET", id: "session_event_stream" });
+        expect(["session_catalog_stream", "session_event_stream"]).toContain(route.id);
+        expect(route.method).toBe("GET");
       }
 
       if (parameters.includes(":request_id")) expect(route.request.params).toBe("session_approval_params_v1");

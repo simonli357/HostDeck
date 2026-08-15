@@ -90,6 +90,7 @@ export {
   type CodexLoadedThreadRequestPort,
   type CodexLoadedThreadSnapshot,
   codexLoadedThreadNotificationTarget,
+  codexLoadedThreadProjectCue,
   createCodexLoadedThreadClient,
   HostDeckCodexLoadedThreadError
 } from "./loaded-thread-client.js";

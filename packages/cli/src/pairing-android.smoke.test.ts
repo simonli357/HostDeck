@@ -78,6 +78,9 @@ import {
   createProjectionSubscriberStreamService,
   createRemoteIngressControlService,
   createSecurityMutationAuditExecutor,
+  createSessionCatalogHub,
+  createSessionCatalogStateReader,
+  createSseSubscriberAdmissionService,
   createTailscaleObserver,
   createTailscaleServeManager,
   type HostDeckFastifyInstance,
@@ -8308,6 +8311,8 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
       let promptSubscribers: ReturnType<
         typeof createProjectionSubscriberStreamService
       > | null = null;
+      let dashboardCatalog: ReturnType<typeof createSessionCatalogHub> | null =
+        null;
       let talkBackArtifacts: PhysicalTalkBackArtifacts | null = null;
       let initialWifiEnabled: boolean | null = null;
       let initialMobileDataEnabled: boolean | null = null;
@@ -8613,6 +8618,31 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             states: selectedStates
           });
           const deviceListing = createDeviceListingRepository(opened.db);
+          dashboardCatalog = createSessionCatalogHub({
+            admission: promptRuntime.admission,
+            authorize: ({ authorization }) => {
+              const parsed = selectedRequestAuthenticationContextSchema.safeParse(
+                authorization
+              );
+              return parsed.success &&
+                  (parsed.data.state === "local_admin" ||
+                    parsed.data.state === "paired_device" ||
+                    (parsed.data.state === "unpaired" &&
+                      parsed.data.network_mode === "loopback"))
+                ? { ok: true }
+                : { ok: false };
+            },
+            create_stream_id: () => "catalog_physical_dashboard_001",
+            initial_cursor: 1_000,
+            now,
+            reader: createSessionCatalogStateReader({
+              max_sessions:
+                defaultResourceBudget.protocol_thread_max_loaded_reads,
+              states: selectedStates
+            }),
+            resource_budget: defaultResourceBudget
+          });
+          dashboardCatalog.initialize(1);
           const routes = createHostDeckSelectedApiRouteComposition({
             admission: writeAdmission,
             audit: promptAuditExecutor,
@@ -8632,6 +8662,7 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             runtimes: dashboardControls.runtimes,
             securityAudit: auditExecutor,
             sessions: Object.freeze({
+              catalog: dashboardCatalog,
               managed: dashboardControls.managed,
               read: sessionReads,
               resume: dashboardControls.resume,
@@ -9442,6 +9473,15 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
           );
         }
         controller.abort();
+        if (dashboardCatalog !== null) {
+          await collectPhysicalCleanupError(
+            "Physical cleanup could not close the dashboard catalog.",
+            () => {
+              dashboardCatalog?.close();
+            },
+            cleanupErrors
+          );
+        }
         if (host !== null) {
           await collectPhysicalCleanupError(
             "Physical cleanup could not close the HostDeck lifecycle.",
@@ -11511,6 +11551,9 @@ type PhysicalOutputCursor = Exclude<
 >;
 
 interface PhysicalPromptRuntime {
+  readonly admission: ReturnType<
+    typeof createSseSubscriberAdmissionService
+  >;
   readonly advance: (state: "in_progress" | "completed") => Promise<void>;
   readonly disconnectForRecovery: () => void;
   readonly publishInterruptTurn: (
@@ -12023,7 +12066,11 @@ function createPhysicalPromptRuntime(
   const recordStreamFailure = (failure: unknown): void => {
     streamFailures.push(failure);
   };
+  const admission = createSseSubscriberAdmissionService(
+    defaultResourceBudget
+  );
   const subscribers = createProjectionSubscriberStreamService({
+    admission,
     handoff: Object.freeze({
       open: (input: unknown) => handoff.open(input)
     }),
@@ -12034,6 +12081,7 @@ function createPhysicalPromptRuntime(
   let interruptPhase: "idle" | "in_progress" | "interrupted" = "idle";
   let interruptTurnId: string | null = null;
   const runtime: PhysicalPromptRuntime = {
+    admission,
     async advance(state) {
       requireCondition(
         (phase === "ready" && state === "in_progress") ||
@@ -12721,6 +12769,7 @@ function physicalSseRoute(
   runtime: PhysicalSseRuntime
 ): HostDeckRoutePluginRegistration {
   return createHostDeckSseTransportRegistration({
+    eventSchema: selectedProjectionEventSchema,
     id: "physical-remote-events",
     observeError: () => undefined,
     path: "/__physical/events",

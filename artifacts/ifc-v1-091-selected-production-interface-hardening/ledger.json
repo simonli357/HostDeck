@@ -701,6 +701,13 @@
       ]
     },
     {
+      "id": "selected-session-catalog-stream",
+      "surface": "sse",
+      "route_ids": [
+        "session_catalog_stream"
+      ]
+    },
+    {
       "id": "selected-managed-thread-resume",
       "surface": "api",
       "route_ids": [
@@ -934,6 +941,14 @@
       "path": "/api/v1/sessions/:session_id/events/stream",
       "transport": "sse",
       "owner_task": "IFC-V1-035"
+    },
+    {
+      "id": "session_catalog_stream",
+      "family": "sessions",
+      "method": "GET",
+      "path": "/api/v1/sessions/catalog/stream",
+      "transport": "sse",
+      "owner_task": "IFC-V1-112"
     },
     {
       "id": "session_resume_metadata",

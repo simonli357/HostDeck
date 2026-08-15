@@ -9,7 +9,8 @@ import {
   type ResourceBudget,
   remoteEnableRequestSchema,
   remoteIngressObservationSnapshotSchema,
-  resolveResourceBudget
+  resolveResourceBudget,
+  selectedProjectionEventSchema
 } from "@hostdeck/contracts";
 import { createOperationDeadline } from "@hostdeck/core";
 import {
@@ -598,6 +599,7 @@ function lifecycleRoutes(input: {
     }
   };
   const sse = createHostDeckSseTransportRegistration({
+    eventSchema: selectedProjectionEventSchema,
     id: "remote-lifecycle-sse-fixture",
     observeError: () => undefined,
     path: "/events",

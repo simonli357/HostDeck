@@ -1110,6 +1110,7 @@ function createAcceptanceSseRegistration(runtime: {
   closed: number;
 }): HostDeckRoutePluginRegistration {
   return createHostDeckSseTransportRegistration({
+    eventSchema: selectedProjectionEventSchema,
     id: "remote-acceptance-sse",
     path: protectedSsePath,
     observeError: () => undefined,

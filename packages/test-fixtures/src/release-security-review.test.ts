@@ -142,7 +142,7 @@ describe("REL-V1-005 security and privacy release review ledger", () => {
     expect(routeManifest).not.toMatch(
       /(?:\/lan|\/terminal|\/shell|\/files|\/editor|\/git|app-server)/iu
     );
-    expect(routeManifest.match(/^ {2}route\(/gmu)).toHaveLength(35);
+    expect(routeManifest.match(/^ {2}route\(/gmu)).toHaveLength(36);
     expect(routeManifest).not.toMatch(/owner_task: "IFC-V1-110"/gu);
   });
 

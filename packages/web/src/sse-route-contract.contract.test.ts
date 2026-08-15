@@ -3,10 +3,14 @@ import { selectedApiRouteManifest } from "../../server/src/selected-api-route-ma
 import { browserSseRouteContract } from "./sse-route-contract.js";
 
 describe("browser SSE route contract", () => {
-  it("matches the sole selected production SSE route exactly", () => {
-    const selected = selectedApiRouteManifest.filter(
+  it("matches the selected per-session production SSE route exactly", () => {
+    const streams = selectedApiRouteManifest.filter(
       (route) => route.transport === "sse"
     );
+    const selected = streams.filter(
+      (route) => route.id === "session_event_stream"
+    );
+    expect(streams).toHaveLength(2);
     expect(selected).toHaveLength(1);
     expect(browserSseRouteContract).toEqual(selected[0]);
     expect(Object.isFrozen(browserSseRouteContract)).toBe(true);

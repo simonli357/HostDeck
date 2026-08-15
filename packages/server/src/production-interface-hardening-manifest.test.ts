@@ -46,11 +46,11 @@ describe("IFC-V1-091 production interface hardening ledger", () => {
     expect(existsSync(ledgerPath)).toBe(true);
     expect(JSON.parse(readFileSync(ledgerPath, "utf8"))).toEqual(expected);
     expect(Object.isFrozen(expected)).toBe(true);
-    expect(selectedApiRouteManifest).toHaveLength(35);
-    expect(hostDeckSelectedApiRouteCompositionDescriptor).toHaveLength(22);
+    expect(selectedApiRouteManifest).toHaveLength(36);
+    expect(hostDeckSelectedApiRouteCompositionDescriptor).toHaveLength(23);
     expect(
       hostDeckSelectedApiRouteCompositionDescriptor.flatMap((entry) => entry.manifestIds)
-    ).toHaveLength(35);
+    ).toHaveLength(36);
   });
 
   it("covers every frozen criterion, dimension, requirement, and evidence owner once", () => {

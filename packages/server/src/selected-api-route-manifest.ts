@@ -79,7 +79,8 @@ export const selectedApiRouteOwnerTasks = [
   "IFC-V1-065",
   "IFC-V1-068",
   "IFC-V1-069",
-  "IFC-V1-076"
+  "IFC-V1-076",
+  "IFC-V1-112"
 ] as const;
 
 export const selectedApiSchemaIds = [
@@ -116,6 +117,7 @@ export const selectedApiSchemaIds = [
   "selected_session_detail_response_v1",
   "selected_event_page_response_v1",
   "selected_projection_event_v1",
+  "session_catalog_event_v1",
   "selected_resume_metadata_response_v1",
   "prompt_dispatch_response_v1",
   "model_control_snapshot_v1",
@@ -351,6 +353,21 @@ export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] 
     audit: null,
     handler: "events.stream",
     owner_task: "IFC-V1-035"
+  }),
+  route({
+    id: "session_catalog_stream",
+    family: "sessions",
+    method: "GET",
+    path: "/api/v1/sessions/catalog/stream",
+    transport: "sse",
+    request: request(null, "selected_stream_cursor_query_v1", null),
+    response: response("session_catalog_event_v1"),
+    ...sessionReadPolicy,
+    target: "host",
+    operation_kind: null,
+    audit: null,
+    handler: "sessions.catalogStream",
+    owner_task: "IFC-V1-112"
   }),
   route({
     id: "session_resume_metadata",

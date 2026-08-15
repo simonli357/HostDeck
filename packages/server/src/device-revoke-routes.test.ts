@@ -848,6 +848,7 @@ function sseFixtureRegistration(input: {
   readonly openStarted: Deferred<void>;
 }): HostDeckRoutePluginRegistration {
   return createHostDeckSseTransportRegistration({
+    eventSchema: selectedProjectionEventSchema,
     id: "device-revoke-sse-fixture",
     path: "/fixture/events",
     observeError: () => undefined,

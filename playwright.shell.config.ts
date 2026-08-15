@@ -24,6 +24,7 @@ export default defineConfig({
     "remote-connection-recovery.spec.ts",
     "responsive-layout.spec.ts",
     "runtime-compatibility.spec.ts",
+    "session-catalog-listener.spec.ts",
     "session-detail.spec.ts",
     "skills-control.spec.ts",
     "usage-control.spec.ts"

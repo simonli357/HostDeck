@@ -1,4 +1,8 @@
-import { sessionIdParamsSchema, sessionIdSchema } from "@hostdeck/contracts";
+import {
+  selectedProjectionEventSchema,
+  sessionIdParamsSchema,
+  sessionIdSchema
+} from "@hostdeck/contracts";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
   requireHostDeckRequestAuthentication
@@ -43,6 +47,7 @@ export function createHostDeckProjectionStreamRouteRegistration(
   const manifest = requireProjectionStreamManifestEntry();
   const subscribers = values.subscribers;
   return createHostDeckSseTransportRegistration({
+    eventSchema: selectedProjectionEventSchema,
     id: hostDeckProjectionStreamRouteRegistrationId,
     observeError: values.observe_error as HostDeckSseFailureObserver,
     paramsSchema: sessionIdParamsSchema,

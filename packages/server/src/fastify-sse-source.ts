@@ -3,10 +3,13 @@ import { Readable } from "node:stream";
 import type { SSEMessage } from "@fastify/sse";
 import {
   type SelectedProjectionEvent,
-  selectedProjectionEventSchema
+  type SessionCatalogEvent,
+  selectedProjectionEventSchema,
+  sessionCatalogEventSchema
 } from "@hostdeck/contracts";
 import type { OutputCursor } from "@hostdeck/core";
 import type { FastifyRequest } from "fastify";
+import type { z } from "zod";
 
 export const hostDeckSseFailureCodes = [
   "source_open_failed",
@@ -48,6 +51,7 @@ export class HostDeckSseAbortError extends Error {
 export interface CreateHostDeckSseReadableInput {
   readonly after: OutputCursor | null;
   readonly cleanupTimeoutMs: number;
+  readonly eventSchema: z.ZodType;
   readonly eventMaxBytes: number;
   readonly expectedSessionId: string | null;
   readonly iterable: AsyncIterable<unknown>;
@@ -102,8 +106,11 @@ async function* managedSseMessages(input: CreateHostDeckSseReadableInput): Async
         completed = true;
         return;
       }
-      const event = parseSelectedEvent(next.value);
-      if (input.expectedSessionId !== null && event.session_id !== input.expectedSessionId) {
+      const event = parseEvent(next.value, input.eventSchema);
+      if (
+        input.expectedSessionId !== null &&
+        (!("session_id" in event) || event.session_id !== input.expectedSessionId)
+      ) {
         throw new HostDeckSseTransportError(
           "invalid_event",
           "SSE source emitted an event for a different session."
@@ -133,19 +140,34 @@ async function* managedSseMessages(input: CreateHostDeckSseReadableInput): Async
   }
 }
 
-function parseSelectedEvent(value: unknown): SelectedProjectionEvent {
-  const result = selectedProjectionEventSchema.safeParse(value);
+type HostDeckSseEvent = SelectedProjectionEvent | SessionCatalogEvent;
+
+function parseEvent(value: unknown, schema: z.ZodType): HostDeckSseEvent {
+  const result = schema.safeParse(value);
   if (!result.success) {
     throw new HostDeckSseTransportError(
       "invalid_event",
-      "SSE source emitted an invalid selected projection event.",
+      "SSE source emitted an event outside its selected contract.",
       result.error
     );
   }
-  return result.data;
+  const event = result.data as Partial<HostDeckSseEvent>;
+  if (
+    event === null ||
+    typeof event !== "object" ||
+    !outputCursor(event.cursor) ||
+    typeof event.type !== "string" ||
+    event.type.length < 1
+  ) {
+    throw new HostDeckSseTransportError(
+      "invalid_event",
+      "SSE source contract did not produce a cursor-bearing event."
+    );
+  }
+  return result.data as HostDeckSseEvent;
 }
 
-function toBoundedSseMessage(event: SelectedProjectionEvent, maximumBytes: number): SSEMessage {
+function toBoundedSseMessage(event: HostDeckSseEvent, maximumBytes: number): SSEMessage {
   const id = String(event.cursor);
   const data = serializeSseJson(event);
   const wireBytes = serializedSseWireByteLength(event, data);
@@ -159,12 +181,21 @@ function toBoundedSseMessage(event: SelectedProjectionEvent, maximumBytes: numbe
 }
 
 export function selectedProjectionSseWireByteLength(candidate: unknown): number {
-  const event = parseSelectedEvent(candidate);
+  const event = parseEvent(candidate, selectedProjectionEventSchema);
   return serializedSseWireByteLength(event, serializeSseJson(event));
 }
 
-function serializedSseWireByteLength(event: SelectedProjectionEvent, data: string): number {
+export function sessionCatalogSseWireByteLength(candidate: unknown): number {
+  const event = parseEvent(candidate, sessionCatalogEventSchema);
+  return serializedSseWireByteLength(event, serializeSseJson(event));
+}
+
+function serializedSseWireByteLength(event: HostDeckSseEvent, data: string): number {
   return Buffer.byteLength(`id: ${event.cursor}\nevent: ${event.type}\ndata: ${data}\n\n`, "utf8");
+}
+
+function outputCursor(value: unknown): value is OutputCursor {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 async function nextWithAbort(

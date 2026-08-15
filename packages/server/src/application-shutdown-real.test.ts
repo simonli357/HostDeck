@@ -196,6 +196,7 @@ describe("real HostDeck application shutdown", () => {
         createRoutePlugins: () => [
           mutationRegistration({ admission, audit, actor, reconnect, target }),
           createHostDeckSseTransportRegistration({
+            eventSchema: selectedProjectionEventSchema,
             id: "shutdown-real-sse",
             observeError: () => undefined,
             path: "/api/events",

@@ -713,6 +713,7 @@ describe("selected Fastify host lifecycle", () => {
       createRequestAuthenticationPolicy,
       createRoutePlugins: () => [
         createHostDeckSseTransportRegistration({
+          eventSchema: selectedProjectionEventSchema,
           id: "lifecycle-sse",
           observeError: () => undefined,
           path: "/api/events",

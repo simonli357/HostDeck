@@ -79,6 +79,7 @@ describe("bounded Fastify SSE transport", () => {
 
   it("fails composition for missing source/observer, invalid paths, or unvalidated route parameters", () => {
     const base = {
+      eventSchema: selectedProjectionEventSchema,
       id: "strict-events",
       observeError: () => undefined,
       path: "/api/events" as const,
@@ -443,6 +444,7 @@ describe("bounded Fastify SSE transport", () => {
       resourceBudget: budget,
       routePlugins: [
         createHostDeckSseTransportRegistration({
+          eventSchema: selectedProjectionEventSchema,
           id: "failure-events",
           observeError: (failure) => failures.push(failure),
           paramsSchema: z.object({
@@ -721,6 +723,7 @@ function createSseApp(
     resourceBudget,
     routePlugins: [
       createHostDeckSseTransportRegistration({
+        eventSchema: selectedProjectionEventSchema,
         id: "session-events",
         observeError: (failure) => failures.push(failure),
         paramsSchema: sessionIdParamsSchema,

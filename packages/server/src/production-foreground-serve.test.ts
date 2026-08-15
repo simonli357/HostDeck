@@ -533,9 +533,9 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
     snapshot: () =>
       Object.freeze({
         phase: state.applicationPhase,
-        route_registration_count: 23,
+        route_registration_count: 24,
         api_registration_count: 21,
-        sse_registration_count: 1,
+        sse_registration_count: 2,
         static_registration_count: 1,
         reported_issue_count: 0,
         observer_failure_count: 0,

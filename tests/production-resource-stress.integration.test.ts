@@ -53,6 +53,8 @@ import {
   createProjectionSubscriberStreamService,
   createRemoteIngressControlService,
   createSecurityMutationAuditExecutor,
+  createSessionCatalogHub,
+  createSseSubscriberAdmissionService,
   type HostDeckFastifyLifecycle,
   type HostDeckSelectedWriteAdmissionPolicy,
   hostDeckFastifyResourceSnapshot,
@@ -99,7 +101,7 @@ describe("IFC-V1-052 selected production resource stress", () => {
     expect(Object.isFrozen(harness.budget)).toBe(true);
     expect(harness.startedBudget).toBe(harness.budget);
     expect(harness.service.context.budget).toBe(harness.budget);
-    expect(harness.service.context.registrations).toHaveLength(22);
+    expect(harness.service.context.registrations).toHaveLength(23);
     expect(harness.service.context.input.admission).toBe(harness.admission);
     expect(harness.service.context.input.sessions.subscribers).toBe(harness.subscribers);
     expect(harness.budget).toMatchObject({
@@ -145,7 +147,7 @@ describe("IFC-V1-052 selected production resource stress", () => {
     });
 
     const inventory = hostDeckFastifyRouteInventory(harness.service.app);
-    expect(inventory).toHaveLength(35);
+    expect(inventory).toHaveLength(36);
     expect(inventory.map((entry) => `${entry.method} ${entry.path}`).sort()).toEqual(
       selectedApiRouteManifest.map((entry) => `${entry.method} ${entry.path}`).sort(),
     );
@@ -787,13 +789,31 @@ async function createStressHarness(options: { readonly port?: number } = {}): Pr
     const subscriberFailures: Array<
       Readonly<{ code: string; cursor: number | null }>
     > = [];
+    const sseAdmission = createSseSubscriberAdmissionService(budget);
     const subscribers = createProjectionSubscriberStreamService({
+      admission: sseAdmission,
       handoff,
       observe_failure: (failure) => subscriberFailures.push(failure),
       resource_budget: budget,
     });
     failureCleanups.push(() => {
       subscribers.close();
+    });
+    const catalog = createSessionCatalogHub({
+      admission: sseAdmission,
+      authorize: () => ({ ok: true }),
+      create_stream_id: () => "catalog_resource_stress_001",
+      initial_cursor: 1_000,
+      now: () => new Date(timestamp),
+      reader: Object.freeze({
+        read: () => Object.freeze([]),
+        readOne: () => null,
+      }),
+      resource_budget: budget,
+    });
+    catalog.initialize(1);
+    failureCleanups.push(() => {
+      catalog.close();
     });
     const admission = createHostDeckSelectedWriteAdmissionPolicy({
       resourceBudget: budget,
@@ -957,6 +977,7 @@ async function createStressHarness(options: { readonly port?: number } = {}): Pr
       },
       securityAudit,
       sessions: {
+        catalog,
         managed: {
           archive: failUnused,
           read: state.require,
