@@ -20,6 +20,9 @@ describe("shared runtime hardening manifest", () => {
         CODEX_HOME: "/private/codex",
         HOSTDECK_REQUIRE_OLD: "1",
         HOSTDECK_SHARED_RUNTIME_OLD: "private",
+        TEMP: "/private/temp",
+        TMP: "/private/tmp",
+        TMPDIR: "/private/tmpdir",
         VITEST_POOL_ID: "private"
       }
     });
@@ -42,6 +45,9 @@ describe("shared runtime hardening manifest", () => {
       "HOSTDECK_SHARED_RUNTIME_OLD"
     );
     expect(manifest[0]?.command.env).not.toHaveProperty("VITEST_POOL_ID");
+    expect(manifest[0]?.command.env).not.toHaveProperty("TEMP");
+    expect(manifest[0]?.command.env).not.toHaveProperty("TMP");
+    expect(manifest[0]?.command.env).not.toHaveProperty("TMPDIR");
     expect(sharedRuntimeHardeningDeterministicTests).toHaveLength(32);
     expect([...sharedRuntimeHardeningDeterministicTests]).toEqual(
       [...sharedRuntimeHardeningDeterministicTests].sort()

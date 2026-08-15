@@ -88,7 +88,7 @@ export function createSharedRuntimeHardeningManifest(
         "--maxWorkers=2"
       ],
       cwd: repositoryRoot,
-      env: scenarioEnvironment(baseEnvironment, deterministicRoot, {}),
+      env: scenarioEnvironment(baseEnvironment, {}),
       timeout_ms: 240_000,
       max_output_bytes: 512 * 1_024
     }),
@@ -109,7 +109,7 @@ export function createSharedRuntimeHardeningManifest(
         "--maxWorkers=1"
       ],
       cwd: repositoryRoot,
-      env: scenarioEnvironment(baseEnvironment, realRoot, {
+      env: scenarioEnvironment(baseEnvironment, {
         HOSTDECK_CODEX_BIN: input.codex_bin,
         HOSTDECK_EXPECTED_COMMIT: input.expected_commit,
         HOSTDECK_SHARED_RUNTIME_REPORT: join(
@@ -169,14 +169,10 @@ function sanitizedEnvironment(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 
 function scenarioEnvironment(
   base: NodeJS.ProcessEnv,
-  root: string,
   exact: Readonly<Record<string, string>>
 ): NodeJS.ProcessEnv {
   return {
     ...base,
-    ...exact,
-    TEMP: root,
-    TMP: root,
-    TMPDIR: root
+    ...exact
   };
 }
