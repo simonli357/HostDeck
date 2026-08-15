@@ -66,7 +66,7 @@ export function createDeterministicPackageArchive(packageRoot, archivePath) {
       "--group=0",
       "--numeric-owner",
       "--pax-option=delete=atime,delete=ctime",
-      "--transform=s|^\\.|hostdeck|",
+      "--transform=s|^\\.|hostdeck|rSH",
       "-C",
       sourceRoot,
       "-cf",

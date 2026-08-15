@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   symlinkSync,
   writeFileSync
@@ -38,6 +39,10 @@ archiveTest("creates byte-identical normalized archives with one HostDeck root",
     .split("\n")
     .filter(Boolean);
   assert.equal(entries.every((entry) => entry === "hostdeck/" || entry.startsWith("hostdeck/")), true);
+  const extractionRoot = join(root, "extracted");
+  mkdirSync(extractionRoot);
+  execFileSync("tar", ["-xzf", firstPath, "-C", extractionRoot]);
+  assert.equal(readlinkSync(join(extractionRoot, "hostdeck", "codexdeck")), "bin/codexdeck");
 
   writeFileSync(join(packageRoot, "README.md"), "changed\n", { mode: 0o644 });
   const changed = createDeterministicPackageArchive(packageRoot, join(root, "changed.tar.gz"));
