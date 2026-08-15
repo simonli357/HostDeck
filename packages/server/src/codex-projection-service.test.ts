@@ -621,6 +621,7 @@ function tokenBreakdown(totalTokens: number) {
     totalTokens,
     inputTokens: Math.floor(totalTokens / 2),
     cachedInputTokens: 0,
+    cacheWriteInputTokens: 0,
     outputTokens: totalTokens - Math.floor(totalTokens / 2),
     reasoningOutputTokens: 0
   };
@@ -634,6 +635,7 @@ function rawRateLimits() {
     secondary: null,
     credits: null,
     individualLimit: null,
+    spendControlReached: null,
     planType: "pro",
     rateLimitReachedType: null
   };

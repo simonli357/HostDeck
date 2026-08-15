@@ -14,7 +14,17 @@ describe("normalized Codex model client", () => {
       expect(request).toMatchObject({ method: "model/list", kind: "read", timeout_ms: 10_000 });
       const cursor = (request.params as { readonly cursor: string | null }).cursor;
       return cursor === null
-        ? { data: [rawModel({ id: "model-a", model: "runtime-a", isDefault: true })], nextCursor: "page-2" }
+        ? {
+            data: [
+              rawModel({
+                id: "model-a",
+                model: "runtime-a",
+                modelSpecialty: "coding",
+                isDefault: true
+              })
+            ],
+            nextCursor: "page-2"
+          }
         : { data: [rawModel({ id: "model-b", model: "runtime-b", isDefault: false })], nextCursor: null };
     });
     const client = createCodexModelClient(port, {
@@ -156,6 +166,15 @@ describe("normalized Codex model client", () => {
       createCodexModelClient(
         fakePort(() => ({
           data: [rawModel({ defaultReasoningEffort: "missing" })],
+          nextCursor: null
+        }))
+      ).listCatalog(),
+      "invalid_protocol_message"
+    );
+    await expectAdapterError(
+      createCodexModelClient(
+        fakePort(() => ({
+          data: [rawModel({ modelSpecialty: { unexpected: true } })],
           nextCursor: null
         }))
       ).listCatalog(),
@@ -320,6 +339,7 @@ function rawModel(overrides: Record<string, unknown> = {}): Record<string, unkno
     availabilityNux: null,
     displayName: "Model A",
     description: "Model description",
+    modelSpecialty: null,
     hidden: false,
     supportedReasoningEfforts: [
       { reasoningEffort: "low", description: "Fast" },

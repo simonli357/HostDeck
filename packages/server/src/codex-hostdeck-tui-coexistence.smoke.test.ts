@@ -13,6 +13,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync
 } from "node:fs";
@@ -71,7 +72,7 @@ import { requirePrivateLifecycleReportPath } from "./codex-runtime-lifecycle-fil
 
 const requireSmoke =
   process.env.HOSTDECK_REQUIRE_CODEX_TUI_COEXISTENCE_SMOKE === "1";
-const codexBin = resolve(process.env.HOSTDECK_CODEX_BIN ?? "codex");
+const codexBin = resolveCodexBinary(process.env.HOSTDECK_CODEX_BIN);
 const defaultEvidencePath = resolve(
   "artifacts/int-v1-031-hostdeck-tui-coexistence-evidence.json"
 );
@@ -88,6 +89,18 @@ const commandIntervalSeconds = 8;
 const commandInitialWaitMs = 15_000;
 const tuiReadinessTimeoutMs = 30_000;
 const overallTimeoutMs = 240_000;
+
+function resolveCodexBinary(configured: string | undefined): string {
+  const candidate = configured ?? execFileSync("which", ["codex"], {
+    encoding: "utf8",
+    timeout: 5_000,
+    maxBuffer: 64 * 1024
+  }).trim();
+  if (!isAbsolute(candidate)) {
+    throw new TypeError("Codex TUI coexistence requires an absolute Codex binary path.");
+  }
+  return realpathSync.native(candidate);
+}
 
 describe.skipIf(!requireSmoke)(
   "exact Codex HostDeck and TUI coexistence",
@@ -122,7 +135,11 @@ describe.skipIf(!requireSmoke)(
         const codexHome = join(root, "codex-home");
         const managedProject = join(root, "managed-project");
         const foreignProject = join(root, "foreign-project");
-        const socketPath = join(runtimeDir, "app-server.sock");
+        const socketPath = join(
+          codexHome,
+          "app-server-control",
+          "app-server-control.sock"
+        );
         const tuiASocketPath = join(runtimeDir, "tui-a.sock");
         const tuiBSocketPath = join(runtimeDir, "tui-b.sock");
         const markerPath = join(managedProject, "coexistence-marker");
@@ -1145,12 +1162,13 @@ function prepareCodexHome(destination: string): void {
     );
   }
   mkdirSync(destination, { mode: 0o700 });
+  mkdirSync(join(destination, "app-server-control"), { mode: 0o700 });
   const copied = join(destination, "auth.json");
   copyFileSync(source, copied);
   chmodSync(copied, 0o600);
   writeFileSync(
     join(destination, "config.toml"),
-    "check_for_update_on_startup = false\n",
+    "check_for_update_on_startup = false\n[features]\nplugins = false\n",
     { flag: "wx", mode: 0o600 }
   );
 }

@@ -682,6 +682,7 @@ function rawTokenUsage() {
     totalTokens: 10,
     inputTokens: 4,
     cachedInputTokens: 1,
+    cacheWriteInputTokens: 0,
     outputTokens: 5,
     reasoningOutputTokens: 2
   };

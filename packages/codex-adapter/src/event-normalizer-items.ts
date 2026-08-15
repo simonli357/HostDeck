@@ -361,6 +361,8 @@ export function normalizeCodexItem(
           .object({
             type: z.literal("commandExecution"),
             id: codexItemIdSchema,
+            pluginId: boundedStringSchema(240).nullable(),
+            scriptPath: boundedStringSchema(maximumTextLength).nullable(),
             command: boundedStringSchema(maximumTextLength * 4),
             cwd: boundedStringSchema(maximumTextLength),
             processId: z.string().max(240).nullable(),

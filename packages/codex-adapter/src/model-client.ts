@@ -106,6 +106,7 @@ const rawModelKeys = [
   "inputModalities",
   "isDefault",
   "model",
+  "modelSpecialty",
   "serviceTiers",
   "supportedReasoningEfforts",
   "supportsPersonality",
@@ -283,6 +284,11 @@ function parseRawModel(candidate: unknown): ParsedRawModel {
   parseNullablePrintableString(value.upgrade, "Codex model upgrade", codexModelContractLimits.identityLength);
   validateUpgradeInfo(value.upgradeInfo);
   validateAvailabilityNux(value.availabilityNux);
+  parseNullablePrintableString(
+    value.modelSpecialty,
+    "Codex model specialty",
+    120
+  );
   validateStringArray(value.additionalSpeedTiers, "Codex model additional speed tiers", 16, 120);
   const serviceTierIds = validateServiceTiers(value.serviceTiers);
   const defaultServiceTier = parseNullablePrintableString(value.defaultServiceTier, "Codex model default service tier", 120);

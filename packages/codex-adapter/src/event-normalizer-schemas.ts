@@ -206,6 +206,7 @@ export const tokenUsageSchema = z
     totalTokens: nonnegativeSafeIntegerSchema,
     inputTokens: nonnegativeSafeIntegerSchema,
     cachedInputTokens: nonnegativeSafeIntegerSchema,
+    cacheWriteInputTokens: nonnegativeSafeIntegerSchema,
     outputTokens: nonnegativeSafeIntegerSchema,
     reasoningOutputTokens: nonnegativeSafeIntegerSchema
   })
@@ -351,6 +352,7 @@ export const rateLimitParamsSchema = z
         secondary: rateLimitWindowSchema.nullable(),
         credits: creditsSnapshotSchema.nullable(),
         individualLimit: spendControlLimitSchema.nullable(),
+        spendControlReached: z.boolean().nullable(),
         planType: planTypeSchema.nullable(),
         rateLimitReachedType: rateLimitReachedTypeSchema.nullable()
       })

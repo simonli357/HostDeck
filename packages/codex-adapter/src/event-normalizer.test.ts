@@ -308,7 +308,19 @@ describe("exact Codex event normalizer", () => {
     const normalizer = activeTurnNormalizer(threadA, turnA);
     const command = normalizeEvent(
       normalizer.normalize(
-        selected("item/started", itemParams(threadA, turnA, rawCommand("item-secret-command", "inProgress"), "started"))
+        selected(
+          "item/started",
+          itemParams(
+            threadA,
+            turnA,
+            {
+              ...rawCommand("item-secret-command", "inProgress"),
+              pluginId: "private-plugin",
+              scriptPath: "scripts/private.sh"
+            },
+            "started"
+          )
+        )
       )
     );
     const reasoning = normalizeEvent(
@@ -327,9 +339,31 @@ describe("exact Codex event normalizer", () => {
 
     expect(command).toMatchObject({ item: { category: "command", content_state: "redacted", text: null } });
     expect(reasoning).toMatchObject({ item: { category: "reasoning", content_state: "redacted", text: null } });
-    expect(JSON.stringify([command, reasoning])).not.toContain("secret-value");
+    expect(JSON.stringify([command, reasoning])).not.toMatch(
+      /secret-value|private-plugin|private\.sh/u
+    );
     expect(JSON.stringify(reasoning)).not.toContain("secret summary");
     expect(JSON.stringify(reasoning)).not.toContain("secret content");
+
+    const malformed = activeTurnNormalizer(threadB, turnB);
+    expectNormalizationError(
+      () =>
+        malformed.normalize(
+          selected(
+            "item/started",
+            itemParams(
+              threadB,
+              turnB,
+              {
+                ...rawCommand("item-invalid-plugin-command", "inProgress"),
+                pluginId: { invalid: true }
+              },
+              "started"
+            )
+          )
+        ),
+      "malformed_required_event"
+    );
   });
 
   it("truncates oversized message content with an explicit limitation", () => {
@@ -657,6 +691,22 @@ describe("exact Codex event normalizer", () => {
             threadId: threadA,
             turnId: null,
             goal: rawGoal(threadB, 1_752_170_401, "paused")
+          })
+        ),
+      "malformed_required_event"
+    );
+
+    const malformedUsage = activeTurnNormalizer(threadA, turnA);
+    expectNormalizationError(
+      () =>
+        malformedUsage.normalize(
+          selected("thread/tokenUsage/updated", {
+            threadId: threadA,
+            turnId: turnA,
+            tokenUsage: {
+              ...rawTokenUsage(100, 10),
+              total: { ...tokenBreakdown(100), cacheWriteInputTokens: -1 }
+            }
           })
         ),
       "malformed_required_event"
@@ -1300,6 +1350,8 @@ function rawCommand(itemId: string, status: "completed" | "declined" | "failed" 
   return {
     type: "commandExecution",
     id: itemId,
+    pluginId: null,
+    scriptPath: null,
     command: "printf secret-value",
     cwd: "/tmp/hostdeck-normalizer",
     processId: status === "inProgress" ? "process-a" : null,
@@ -1331,6 +1383,7 @@ function tokenBreakdown(totalTokens: number) {
     totalTokens,
     inputTokens: Math.floor(totalTokens / 2),
     cachedInputTokens: 0,
+    cacheWriteInputTokens: 0,
     outputTokens: totalTokens - Math.floor(totalTokens / 2),
     reasoningOutputTokens: 0
   };
@@ -1344,6 +1397,7 @@ function rawRateLimits() {
     secondary: null,
     credits: null,
     individualLimit: null,
+    spendControlReached: null,
     planType: "pro",
     rateLimitReachedType: null
   };
