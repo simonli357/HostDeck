@@ -68,7 +68,12 @@ describe("automatic session enrollment repository", () => {
       const candidate = automaticCandidate();
       const result = repository.enrollAutomatic(candidate);
 
-      expect(result).toEqual({ created: true, membership: candidate.membership, state: candidate.state });
+      expect(result).toEqual({
+        created: true,
+        refreshed: false,
+        membership: candidate.membership,
+        state: candidate.state
+      });
       expect(repository.getByTargetId(candidate.membership.native_thread_id)).toEqual(candidate.state);
       expect(repository.getByTargetId(candidate.membership.session_id)).toEqual(candidate.state);
       expect(repository.requireByTargetId(candidate.membership.native_thread_id)).toEqual(candidate.state);
@@ -102,6 +107,7 @@ describe("automatic session enrollment repository", () => {
       expect(createSelectedStateRepository(first.db).enrollAutomatic(candidate).created).toBe(true);
       expect(createSelectedStateRepository(second.db).enrollAutomatic(candidate)).toEqual({
         created: false,
+        refreshed: false,
         membership: candidate.membership,
         state: candidate.state
       });
@@ -122,7 +128,7 @@ describe("automatic session enrollment repository", () => {
     }
   });
 
-  it("enrolls an existing HostDeck mapping in place and resets only its bounded projection at a visible boundary", () => {
+  it("recovers an existing HostDeck mapping in place and resets only its bounded projection at a visible boundary", () => {
     const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
     try {
       const repository = createSelectedStateRepository(open.db);
@@ -160,13 +166,33 @@ describe("automatic session enrollment repository", () => {
         },
         selectedStateRevision(initial)
       );
+      open.db
+        .prepare(
+          "UPDATE selected_sessions SET runtime_version = '0.144.0', disposition = 'recovery_required', updated_at = ? WHERE id = ?"
+        )
+        .run("2026-08-14T16:00:31.000Z", initial.mapping.id);
+      open.db
+        .prepare(
+          `
+            UPDATE selected_session_projections SET
+              session_state = 'unknown', turn_state = 'unknown', attention = 'unknown',
+              freshness = 'stale', freshness_reason = 'Managed Codex runtime version changed.',
+              updated_at = ?, model = NULL, settings_json = NULL,
+              recent_summary = 'Managed Codex runtime version changed.'
+            WHERE session_id = ?
+          `
+        )
+        .run("2026-08-14T16:00:31.000Z", initial.mapping.id);
 
       const result = repository.enrollAutomatic(automaticCandidate());
       expect(result.created).toBe(false);
+      expect(result.refreshed).toBe(true);
       expect(result.state.mapping).toMatchObject({
         id: initial.mapping.id,
         name: initial.mapping.name,
-        codex_thread_id: nativeThreadId
+        codex_thread_id: nativeThreadId,
+        disposition: "selected",
+        runtime_version: "0.147.0"
       });
       expect(result.membership).toEqual({
         session_id: initial.mapping.id,
@@ -185,6 +211,69 @@ describe("automatic session enrollment repository", () => {
         "Prior bounded HostDeck projection."
       );
       expect(rawSelectedCounts(open.db)).toEqual({ events: 1, memberships: 1, projections: 1, sessions: 1 });
+    } finally {
+      open.db.close();
+    }
+  });
+
+  it("refreshes a recovery-required adopted mapping without rewriting its historical membership", () => {
+    const open = openMigratedDatabase(tempDbPath(), { now: fixedNow });
+    try {
+      const repository = createSelectedStateRepository(open.db);
+      const adoption = adoptionCandidate();
+      repository.adopt(adoption);
+      open.db
+        .prepare(
+          "UPDATE selected_sessions SET runtime_version = '0.144.0', disposition = 'recovery_required', updated_at = ? WHERE id = ?"
+        )
+        .run("2026-08-14T16:02:00.000Z", adoption.state.mapping.id);
+      open.db
+        .prepare(
+          `
+            UPDATE selected_session_projections SET
+              session_state = 'unknown', turn_state = 'unknown', attention = 'unknown',
+              freshness = 'stale', freshness_reason = 'Managed Codex runtime version changed.',
+              updated_at = ?, model = NULL, settings_json = NULL,
+              recent_summary = 'Managed Codex runtime version changed.'
+            WHERE session_id = ?
+          `
+        )
+        .run("2026-08-14T16:02:00.000Z", adoption.state.mapping.id);
+      const membershipBefore = JSON.stringify(
+        open.db.prepare("SELECT * FROM selected_native_session_memberships WHERE session_id = ?").get(
+          adoption.state.mapping.id
+        )
+      );
+
+      const result = repository.enrollAutomatic(automaticCandidate());
+
+      expect(result).toMatchObject({
+        created: false,
+        refreshed: true,
+        membership: adoption.membership,
+        state: {
+          mapping: {
+            id: adoption.state.mapping.id,
+            name: adoption.state.mapping.name,
+            disposition: "selected",
+            runtime_version: "0.147.0"
+          },
+          projection: {
+            session: { freshness: "current", session_state: "active" },
+            retention_boundary_cursor: 1
+          }
+        }
+      });
+      expect(
+        JSON.stringify(
+          open.db.prepare("SELECT * FROM selected_native_session_memberships WHERE session_id = ?").get(
+            adoption.state.mapping.id
+          )
+        )
+      ).toBe(membershipBefore);
+      expect(repository.listEvents(adoption.state.mapping.id).events).toMatchObject([
+        { after: 1, cursor: 2, reason: "enrollment", type: "replay_boundary" }
+      ]);
     } finally {
       open.db.close();
     }
@@ -282,7 +371,12 @@ describe("automatic session membership migration", () => {
       expect(repository.getNativeMembership(adoption.membership.session_id)).toEqual(adoption.membership);
       expect(repository.getSharedMembership(adoption.membership.session_id)).toEqual(adoption.membership);
       const reused = repository.enrollAutomatic(automaticCandidate());
-      expect(reused).toEqual({ created: false, membership: adoption.membership, state: adoption.state });
+      expect(reused).toEqual({
+        created: false,
+        refreshed: false,
+        membership: adoption.membership,
+        state: adoption.state
+      });
       expect(repository.requireByTargetId(nativeThreadId).mapping.id).toBe(adoption.membership.session_id);
       expect(rawSelectedCounts(migrated.db)).toEqual({ events: 1, memberships: 1, projections: 1, sessions: 1 });
 
@@ -316,7 +410,12 @@ describe("automatic session membership migration", () => {
           at: enrolledAt,
           phase: "terminal",
           outcome: "succeeded",
-          payload_summary: { schema_version: 1, enrolled: true, created: true }
+          payload_summary: {
+            schema_version: 1,
+            enrolled: true,
+            created: true,
+            refreshed: false
+          }
         })
       ).toMatchObject({
         state: "terminal",

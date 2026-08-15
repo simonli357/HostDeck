@@ -109,7 +109,12 @@ describe("automatic shared-session enrollment", () => {
           {
             phase: "terminal",
             outcome: "succeeded",
-            payload_summary: { schema_version: 1, enrolled: true, created: true }
+            payload_summary: {
+              schema_version: 1,
+              enrolled: true,
+              created: true,
+              refreshed: false
+            }
           }
         ]
       });
@@ -156,6 +161,110 @@ describe("automatic shared-session enrollment", () => {
         attention: "watch"
       });
       service.close();
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("refreshes an exact recovery-required mapping when its native thread joins the shared broker", async () => {
+    const harness = storageHarness();
+    try {
+      const eligible = candidate(threadA);
+      const initialLoaded = fakeLoaded({
+        ids: [threadA],
+        candidates: new Map([[threadA, eligible]]),
+        snapshot: snapshot(eligible)
+      });
+      const initialService = createService(harness, initialLoaded);
+      await initialService.reconcileLoaded("loaded_before", 1);
+      initialService.close();
+
+      harness.db
+        .prepare(
+          "UPDATE selected_sessions SET runtime_version = '0.144.0', disposition = 'recovery_required', updated_at = ? WHERE codex_thread_id = ?"
+        )
+        .run("2026-08-14T16:05:00.000Z", threadA);
+      harness.db
+        .prepare(
+          `
+            UPDATE selected_session_projections SET
+              session_state = 'unknown', turn_state = 'unknown', attention = 'unknown',
+              freshness = 'stale', freshness_reason = 'Managed Codex runtime version changed.',
+              updated_at = ?, model = NULL, settings_json = NULL,
+              recent_summary = 'Managed Codex runtime version changed.'
+            WHERE session_id = ?
+          `
+        )
+        .run("2026-08-14T16:05:00.000Z", "sess_019f489a1f9d7402ae00eac6ea322f64");
+
+      const refreshedPipeline = createCodexEventPipeline({
+        repository: harness.repository,
+        append_port: createProductionProjectionAppendPort({
+          repository: harness.repository,
+          publish() {}
+        }),
+        normalizer: { now: advancingClock("2026-08-14T16:10:00.000Z") }
+      });
+      const refreshedLoaded = fakeLoaded({
+        ids: [threadA],
+        candidates: new Map([[threadA, eligible]]),
+        snapshot: snapshot(eligible, {
+          turns: [
+            {
+              turn_id: "turn-after-upgrade",
+              status: "completed",
+              started_at: "2026-08-14T15:20:00.000Z",
+              completed_at: "2026-08-14T15:21:00.000Z",
+              messages: []
+            }
+          ]
+        })
+      });
+      const refreshedService = createAutomaticSessionEnrollmentService({
+        loaded: refreshedLoaded,
+        states: harness.repository,
+        audit: harness.audit,
+        events: refreshedPipeline,
+        now: () => new Date("2026-08-14T16:10:00.000Z"),
+        create_operation_id: harness.createOperationId,
+        create_record_id: harness.createRecordId,
+        capture_branch: () => "main"
+      });
+
+      await expect(refreshedService.reconcileLoaded("reconciliation", 2)).resolves.toMatchObject({
+        outcomes: [
+          {
+            state: "enrolled",
+            history: { events_loaded: 1, turns_loaded: 1 },
+            session: {
+              native_thread_id: threadA,
+              internal_session_id: "sess_019f489a1f9d7402ae00eac6ea322f64",
+              runtime_version: "0.147.0"
+            }
+          }
+        ]
+      });
+      expect(harness.repository.getByThreadId(threadA)).toMatchObject({
+        mapping: { disposition: "selected", runtime_version: "0.147.0" },
+        projection: { session: { freshness: "current", session_state: "active" } }
+      });
+      expect(
+        harness.repository.listEvents("sess_019f489a1f9d7402ae00eac6ea322f64").events
+      ).toMatchObject([
+        { after: 1, cursor: 2, reason: "enrollment", type: "replay_boundary" },
+        { cursor: 3, turn_id: "turn-after-upgrade", type: "turn" }
+      ]);
+      expect(harness.audit.require("op_session_enroll_test_0002")).toMatchObject({
+        records: [
+          { outcome: "accepted" },
+          {
+            outcome: "succeeded",
+            payload_summary: { created: false, refreshed: true }
+          }
+        ],
+        state: "terminal"
+      });
+      refreshedService.close();
     } finally {
       harness.close();
     }
@@ -475,6 +584,7 @@ function storageHarness() {
   let operationOrdinal = 0;
   let recordOrdinal = 0;
   return {
+    db: open.db,
     repository,
     audit,
     pipeline,

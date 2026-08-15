@@ -33,6 +33,7 @@ interface SeedSessionOptions {
   readonly recentSummary?: string;
   readonly sessionState?: "starting" | "active" | "archived" | "stale" | "incompatible" | "unknown";
   readonly settings?: unknown;
+  readonly turnState?: "idle" | "in_progress" | "waiting_for_input" | "waiting_for_approval" | "completed" | "failed" | "interrupted" | "unknown";
 }
 
 afterEach(() => {
@@ -195,22 +196,39 @@ describe("selected session-read repository", () => {
     }
   });
 
-  it("omits archived rows and distinguishes unknown, archived, and recovery-required detail", () => {
+  it("omits archived rows and exposes recovery-required rows only as explicit stale state", () => {
     const open = openDatabase();
     try {
       seedSession(open.db, { archived: true, id: "sess_policy_archived" });
-      seedSession(open.db, { disposition: "recovery_required", id: "sess_policy_recovery" });
+      seedSession(open.db, {
+        attention: "unknown",
+        disposition: "recovery_required",
+        freshness: "stale",
+        id: "sess_policy_recovery",
+        sessionState: "unknown",
+        turnState: "unknown"
+      });
       const repository = createSelectedSessionReadRepository(open.db);
 
       expect(repository.get("sess_policy_missing")).toBeNull();
       expectRepositoryError(() => repository.get("sess_policy_archived"), "session_archived");
-      expectRepositoryError(
-        () => repository.get("sess_policy_recovery"),
-        "session_recovery_required"
+      expect(repository.get("sess_policy_recovery")?.session).toMatchObject({
+        attention: "unknown",
+        freshness: "stale",
+        freshness_reason: "Projection is stale.",
+        session_state: "unknown",
+        turn_state: "unknown"
+      });
+      expect(repository.list(firstPageInput(100)).sessions).toMatchObject([
+        { session: { id: "sess_policy_recovery", freshness: "stale" } }
+      ]);
+
+      open.db.prepare("UPDATE selected_session_projections SET attention = 'none' WHERE session_id = ?").run(
+        "sess_policy_recovery"
       );
       expectRepositoryError(
         () => repository.list(firstPageInput(100)),
-        "session_recovery_required"
+        "invalid_state"
       );
 
       open.db.prepare("DELETE FROM selected_session_projections WHERE session_id = ?").run("sess_policy_recovery");
@@ -603,11 +621,12 @@ function seedSession(db: Database.Database, options: SeedSessionOptions): void {
         updated_at, last_activity_at, branch, model, settings_json, goal_json,
         recent_summary, last_event_cursor, retained_event_count, retained_event_bytes,
         earliest_retained_cursor, retention_boundary_cursor
-      ) VALUES (?, ?, 'idle', ?, ?, ?, ?, ?, 'main', 'gpt-5.5-codex', ?, ?, ?, NULL, 0, 0, NULL, NULL)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'main', 'gpt-5.5-codex', ?, ?, ?, NULL, 0, 0, NULL, NULL)
     `
   ).run(
     options.id,
     options.sessionState ?? (archived ? "archived" : "active"),
+    options.turnState ?? "idle",
     options.attention ?? "none",
     freshness,
     freshness === "current" ? null : `Projection is ${freshness}.`,

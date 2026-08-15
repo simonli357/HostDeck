@@ -284,6 +284,7 @@ export const selectedSessionEnrollmentAuditPayloadSummarySchema = z
     enrollment_origin: z.enum(sessionEnrollmentOrigins).optional(),
     enrolled: z.literal(true).optional(),
     created: z.boolean().optional(),
+    refreshed: z.boolean().optional(),
     reconciliation_reason: z.literal("host_restart_without_terminal").optional()
   })
   .strict();
@@ -314,11 +315,15 @@ export const selectedSessionEnrollmentAuditEventRecordSchema = selectedAuditEven
       value.phase === "accepted"
         ? ["enrollment_origin", "schema_version"]
         : value.outcome === "succeeded"
-          ? ["created", "enrolled", "schema_version"]
+          ? ["created", "enrolled", "refreshed", "schema_version"]
           : value.outcome === "incomplete"
             ? ["reconciliation_reason", "schema_version"]
             : ["schema_version"];
-    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
+    if (
+      keys.length !== expected.length ||
+      keys.some((key, index) => key !== expected[index]) ||
+      (value.outcome === "succeeded" && summary.data.created === true && summary.data.refreshed === true)
+    ) {
       context.addIssue({
         code: "custom",
         message: "Session-enrollment audit summary contradicts its phase or outcome.",

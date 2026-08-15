@@ -87,6 +87,7 @@ export interface EnrollAutomaticSelectedSessionInput {
 
 export interface AutomaticSelectedSessionEnrollmentResult {
   readonly created: boolean;
+  readonly refreshed: boolean;
   readonly membership: SharedSessionMembershipRecord;
   readonly state: SelectedSessionState;
 }
@@ -301,17 +302,24 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
       const existing = readStateByThreadId(db, input.membership.native_thread_id);
       if (existing !== null) {
         const membership = readSharedMembership(db, existing.mapping.id);
-        if (membership === null) {
-          try {
-            return convertExistingMappingToAutomaticEnrollment(db, existing, input);
-          } catch (error) {
-            if (error instanceof HostDeckSelectedStateRepositoryError) throw error;
-            throw mapNativeEnrollmentConstraint(error);
+        if (membership !== null) {
+          assertSharedMembershipIdentity(membership, existing);
+          assertPersistedEventProjection(db, existing.projection);
+          if (canReuseAutomaticEnrollment(existing, input)) {
+            return { created: false, refreshed: false, membership, state: existing };
           }
         }
-        assertSharedMembershipIdentity(membership, existing);
-        assertPersistedEventProjection(db, existing.projection);
-        return { created: false, membership, state: existing };
+        try {
+          return refreshExistingMappingFromAutomaticEnrollment(
+            db,
+            existing,
+            membership,
+            input
+          );
+        } catch (error) {
+          if (error instanceof HostDeckSelectedStateRepositoryError) throw error;
+          throw mapNativeEnrollmentConstraint(error);
+        }
       }
 
       assertDeterministicAutomaticIdentity(input);
@@ -325,7 +333,12 @@ export function createSelectedStateRepository(db: Database.Database): SelectedSt
         if (error instanceof HostDeckSelectedStateRepositoryError) throw error;
         throw mapNativeEnrollmentConstraint(error);
       }
-      return { created: true, membership: input.membership, state: input.state };
+      return {
+        created: true,
+        refreshed: false,
+        membership: input.membership,
+        state: input.state
+      };
     }
   ).immediate;
 
@@ -1516,21 +1529,40 @@ function assertAutomaticEnrollmentProjection(
   }
 }
 
-function convertExistingMappingToAutomaticEnrollment(
+function canReuseAutomaticEnrollment(
+  existing: SelectedSessionState,
+  input: ParsedAutomaticSessionEnrollment
+): boolean {
+  return (
+    existing.mapping.disposition === "selected" &&
+    existing.mapping.archived_at === null &&
+    existing.projection.session.session_state !== "archived" &&
+    existing.mapping.cwd === input.state.mapping.cwd &&
+    existing.mapping.runtime_source === input.state.mapping.runtime_source &&
+    existing.mapping.runtime_version === input.state.mapping.runtime_version
+  );
+}
+
+function refreshExistingMappingFromAutomaticEnrollment(
   db: Database.Database,
   existing: SelectedSessionState,
+  existingMembership: SharedSessionMembershipRecord | null,
   input: ParsedAutomaticSessionEnrollment
 ): AutomaticSelectedSessionEnrollmentResult {
   assertPersistedEventProjection(db, existing.projection);
   if (
-    existing.mapping.disposition !== "selected" ||
     existing.mapping.archived_at !== null ||
-    existing.projection.session.session_state === "archived"
+    existing.projection.session.session_state === "archived" ||
+    existing.mapping.cwd !== input.state.mapping.cwd ||
+    existing.mapping.runtime_source !== input.state.mapping.runtime_source
   ) {
     throw new HostDeckSelectedStateRepositoryError(
       "invalid_membership",
-      "Only an unarchived selected mapping can acquire automatic shared-session membership."
+      "Automatic re-enrollment requires one unarchived mapping with the exact loaded runtime identity."
     );
+  }
+  if (existingMembership !== null) {
+    assertSharedMembershipIdentity(existingMembership, existing);
   }
 
   const floor = Math.max(
@@ -1545,17 +1577,15 @@ function convertExistingMappingToAutomaticEnrollment(
   }
   const boundaryCursor = floor + 1;
   const events = rebaseAutomaticEnrollmentEvents(input.events, existing.mapping.id, boundaryCursor);
-  const updatedAt = [
-    existing.mapping.updated_at,
-    existing.projection.session.updated_at,
-    input.membership.enrolled_at,
-    input.state.mapping.updated_at,
-    input.state.projection.session.updated_at
-  ].sort().at(-1);
-  if (updatedAt === undefined) {
-    throw new HostDeckSelectedStateRepositoryError("invalid_projection", "Automatic enrollment update time is missing.");
-  }
-  const membership = parseAutomaticMembership({
+  const updatedAt = automaticRefreshTimestamp(
+    [existing.mapping.updated_at, existing.projection.session.updated_at],
+    [
+      input.membership.enrolled_at,
+      input.state.mapping.updated_at,
+      input.state.projection.session.updated_at
+    ]
+  );
+  const refreshMembership = parseAutomaticMembership({
     ...input.membership,
     session_id: existing.mapping.id
   });
@@ -1567,6 +1597,14 @@ function convertExistingMappingToAutomaticEnrollment(
     updated_at: updatedAt
   });
   const retainedBytes = events.reduce((total, event) => total + event.byte_length, 0);
+  const candidateActivity = input.state.projection.session.last_activity_at;
+  const existingActivity = existing.projection.session.last_activity_at;
+  const lastActivityAt =
+    candidateActivity === null
+      ? existingActivity
+      : existingActivity === null || candidateActivity > existingActivity
+        ? candidateActivity
+        : existingActivity;
   const projection = parseProjection({
     ...input.state.projection,
     session: {
@@ -1580,6 +1618,7 @@ function convertExistingMappingToAutomaticEnrollment(
       created_at: mapping.created_at,
       archived_at: null,
       updated_at: updatedAt,
+      last_activity_at: lastActivityAt,
       last_event_cursor: boundaryCursor + events.length - 1
     },
     retained_event_count: events.length,
@@ -1590,20 +1629,43 @@ function convertExistingMappingToAutomaticEnrollment(
   const state = { mapping, projection };
   assertProjectionIdentity(mapping, projection);
   assertStateChronology(mapping, projection);
-  assertAutomaticEnrollmentIdentity(membership, state);
-  assertAutomaticEnrollmentProjection(membership, state, events, boundaryCursor);
+  assertAutomaticEnrollmentIdentity(refreshMembership, state);
+  assertAutomaticEnrollmentProjection(refreshMembership, state, events, boundaryCursor);
 
   if (updateMapping(db, mapping) !== 1) {
     throw new HostDeckSelectedStateRepositoryError("session_not_found", `Selected session ${mapping.id} does not exist.`);
   }
   db.prepare("DELETE FROM selected_projected_events WHERE session_id = ?").run(mapping.id);
-  insertAutomaticMembership(db, membership);
+  if (existingMembership === null) insertAutomaticMembership(db, refreshMembership);
   for (const event of events) insertEvent(db, event);
   if (updateProjection(db, projection) !== 1) {
     throw new HostDeckSelectedStateRepositoryError("session_not_found", `Selected session ${mapping.id} does not exist.`);
   }
   assertPersistedEventProjection(db, projection);
-  return { created: false, membership, state };
+  const membership = existingMembership ?? refreshMembership;
+  assertSharedMembershipIdentity(membership, state);
+  return { created: false, refreshed: true, membership, state };
+}
+
+function automaticRefreshTimestamp(
+  existing: readonly string[],
+  requested: readonly string[]
+): string {
+  const existingFloor = Math.max(...existing.map((value) => Date.parse(value)));
+  const requestedFloor = Math.max(...requested.map((value) => Date.parse(value)));
+  const milliseconds = Math.max(existingFloor + 1, requestedFloor);
+  if (
+    !Number.isSafeInteger(existingFloor) ||
+    !Number.isSafeInteger(requestedFloor) ||
+    !Number.isSafeInteger(milliseconds) ||
+    milliseconds > 8_640_000_000_000_000
+  ) {
+    throw new HostDeckSelectedStateRepositoryError(
+      "invalid_projection",
+      "Automatic enrollment update timestamp is invalid."
+    );
+  }
+  return new Date(milliseconds).toISOString();
 }
 
 function rebaseAutomaticEnrollmentEvents(

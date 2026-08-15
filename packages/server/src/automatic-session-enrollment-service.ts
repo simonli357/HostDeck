@@ -433,9 +433,9 @@ class DefaultAutomaticSessionEnrollmentService {
         snapshot.candidate,
         pending.snapshot.origin,
         build.imported_event_count,
-        committed.created ? snapshot : null
+        committed.created || committed.refreshed ? snapshot : null
       );
-      this.recordAuditSucceeded(pending, committed.created);
+      this.recordAuditSucceeded(pending, committed.created, committed.refreshed);
     } catch (error) {
       return this.failAfterAuditTerminalError(
         pending,
@@ -737,7 +737,11 @@ class DefaultAutomaticSessionEnrollmentService {
     pending.audit = Object.freeze({ operation_id: operationId, accepted_at: acceptedAt });
   }
 
-  private recordAuditSucceeded(pending: PendingEnrollment, created: boolean): void {
+  private recordAuditSucceeded(
+    pending: PendingEnrollment,
+    created: boolean,
+    refreshed: boolean
+  ): void {
     const audit = requireAuditContext(pending);
     this.options.audit.recordTerminal(selectedSessionEnrollmentAuditEventRecordSchema.parse({
       id: this.options.createRecordId(),
@@ -748,7 +752,7 @@ class DefaultAutomaticSessionEnrollmentService {
       target: { type: "native_codex_thread", codex_thread_id: pending.snapshot.native_thread_id },
       phase: "terminal",
       outcome: "succeeded",
-      payload_summary: { schema_version: 1, enrolled: true, created },
+      payload_summary: { schema_version: 1, enrolled: true, created, refreshed },
       error_code: null
     }));
   }

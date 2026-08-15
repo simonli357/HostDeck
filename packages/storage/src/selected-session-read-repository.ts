@@ -50,6 +50,7 @@ interface OrderingScanRow {
   readonly projection_session_id: unknown;
   readonly projection_session_state: unknown;
   readonly projection_attention: unknown;
+  readonly projection_freshness: unknown;
   readonly projection_last_activity_at: unknown;
 }
 
@@ -174,6 +175,7 @@ export function createSelectedSessionReadRepository(
       p.session_id AS projection_session_id,
       p.session_state AS projection_session_state,
       p.attention AS projection_attention,
+      p.freshness AS projection_freshness,
       p.last_activity_at AS projection_last_activity_at
     FROM selected_sessions AS s
     LEFT JOIN selected_session_projections AS p ON p.session_id = s.id
@@ -330,7 +332,6 @@ export function createSelectedSessionReadRepository(
     const row = detailStatement.get({ session_id: sessionId }) as SessionReadRow | undefined;
     if (row === undefined) return null;
     const mapping = parseMappingRow(row);
-    assertSelectedDisposition(mapping);
     if (mapping.archived_at !== null) {
       throw repositoryError("session_archived", "Archived managed sessions are unavailable.");
     }
@@ -365,14 +366,13 @@ export function createSelectedSessionReadRepository(
 }
 
 function parseOrderingScanRow(row: OrderingScanRow): OrderingScanEntry {
-  if (row.disposition === "recovery_required") {
-    throw repositoryError(
-      "session_recovery_required",
-      "Managed-session state requires recovery."
-    );
-  }
+  const readableRecovery =
+    row.disposition === "recovery_required" &&
+    row.projection_session_state === "unknown" &&
+    row.projection_attention === "unknown" &&
+    row.projection_freshness === "stale";
   if (
-    row.disposition !== "selected" ||
+    (row.disposition !== "selected" && !readableRecovery) ||
     row.projection_session_id !== row.mapping_id ||
     !isActiveProjectionState(row.projection_session_state)
   ) {
@@ -499,7 +499,6 @@ function parseSessionReadRow(
   preparedMapping?: SelectedSessionMappingRecord
 ): SelectedSessionReadItem {
   const mapping = preparedMapping ?? parseMappingRow(row);
-  assertSelectedDisposition(mapping);
   if (mapping.archived_at !== null) {
     throw repositoryError("session_archived", "Archived managed sessions are unavailable.");
   }
@@ -545,6 +544,7 @@ function parseSessionReadRow(
     throw repositoryError("invalid_state", "Managed-session projection state is invalid.");
   }
   const projection = projectionResult.data;
+  assertReadableDisposition(mapping, projection.session);
   assertProjectionRawColumns(row, projection.session);
   assertProjectionChronology(mapping, projection.session);
   assertEventAggregate(row, projection);
@@ -607,11 +607,23 @@ function parseMappingRow(row: SessionReadRow): SelectedSessionMappingRecord {
   return mapping;
 }
 
-function assertSelectedDisposition(mapping: SelectedSessionMappingRecord): void {
-  if (mapping.disposition === "recovery_required") {
+function assertReadableDisposition(
+  mapping: SelectedSessionMappingRecord,
+  session: SelectedSessionReadItem["session"]
+): void {
+  if (
+    mapping.disposition === "recovery_required" &&
+    (
+      session.session_state !== "unknown" ||
+      session.turn_state !== "unknown" ||
+      session.attention !== "unknown" ||
+      session.freshness !== "stale" ||
+      session.freshness_reason === null
+    )
+  ) {
     throw repositoryError(
-      "session_recovery_required",
-      "Managed-session state requires recovery."
+      "invalid_state",
+      "Recovery-required managed-session state is not explicitly stale."
     );
   }
 }

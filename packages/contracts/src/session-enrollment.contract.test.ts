@@ -19,9 +19,22 @@ describe("session enrollment audit contract", () => {
     const succeeded = enrollmentRecord("terminal", "succeeded", {
       schema_version: 1,
       enrolled: true,
-      created: false
+      created: false,
+      refreshed: false
     });
     expect(selectedSessionEnrollmentAuditEventRecordSchema.parse(succeeded)).toEqual(succeeded);
+    expect(
+      selectedSessionEnrollmentAuditEventRecordSchema.parse({
+        ...succeeded,
+        payload_summary: { ...succeeded.payload_summary, refreshed: true }
+      })
+    ).toMatchObject({ payload_summary: { created: false, refreshed: true } });
+    expect(
+      selectedSessionEnrollmentAuditEventRecordSchema.safeParse({
+        ...succeeded,
+        payload_summary: { ...succeeded.payload_summary, created: true, refreshed: true }
+      }).success
+    ).toBe(false);
   });
 
   it("accepts the bounded restart outcome without inventing enrollment success", () => {
