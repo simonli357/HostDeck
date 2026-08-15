@@ -1,5 +1,6 @@
 export * from "./application-shutdown.js";
 export * from "./approval-routes.js";
+export * from "./automatic-session-enrollment-service.js";
 export * from "./codex-approval-control-service.js";
 export * from "./codex-compact-control-service.js";
 export * from "./codex-control-event-observer.js";

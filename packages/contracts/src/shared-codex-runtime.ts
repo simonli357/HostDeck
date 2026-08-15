@@ -64,7 +64,7 @@ export const nativeCodexThreadIdSchema = brandedIdSchema<NativeCodexThreadId>(
 const boundedCandidateTextSchema = z.string().min(1).max(sharedCodexRuntimeContractLimits.nameLength);
 const boundedProjectCueSchema = z.string().min(1).max(sharedCodexRuntimeContractLimits.projectCueLength);
 const candidateCwdSchema = z.string().min(1).max(sharedCodexRuntimeContractLimits.pathLength);
-const unixAbsolutePathSchema = candidateCwdSchema
+export const sharedCodexAbsolutePathSchema = candidateCwdSchema
   .regex(/^\//u, "Shared Codex paths must be absolute Unix paths.")
   .refine((value) => !value.includes("\0"), "Shared Codex paths must not contain NUL bytes.")
   .refine(
@@ -117,7 +117,7 @@ export const trackedSessionSchema = z
     native_thread_id: nativeCodexThreadIdSchema,
     internal_session_id: sessionIdSchema,
     alias: sessionNameSchema,
-    cwd: unixAbsolutePathSchema,
+    cwd: sharedCodexAbsolutePathSchema,
     project_cue: boundedProjectCueSchema,
     branch: z.string().min(1).max(sharedCodexRuntimeContractLimits.branchLength).nullable(),
     runtime_version: codexVersionSchema,
@@ -238,8 +238,8 @@ function expectedLoadedThreadRejectionReason(
   ) {
     return "child_or_subagent";
   }
-  if (value.source !== "cli" && value.source !== "app_server") return "non_interactive_source";
-  if (!unixAbsolutePathSchema.safeParse(value.cwd).success) return "invalid_cwd";
+  if (!["cli", "app_server", "vscode"].includes(value.source)) return "non_interactive_source";
+  if (!sharedCodexAbsolutePathSchema.safeParse(value.cwd).success) return "invalid_cwd";
   if (value.status === "not_loaded") return "missing";
   if (value.status === "system_error") return "runtime_error";
   return null;
@@ -248,8 +248,8 @@ function expectedLoadedThreadRejectionReason(
 export const sharedCodexEndpointLocationSchema = z
   .object({
     kind: z.literal("standard_unix"),
-    codex_home: unixAbsolutePathSchema,
-    socket_path: unixAbsolutePathSchema
+    codex_home: sharedCodexAbsolutePathSchema,
+    socket_path: sharedCodexAbsolutePathSchema
   })
   .strict()
   .superRefine((value, context) => {

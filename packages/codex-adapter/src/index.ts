@@ -83,6 +83,17 @@ export {
   createCodexGoalClient
 } from "./goal-client.js";
 export {
+  type CodexLoadedThreadClient,
+  type CodexLoadedThreadClientOptions,
+  type CodexLoadedThreadErrorCode,
+  type CodexLoadedThreadHistory,
+  type CodexLoadedThreadRequestPort,
+  type CodexLoadedThreadSnapshot,
+  codexLoadedThreadNotificationTarget,
+  createCodexLoadedThreadClient,
+  HostDeckCodexLoadedThreadError
+} from "./loaded-thread-client.js";
+export {
   type CodexModelCatalog,
   type CodexModelClient,
   type CodexModelClientOptions,

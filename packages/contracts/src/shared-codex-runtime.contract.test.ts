@@ -128,6 +128,13 @@ describe("loaded-thread enrollment contracts", () => {
     });
     expect(loadedThreadCandidateSchema.safeParse({ ...eligibleCandidate(), turns: [] }).success).toBe(false);
     expect(loadedThreadCandidateSchema.safeParse({ ...eligibleCandidate(), path: "/private/rollout.jsonl" }).success).toBe(false);
+    expect(
+      loadedThreadCandidateSchema.parse({
+        ...eligibleCandidate(),
+        source: "vscode",
+        eligibility: { state: "eligible", reason: null }
+      })
+    ).toMatchObject({ source: "vscode", eligibility: { state: "eligible" } });
   });
 
   it("requires the one deterministic rejection reason for ineligible metadata", () => {
