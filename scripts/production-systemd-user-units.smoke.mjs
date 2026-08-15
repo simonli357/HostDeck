@@ -38,27 +38,35 @@ const codexBin = requireExactCodexBinary(
   process.env.HOSTDECK_CODEX_BIN,
   sourceManifest.codex.codexVersion
 );
-const nodeBin = requireCanonicalExecutable(process.execPath, "Node");
 const uid = requireCurrentUid();
-const runtimeHome = requireRuntimeHome(uid);
-const managerUnitRoot = join(runtimeHome, "systemd", "user");
-const runtimeDir = join(runtimeHome, "hostdeck");
-const socketPath = join(runtimeDir, "app-server.sock");
-const unitNames = ["hostdeck-codex.service", "hostdeck.service"];
+const managerRuntimeHome = requireRuntimeHome(uid);
+const managerUnitRoot = join(managerRuntimeHome, "systemd", "user");
+const canonicalUnitNames = ["hostdeck-codex.service", "hostdeck.service"];
+const unitPrefix = `hostdeck-package-smoke-${process.pid}`;
+const brokerUnitName = `${unitPrefix}-codex.service`;
+const hostDeckUnitName = `${unitPrefix}.service`;
+const unitNames = [brokerUnitName, hostDeckUnitName];
 const root = mkdtempSync(join(homedir(), ".hostdeck-systemd-units-"));
 const packageRoot = join(root, "package");
 const homeDir = join(root, "home");
 const configHome = join(root, "config-home");
 const stateHome = join(root, "state-home");
+const foregroundRuntimeHome = join(root, "runtime-home");
+const runtimeDir = join(managerRuntimeHome, unitPrefix);
 const stateDir = join(stateHome, "hostdeck");
 const databasePath = join(stateDir, "hostdeck.sqlite");
 const leasePath = join(stateDir, "hostdeck.lock");
 const codexHome = join(root, "codex-home");
+const controlDir = join(codexHome, "app-server-control");
+const socketPath = join(controlDir, "app-server-control.sock");
+const ownerPath = join(controlDir, "hostdeck-broker-owner.json");
 const commandDir = join(root, "bin");
 const environmentRoot = join(root, "environment");
 const environmentFile = join(environmentRoot, "hostdeck.env");
 const generatedUnitRoot = join(root, "units");
+const bundledNode = join(packageRoot, sourceManifest.runtime.bundle.path);
 const linkedUnitPaths = unitNames.map((name) => join(managerUnitRoot, name));
+const initialRuntimeIdentity = pathIdentityOrNull(runtimeDir);
 let unitsLinked = false;
 let cleanupError = null;
 let primaryError = null;
@@ -79,11 +87,13 @@ try {
   });
   chmodSync(packageRoot, 0o755);
   normalizePackageModes(packageRoot, new Set(sourceManifest.executableFiles));
+  requireCanonicalExecutable(bundledNode, "Bundled Node");
   const webIdentity = loadProductionWebSmokeIdentity(packageRoot);
   for (const path of [
     homeDir,
     configHome,
     stateHome,
+    foregroundRuntimeHome,
     codexHome,
     commandDir,
     environmentRoot,
@@ -92,7 +102,12 @@ try {
     mkdirSync(path, { mode: 0o700, recursive: true });
     chmodSync(path, 0o700);
   }
-  symlinkSync(nodeBin, join(commandDir, "node"));
+  writeFileSync(
+    join(codexHome, "config.toml"),
+    "check_for_update_on_startup = false\n[features]\nplugins = false\n",
+    { mode: 0o600 }
+  );
+  symlinkSync(bundledNode, join(commandDir, "node"));
   const port = await availableLoopbackPort();
   writeEnvironmentFile(port);
 
@@ -103,20 +118,23 @@ try {
     codex_bin: codexBin,
     environment_file: environmentFile,
     expected_package_version: sourceManifest.packageVersion,
-    node_bin: nodeBin,
+    node_bin: bundledNode,
     package_root: packageRoot
   });
   generatorModule.assertHostDeckSystemdUserUnitBundle(bundle);
-  assert.equal(bundle.schema_version, 1);
+  assert.equal(bundle.schema_version, 2);
+  assert.equal(bundle.broker_host_path, join(packageRoot, sourceManifest.brokerHost.path));
+  assert.equal(bundle.service_host_path, join(packageRoot, sourceManifest.serviceHost.path));
   assert.deepEqual(
     bundle.units.map((unit) => unit.name),
-    unitNames
+    canonicalUnitNames
   );
   const generatedUnitPaths = bundle.units.map((unit) => {
     assert.equal(unit.mode, 0o644);
     assert.equal(sha256(unit.content), unit.sha256);
-    const path = join(generatedUnitRoot, unit.name);
-    writeFileSync(path, unit.content, { mode: unit.mode });
+    const isolated = isolateGeneratedUnit(unit);
+    const path = join(generatedUnitRoot, isolated.name);
+    writeFileSync(path, isolated.content, { mode: unit.mode });
     chmodSync(path, unit.mode);
     return path;
   });
@@ -127,81 +145,114 @@ try {
   runSystemctl(["daemon-reload"]);
   assertLinkedUnits(generatedUnitPaths);
 
-  runSystemctl(["start", "hostdeck.service"]);
+  runSystemctl(["start", hostDeckUnitName]);
   await waitForUnitsReady(port, webIdentity);
-  let codex = await requireActiveUnit("hostdeck-codex.service");
-  let hostDeck = await requireActiveUnit("hostdeck.service");
-  await requireCodexLauncherProcessTree(codex);
+  let codex = await requireActiveUnit(brokerUnitName);
+  let hostDeck = await requireActiveUnit(hostDeckUnitName);
+  await requireBrokerSupervisorProcessTree(codex, bundle.broker_host_path);
   await requireSingleMainProcess(hostDeck);
+  assertNodeHostProcess(hostDeck.mainPid, bundle.service_host_path);
   assertUnprivilegedProcess(codex.mainPid);
   assertUnprivilegedProcess(hostDeck.mainPid);
-  await assertPrivateSocket();
+  await assertStandardBroker();
   assertLoopbackOnlyListener(port);
   const firstSocketIdentity = socketIdentity();
+  const firstBrokerIdentity = brokerIdentity();
   const firstCodexPid = codex.mainPid;
   const firstHostDeckPid = hostDeck.mainPid;
 
-  runSystemctl(["start", "hostdeck.service"]);
-  codex = await requireActiveUnit("hostdeck-codex.service");
-  hostDeck = await requireActiveUnit("hostdeck.service");
+  runSystemctl(["start", hostDeckUnitName]);
+  codex = await requireActiveUnit(brokerUnitName);
+  hostDeck = await requireActiveUnit(hostDeckUnitName);
   assert.equal(codex.mainPid, firstCodexPid);
   assert.equal(hostDeck.mainPid, firstHostDeckPid);
   assert.equal(socketIdentity(), firstSocketIdentity);
-  await requireCodexLauncherProcessTree(codex);
+  assert.equal(brokerIdentity(), firstBrokerIdentity);
+  await requireBrokerSupervisorProcessTree(codex, bundle.broker_host_path);
   await requireSingleMainProcess(hostDeck);
+  assertNodeHostProcess(hostDeck.mainPid, bundle.service_host_path);
 
-  runSystemctl(["restart", "hostdeck.service"]);
-  hostDeck = await waitForDifferentMainPid("hostdeck.service", firstHostDeckPid);
-  codex = await requireActiveUnit("hostdeck-codex.service");
+  runSystemctl(["restart", hostDeckUnitName]);
+  hostDeck = await waitForDifferentMainPid(hostDeckUnitName, firstHostDeckPid);
+  codex = await requireActiveUnit(brokerUnitName);
   assert.equal(codex.mainPid, firstCodexPid);
   assert.equal(socketIdentity(), firstSocketIdentity);
+  assert.equal(brokerIdentity(), firstBrokerIdentity);
   await eventuallyReady(port, 30_000);
-  await requireCodexLauncherProcessTree(codex);
+  await requireBrokerSupervisorProcessTree(codex, bundle.broker_host_path);
   await requireSingleMainProcess(hostDeck);
+  assertNodeHostProcess(hostDeck.mainPid, bundle.service_host_path);
   const secondHostDeckPid = hostDeck.mainPid;
 
-  runSystemctl(["restart", "hostdeck-codex.service"]);
-  codex = await waitForDifferentMainPid("hostdeck-codex.service", firstCodexPid);
-  hostDeck = await requireActiveUnit("hostdeck.service");
+  runSystemctl(["restart", brokerUnitName]);
+  codex = await waitForDifferentMainPid(brokerUnitName, firstCodexPid);
+  hostDeck = await requireActiveUnit(hostDeckUnitName);
   assert.equal(hostDeck.mainPid, secondHostDeckPid);
-  await waitForSocketIdentityChange(firstSocketIdentity, 30_000);
-  await assertPrivateSocket();
+  await waitForBrokerIdentityChange(firstBrokerIdentity, 30_000);
+  await assertStandardBroker();
   await eventuallyReady(port, 30_000);
-  await requireCodexLauncherProcessTree(codex);
+  await requireBrokerSupervisorProcessTree(codex, bundle.broker_host_path);
   await requireSingleMainProcess(hostDeck);
+  assertNodeHostProcess(hostDeck.mainPid, bundle.service_host_path);
   const secondCodexPid = codex.mainPid;
 
-  runSystemctl(["stop", "hostdeck-codex.service"]);
-  await requireInactiveUnit("hostdeck-codex.service");
-  hostDeck = await requireActiveUnit("hostdeck.service");
+  runSystemctl(["stop", brokerUnitName]);
+  await requireInactiveUnit(brokerUnitName);
+  hostDeck = await requireActiveUnit(hostDeckUnitName);
   assert.equal(hostDeck.mainPid, secondHostDeckPid);
   await eventuallyNotReady(port, 30_000);
   await assertLive(port);
-  await waitForMissingPath(runtimeDir, 10_000);
+  await waitForMissingPath(socketPath, 10_000);
+  await waitForMissingPath(ownerPath, 10_000);
+  assert.equal(existsSync(runtimeDir), true);
 
-  runSystemctl(["start", "hostdeck-codex.service"]);
-  codex = await waitForDifferentMainPid("hostdeck-codex.service", secondCodexPid);
-  hostDeck = await requireActiveUnit("hostdeck.service");
+  runSystemctl(["start", brokerUnitName]);
+  codex = await waitForDifferentMainPid(brokerUnitName, secondCodexPid);
+  hostDeck = await requireActiveUnit(hostDeckUnitName);
   assert.equal(hostDeck.mainPid, secondHostDeckPid);
-  await assertPrivateSocket();
+  await assertStandardBroker();
   await eventuallyReady(port, 30_000);
   const thirdSocketIdentity = socketIdentity();
   const thirdCodexPid = codex.mainPid;
 
-  runSystemctl(["stop", "hostdeck.service"]);
-  await requireInactiveUnit("hostdeck.service");
-  codex = await requireActiveUnit("hostdeck-codex.service");
+  runSystemctl(["stop", hostDeckUnitName]);
+  await requireInactiveUnit(hostDeckUnitName);
+  codex = await requireActiveUnit(brokerUnitName);
   assert.equal(codex.mainPid, thirdCodexPid);
   assert.equal(socketIdentity(), thirdSocketIdentity);
-  await assertPrivateSocket();
+  await assertStandardBroker();
+  await assertRuntimeDirectoryRestored();
   await assertLoopbackPortAvailable(port);
 
-  runSystemctl(["start", "hostdeck.service"]);
+  runSystemctl(["start", hostDeckUnitName]);
   await waitForUnitsReady(port, webIdentity);
-  codex = await requireActiveUnit("hostdeck-codex.service");
-  hostDeck = await requireActiveUnit("hostdeck.service");
+  codex = await requireActiveUnit(brokerUnitName);
+  hostDeck = await requireActiveUnit(hostDeckUnitName);
   assert.equal(codex.mainPid, thirdCodexPid);
   assert.equal(socketIdentity(), thirdSocketIdentity);
+  const explicitStopHostDeckPid = hostDeck.mainPid;
+
+  const explicitStop = runBrokerStopProbe();
+  assert.equal(explicitStop.action, "stop");
+  assert.equal(explicitStop.endpoint.kind, "standard_unix");
+  assert.equal(explicitStop.endpoint.state, "absent");
+  await requireInactiveUnit(brokerUnitName);
+  hostDeck = await requireActiveUnit(hostDeckUnitName);
+  assert.equal(hostDeck.mainPid, explicitStopHostDeckPid);
+  await eventuallyNotReady(port, 30_000);
+  await assertLive(port);
+  await waitForMissingPath(socketPath, 10_000);
+  await waitForMissingPath(ownerPath, 10_000);
+
+  runSystemctl(["start", brokerUnitName]);
+  codex = await waitForDifferentMainPid(brokerUnitName, thirdCodexPid);
+  hostDeck = await requireActiveUnit(hostDeckUnitName);
+  assert.equal(hostDeck.mainPid, explicitStopHostDeckPid);
+  await assertStandardBroker();
+  await eventuallyReady(port, 30_000);
+  await requireBrokerSupervisorProcessTree(codex, bundle.broker_host_path);
+  await requireSingleMainProcess(hostDeck);
+  assertNodeHostProcess(hostDeck.mainPid, bundle.service_host_path);
   const leaseCodexPid = codex.mainPid;
   const leaseHostDeckPid = hostDeck.mainPid;
   const leaseSocketIdentity = socketIdentity();
@@ -216,13 +267,14 @@ try {
   );
   assert.equal(foreground.stderr.includes(root), false);
   assert.equal(foreground.stderr.includes(codexBin), false);
-  codex = await requireActiveUnit("hostdeck-codex.service");
-  hostDeck = await requireActiveUnit("hostdeck.service");
+  codex = await requireActiveUnit(brokerUnitName);
+  hostDeck = await requireActiveUnit(hostDeckUnitName);
   assert.equal(codex.mainPid, leaseCodexPid);
   assert.equal(hostDeck.mainPid, leaseHostDeckPid);
   assert.equal(socketIdentity(), leaseSocketIdentity);
-  await requireCodexLauncherProcessTree(codex);
+  await requireBrokerSupervisorProcessTree(codex, bundle.broker_host_path);
   await requireSingleMainProcess(hostDeck);
+  assertNodeHostProcess(hostDeck.mainPid, bundle.service_host_path);
   await assertLocalSurface(port, webIdentity);
 
   const security = inspectUnitSecurity();
@@ -247,10 +299,12 @@ try {
   assert.deepEqual(listFailedUserUnits(), initialFailedUnits);
   assert.deepEqual(observeTailscaleIdentity(), initialTailscaleIdentity);
   assertLeaseReleased();
-  assert.equal(existsSync(runtimeDir), false);
+  await assertRuntimeDirectoryRestored();
+  assert.equal(existsSync(socketPath), false);
+  assert.equal(existsSync(ownerPath), false);
   await assertLoopbackPortAvailable(port);
   console.log(
-    `HostDeck systemd user-unit smoke passed: ${verification.sourceCount} sources, two exact units, independent restart/stop recovery, lease exclusion, security inspection ${security.join("/")}, exact Codex ${sourceManifest.codex.codexVersion}, no model turn or persistent manager state.`
+    `HostDeck systemd user-unit smoke passed: ${verification.sourceCount} sources, bundled Node, standard broker, independent restart/stop recovery, explicit owner-safe broker stop, lease exclusion, security inspection ${security.join("/")}, exact Codex ${sourceManifest.codex.codexVersion}, no model turn or persistent manager state.`
   );
 } catch (error) {
   primaryError = error;
@@ -300,6 +354,22 @@ function verifyGeneratedUnits(paths) {
   assert.equal(`${result.stdout}${result.stderr}`, "");
 }
 
+function isolateGeneratedUnit(unit) {
+  if (unit.name === canonicalUnitNames[0]) {
+    return Object.freeze({ content: unit.content, name: brokerUnitName });
+  }
+  assert.equal(unit.name, canonicalUnitNames[1]);
+  const content = unit.content
+    .replaceAll(canonicalUnitNames[0], brokerUnitName)
+    .replace(
+      "RuntimeDirectory=hostdeck-service",
+      `RuntimeDirectory=${unitPrefix}`
+    );
+  assert.notEqual(content, unit.content);
+  assert.equal(content.includes(canonicalUnitNames[0]), false);
+  return Object.freeze({ content, name: hostDeckUnitName });
+}
+
 function inspectUnitSecurity() {
   return unitNames.map((name) => {
     const result = runCommand(
@@ -317,9 +387,9 @@ function inspectUnitSecurity() {
 }
 
 async function waitForUnitsReady(port, webIdentity) {
-  await requireActiveUnit("hostdeck-codex.service");
-  await requireActiveUnit("hostdeck.service");
-  await assertPrivateSocket();
+  await requireActiveUnit(brokerUnitName);
+  await requireActiveUnit(hostDeckUnitName);
+  await assertStandardBroker();
   await assertLocalSurface(port, webIdentity);
 }
 
@@ -456,13 +526,25 @@ async function requireSingleMainProcess(snapshot) {
   }, 10_000, `${snapshot.name} did not settle to one main process.`);
 }
 
-async function requireCodexLauncherProcessTree(snapshot) {
+async function requireBrokerSupervisorProcessTree(snapshot, brokerHostPath) {
+  let owner = null;
   await eventually(async () => {
-    const pids = readControlGroupPids(snapshot.controlGroup);
-    if (pids.length !== 2 || !pids.includes(snapshot.mainPid)) return false;
-    const childPid = pids.find((pid) => pid !== snapshot.mainPid);
-    return childPid !== undefined && processParentPid(childPid) === snapshot.mainPid;
-  }, 10_000, `${snapshot.name} did not settle to one launcher-owned native child.`);
+    try {
+      owner = readBrokerOwner();
+      const pids = readControlGroupPids(snapshot.controlGroup);
+      return (
+        owner.pid !== snapshot.mainPid &&
+        pids.includes(snapshot.mainPid) &&
+        pids.includes(owner.pid) &&
+        isNodeHostProcess(snapshot.mainPid, brokerHostPath)
+      );
+    } catch {
+      return false;
+    }
+  }, 30_000, `${snapshot.name} did not retain its supervisor and owned broker.`);
+  assert(owner !== null);
+  assert.equal(owner.socket_identity, socketIdentity());
+  assertUnprivilegedProcess(owner.pid);
 }
 
 function readControlGroupPids(controlGroup) {
@@ -475,10 +557,20 @@ function readControlGroupPids(controlGroup) {
     .sort((left, right) => left - right);
 }
 
-function processParentPid(pid) {
-  const status = readFileSync(`/proc/${pid}/status`, "utf8");
-  const match = status.match(/^PPid:\s+(\d+)$/mu);
-  return match === null ? null : Number(match[1]);
+function assertNodeHostProcess(pid, hostPath) {
+  assert.equal(isNodeHostProcess(pid, hostPath), true);
+}
+
+function isNodeHostProcess(pid, hostPath) {
+  try {
+    const executable = realpathSync(`/proc/${pid}/exe`);
+    const args = readFileSync(`/proc/${pid}/cmdline`, "utf8")
+      .split("\0")
+      .filter(Boolean);
+    return executable === bundledNode && args.includes(hostPath);
+  } catch {
+    return false;
+  }
 }
 
 function assertUnprivilegedProcess(pid) {
@@ -490,16 +582,36 @@ function assertUnprivilegedProcess(pid) {
   assert.equal(Number.parseInt(capabilityMatch[1], 16), 0);
 }
 
-async function assertPrivateSocket() {
+async function assertStandardBroker() {
   await eventually(async () => existsSync(socketPath) && (await probeSocket()), 30_000, "Codex socket did not become usable.");
-  const directoryStats = lstatSync(runtimeDir);
+  const directoryStats = lstatSync(controlDir);
   const socketStats = lstatSync(socketPath);
+  const ownerStats = lstatSync(ownerPath);
   assert.equal(directoryStats.isDirectory(), true);
   assert.equal(directoryStats.uid, uid);
   assert.equal(directoryStats.mode & 0o7777, 0o700);
   assert.equal(socketStats.isSocket(), true);
   assert.equal(socketStats.uid, uid);
   assert.equal(socketStats.mode & 0o7777, 0o600);
+  assert.equal(ownerStats.isFile(), true);
+  assert.equal(ownerStats.uid, uid);
+  assert.equal(ownerStats.mode & 0o7777, 0o600);
+  const owner = readBrokerOwner();
+  assert.equal(owner.socket_identity, socketIdentity());
+  process.kill(owner.pid, 0);
+}
+
+function readBrokerOwner() {
+  const value = JSON.parse(readFileSync(ownerPath, "utf8"));
+  assert.equal(value.schema, 1);
+  assert.equal(Number.isSafeInteger(value.pid) && value.pid > 0, true);
+  assert.equal(value.process_group_id, value.pid);
+  assert.equal(typeof value.start_ticks, "string");
+  assert.equal(typeof value.executable, "string");
+  assert.equal(Array.isArray(value.argv), true);
+  assert.equal(typeof value.socket_identity, "string");
+  assert.equal(typeof value.started_at, "string");
+  return value;
 }
 
 function socketIdentity() {
@@ -508,14 +620,20 @@ function socketIdentity() {
   return `${stats.dev}:${stats.ino}`;
 }
 
-async function waitForSocketIdentityChange(previous, timeoutMs) {
+function brokerIdentity() {
+  const owner = readBrokerOwner();
+  return `${owner.pid}:${owner.start_ticks}`;
+}
+
+async function waitForBrokerIdentityChange(previous, timeoutMs) {
   await eventually(
     async () =>
+      existsSync(ownerPath) &&
+      brokerIdentity() !== previous &&
       existsSync(socketPath) &&
-      socketIdentity() !== previous &&
       (await probeSocket()),
     timeoutMs,
-    "Codex socket identity did not change."
+    "Owned Codex broker identity did not change."
   );
 }
 
@@ -568,7 +686,7 @@ function runForegroundLeaseProbe(port) {
         HOSTDECK_CODEX_BIN: codexBin,
         PATH: commandDir,
         XDG_CONFIG_HOME: configHome,
-        XDG_RUNTIME_DIR: runtimeHome,
+        XDG_RUNTIME_DIR: foregroundRuntimeHome,
         XDG_STATE_HOME: stateHome
       },
       timeout: 30_000
@@ -576,9 +694,30 @@ function runForegroundLeaseProbe(port) {
   );
 }
 
+function runBrokerStopProbe() {
+  const command = join(packageRoot, sourceManifest.command.path);
+  const result = runCommand(command, ["broker", "stop", "--json"], {
+    allowedStatuses: [0],
+    cwd: root,
+    env: {
+      CODEX_HOME: codexHome,
+      HOME: homeDir,
+      HOSTDECK_CODEX_BIN: codexBin,
+      PATH: commandDir,
+      XDG_CONFIG_HOME: configHome,
+      XDG_RUNTIME_DIR: foregroundRuntimeHome,
+      XDG_STATE_HOME: stateHome
+    },
+    timeout: 30_000
+  });
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout.includes(root), false);
+  return JSON.parse(result.stdout);
+}
+
 async function cleanupUnits() {
   const errors = [];
-  for (const name of ["hostdeck.service", "hostdeck-codex.service"]) {
+  for (const name of [hostDeckUnitName, brokerUnitName]) {
     try {
       runSystemctl(["stop", name]);
     } catch (error) {
@@ -606,7 +745,9 @@ async function cleanupUnits() {
     errors.push(error);
   }
   try {
-    await waitForMissingPath(runtimeDir, 10_000);
+    await assertRuntimeDirectoryRestored();
+    await waitForMissingPath(socketPath, 10_000);
+    await waitForMissingPath(ownerPath, 10_000);
     for (const name of unitNames) {
       const snapshot = unitSnapshot(name);
       assert.equal(snapshot.loadState, "not-found");
@@ -627,7 +768,9 @@ function assertCleanPreflight() {
     assert.equal(snapshot.loadState, "not-found");
     assert.equal(snapshot.mainPid, 0);
   }
-  assert.equal(lstatOrNull(runtimeDir), null);
+  assertRuntimeDirectoryBaseline();
+  assert.equal(lstatOrNull(socketPath), null);
+  assert.equal(lstatOrNull(ownerPath), null);
 }
 
 function assertLinkedUnits(generatedPaths) {
@@ -669,7 +812,7 @@ function runFileLockProbe(expectedStatus) {
     "try { acquired = lock.tryLock(descriptor); if (acquired) lock.unlock(descriptor); } finally { fs.closeSync(descriptor); }",
     "process.exitCode = acquired ? 0 : 73;"
   ].join(" ");
-  return runCommand(process.execPath, ["--eval", source, nativeModule, leasePath], {
+  return runCommand(bundledNode, ["--eval", source, nativeModule, leasePath], {
     allowedStatuses: [expectedStatus]
   });
 }
@@ -921,6 +1064,27 @@ function lstatOrNull(path) {
   } catch {
     return null;
   }
+}
+
+function pathIdentityOrNull(path) {
+  if (!existsSync(path)) return null;
+  const stats = lstatSync(path);
+  assert.equal(stats.isDirectory(), true);
+  assert.equal(stats.uid, uid);
+  assert.equal(stats.mode & 0o7777, 0o700);
+  return `${stats.dev}:${stats.ino}`;
+}
+
+function assertRuntimeDirectoryBaseline() {
+  assert.equal(pathIdentityOrNull(runtimeDir), initialRuntimeIdentity);
+}
+
+async function assertRuntimeDirectoryRestored() {
+  if (initialRuntimeIdentity === null) {
+    await waitForMissingPath(runtimeDir, 10_000);
+    return;
+  }
+  assertRuntimeDirectoryBaseline();
 }
 
 function escapeEnvironmentFileValue(value) {

@@ -41,8 +41,9 @@ const configHome = join(root, "config-home");
 const stateHome = join(root, "state-home");
 const runtimeHome = join(root, "runtime-home");
 const runtimeDir = join(runtimeHome, "hostdeck");
-const socketPath = join(runtimeDir, "app-server.sock");
 const codexHome = join(root, "codex-home");
+const controlDir = join(codexHome, "app-server-control");
+const socketPath = join(controlDir, "app-server-control.sock");
 const commandDir = join(root, "bin");
 let appServer = null;
 let hostDeck = null;
@@ -74,8 +75,10 @@ try {
   }
   symlinkSync(process.execPath, join(commandDir, "node"));
   assert.equal(manifest.serviceHost.path, "dist/service-host.js");
+  assert.equal(manifest.brokerHost.path, "dist/broker-host.js");
   assert.equal(manifest.executableFiles.includes(manifest.serviceHost.path), false);
   const serviceHostPath = join(packageRoot, manifest.serviceHost.path);
+  const bundledNode = join(packageRoot, manifest.runtime.bundle.path);
   const port = await availableLoopbackPort();
   const environment = {
     CODEX_HOME: codexHome,
@@ -91,9 +94,9 @@ try {
 
   appServer = startAppServer(codexBin, environment);
   await waitForSocket(socketPath, appServer, 30_000);
-  await assertPrivateExternalSocket(socketPath);
+  await assertStandardExternalSocket(socketPath);
 
-  hostDeck = startServiceHost(serviceHostPath, environment, port);
+  hostDeck = startServiceHost(bundledNode, serviceHostPath, environment, port);
   await withTimeout(hostDeck.ready, 30_000, "Service HostDeck A did not become ready.");
   await assertLocalSurface(port, webIdentity);
 
@@ -103,12 +106,10 @@ try {
   assert.equal(hostDeck.child.exitCode, null);
   assert.equal(hostDeck.child.signalCode, null);
 
-  rmSync(runtimeDir, { force: true, recursive: true });
-  mkdirSync(runtimeDir, { mode: 0o700 });
-  chmodSync(runtimeDir, 0o700);
+  await waitForSocketRemoval(socketPath, 10_000);
   appServer = startAppServer(codexBin, environment);
   await waitForSocket(socketPath, appServer, 30_000);
-  await assertPrivateExternalSocket(socketPath);
+  await assertStandardExternalSocket(socketPath);
   const secondAppServerPid = requireRunningPid(appServer.child, "app-server B");
   assert.notEqual(secondAppServerPid, firstAppServerPid);
   await eventuallyReady(port, 30_000);
@@ -118,17 +119,17 @@ try {
   await stopChild(hostDeck, "SIGTERM", 30_000, "HostDeck A");
   hostDeck = null;
   assert.equal(requireRunningPid(appServer.child, "app-server B"), secondAppServerPid);
-  await assertPrivateExternalSocket(socketPath);
+  await assertStandardExternalSocket(socketPath);
   const socketIdentity = socketIdentityOf(socketPath);
 
-  hostDeck = startServiceHost(serviceHostPath, environment, port);
+  hostDeck = startServiceHost(bundledNode, serviceHostPath, environment, port);
   await withTimeout(hostDeck.ready, 30_000, "Service HostDeck B did not become ready.");
   await assertLocalSurface(port, webIdentity);
   await stopChild(hostDeck, "SIGTERM", 30_000, "HostDeck B");
   hostDeck = null;
   assert.equal(requireRunningPid(appServer.child, "app-server B"), secondAppServerPid);
   assert.equal(socketIdentityOf(socketPath), socketIdentity);
-  await assertPrivateExternalSocket(socketPath);
+  await assertStandardExternalSocket(socketPath);
 
   await stopChild(appServer, "SIGTERM", 30_000, "app-server B");
   appServer = null;
@@ -140,7 +141,7 @@ try {
   );
   assert.equal(existsSync(join(stateHome, "hostdeck", "hostdeck.lock")), true);
   console.log(
-    `HostDeck service-host smoke passed: ${verification.sourceCount} sources, read-only package, one app-server replacement, two HostDeck lifetimes, exact Codex ${sourceManifest.codex.codexVersion}, no model turn.`
+    `HostDeck service-host smoke passed: ${verification.sourceCount} sources, bundled Node, one standard-broker replacement, two HostDeck lifetimes, exact Codex ${sourceManifest.codex.codexVersion}, no model turn.`
   );
 } finally {
   try {
@@ -152,7 +153,7 @@ try {
     }
   } finally {
     makeWritable(root);
-    rmSync(root, { force: true, recursive: true });
+    await removeTreeAfterProcessQuiescence(root);
   }
 }
 
@@ -161,7 +162,7 @@ function startAppServer(executable, environment) {
     executable,
     ["app-server", "--listen", `unix://${socketPath}`],
     {
-      cwd: "/",
+      cwd: codexHome,
       env: environment,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"]
@@ -184,9 +185,9 @@ function assertTailscaleUnavailable(environment) {
   assert.equal(result.error?.code, "ENOENT");
 }
 
-function startServiceHost(serviceHostPath, environment, port) {
+function startServiceHost(nodeBin, serviceHostPath, environment, port) {
   const expectedReady = `HostDeck service ready at http://127.0.0.1:${port}.\n`;
-  const child = spawn(process.execPath, [serviceHostPath], {
+  const child = spawn(nodeBin, [serviceHostPath], {
     cwd: root,
     env: environment,
     shell: false,
@@ -332,12 +333,38 @@ function probeSocket(path) {
   });
 }
 
-async function assertPrivateExternalSocket(path) {
+async function assertStandardExternalSocket(path) {
   const stats = lstatSync(path);
   assert.equal(stats.isSocket(), true);
   assert.equal(stats.mode & 0o7777, 0o600);
   assert.equal(lstatSync(dirname(path)).mode & 0o7777, 0o700);
+  assert.equal(existsSync(join(dirname(path), "hostdeck-broker-owner.json")), false);
   assert.equal(await probeSocket(path), true);
+}
+
+async function waitForSocketRemoval(path, timeoutMs) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (!existsSync(path)) return;
+    await sleep(20);
+  }
+  throw new Error("App-server socket remained after process exit.");
+}
+
+async function removeTreeAfterProcessQuiescence(path) {
+  let lastError;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      rmSync(path, { force: true, recursive: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      await sleep(50);
+    }
+  }
+  throw new Error("Service-host smoke cleanup did not quiesce.", {
+    cause: lastError
+  });
 }
 
 async function assertLocalSurface(port, webIdentity) {
