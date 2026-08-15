@@ -16,6 +16,7 @@ import {
   assertLifecycleDirectoryEmpty,
   assertLifecycleScenarioInventory,
   countCurrentUserProcessReferences,
+  maximumLifecycleScenarioReportBytes,
   publishPrivateLifecycleJson,
   readPrivateLifecycleJson,
   requireLifecycleEvidencePath,
@@ -106,7 +107,7 @@ describe("runtime lifecycle private scenario files", () => {
     ).toThrow("unexpected entries");
   });
 
-  it("rejects linked, weak, malformed, and oversized reports", () => {
+  it("accepts bounded reports and rejects linked, weak, malformed, and oversized reports", () => {
     const linkedRoot = privateRoot();
     const source = join(linkedRoot, "source.json");
     const linked = join(linkedRoot, "supervisor-report.json");
@@ -128,9 +129,19 @@ describe("runtime lifecycle private scenario files", () => {
     writeFileSync(malformed, "not-json\n", { mode: 0o600 });
     expect(() => readPrivateLifecycleJson(malformed)).toThrow("not valid JSON");
 
+    const boundedRoot = privateRoot();
+    const bounded = join(boundedRoot, "integration-report.json");
+    const boundedValue = "x".repeat(160 * 1_024);
+    writeFileSync(bounded, JSON.stringify(boundedValue), { mode: 0o600 });
+    expect(readPrivateLifecycleJson(bounded)).toBe(boundedValue);
+
     const oversizedRoot = privateRoot();
     const oversized = join(oversizedRoot, "integration-report.json");
-    writeFileSync(oversized, "x".repeat(128 * 1_024 + 1), { mode: 0o600 });
+    writeFileSync(
+      oversized,
+      "x".repeat(maximumLifecycleScenarioReportBytes + 1),
+      { mode: 0o600 }
+    );
     expect(() => readPrivateLifecycleJson(oversized)).toThrow(
       "insecure or invalid"
     );

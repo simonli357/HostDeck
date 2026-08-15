@@ -26,6 +26,7 @@ import {
   assertLifecycleDirectoryEmpty,
   assertPrivateLifecycleDirectory,
   countCurrentUserProcessReferences,
+  maximumLifecycleScenarioReportBytes,
   publishPrivateLifecycleJson,
   readPrivateLifecycleJson,
   requireLifecycleEvidencePath
@@ -187,7 +188,7 @@ function assertScenarioInventory(
     metadata.nlink !== 1 ||
     (metadata.mode & 0o077) !== 0 ||
     metadata.size < 2 ||
-    metadata.size > 1024 * 1024 ||
+    metadata.size > maximumLifecycleScenarioReportBytes ||
     (process.getuid !== undefined && metadata.uid !== process.getuid())
   ) {
     throw new TypeError("Shared runtime scenario report is insecure.");

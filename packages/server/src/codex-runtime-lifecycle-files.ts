@@ -35,7 +35,7 @@ export const lifecycleScenarioReportNames = Object.freeze([
 export type LifecycleScenarioReportName =
   (typeof lifecycleScenarioReportNames)[number];
 
-const maximumScenarioReportBytes = 128 * 1_024;
+export const maximumLifecycleScenarioReportBytes = 256 * 1_024;
 
 export function requirePrivateLifecycleReportPath(
   candidate: string,
@@ -249,7 +249,7 @@ function assertPrivateLifecycleJsonFile(path: string): void {
     metadata.nlink !== 1 ||
     (metadata.mode & 0o077) !== 0 ||
     metadata.size < 2 ||
-    metadata.size > maximumScenarioReportBytes ||
+    metadata.size > maximumLifecycleScenarioReportBytes ||
     (process.getuid !== undefined && metadata.uid !== process.getuid())
   ) {
     throw new TypeError("Lifecycle scenario report is insecure or invalid.");
