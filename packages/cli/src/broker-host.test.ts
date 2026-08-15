@@ -10,7 +10,10 @@ import {
   type SharedCodexBrokerAttachment
 } from "@hostdeck/server";
 import { describe, expect, it, vi } from "vitest";
-import { runHostDeckBrokerHost } from "./broker-host.js";
+import {
+  formatBrokerHostFailure,
+  runHostDeckBrokerHost
+} from "./broker-host.js";
 
 describe("IFC-V1-113 shared Codex broker service host", () => {
   it("stops a broker it owns when the service is stopped", async () => {
@@ -157,6 +160,15 @@ describe("IFC-V1-113 shared Codex broker service host", () => {
     await expect(
       runHostDeckBrokerHost(["--unknown"], baseOptions(new AbortController().signal))
     ).rejects.toThrow("arguments");
+  });
+
+  it("reports only bounded lifecycle classification on service failure", () => {
+    expect(formatBrokerHostFailure(brokerError("ownership_ambiguous"))).toBe(
+      "HostDeck Codex broker service failed (ownership_ambiguous/readiness).\n"
+    );
+    expect(formatBrokerHostFailure(new Error("secret /private/path"))).toBe(
+      "HostDeck Codex broker service failed.\n"
+    );
   });
 });
 

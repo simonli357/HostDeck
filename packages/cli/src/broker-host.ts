@@ -30,7 +30,7 @@ export interface HostDeckBrokerHostOptions {
 }
 
 const brokerCheckArgument = "--check-ready";
-const brokerFailureOutput = "HostDeck Codex broker service failed.\n";
+const brokerFailurePrefix = "HostDeck Codex broker service failed";
 const defaultPollIntervalMs = 2_000;
 const minimumPollIntervalMs = 50;
 const maximumPollIntervalMs = 60_000;
@@ -170,10 +170,10 @@ export async function mainHostDeckBrokerHost(
     });
     process.exitCode = 0;
     return 0;
-  } catch {
+  } catch (error) {
     process.exitCode = 1;
     try {
-      process.stderr.write(brokerFailureOutput);
+      process.stderr.write(formatBrokerHostFailure(error));
     } catch {
       // No reliable process output channel remains.
     }
@@ -182,6 +182,13 @@ export async function mainHostDeckBrokerHost(
     processSignals?.close();
     processLifetime.close();
   }
+}
+
+export function formatBrokerHostFailure(error: unknown): string {
+  if (error instanceof HostDeckSharedCodexBrokerError) {
+    return `${brokerFailurePrefix} (${error.code}/${error.stage}).\n`;
+  }
+  return `${brokerFailurePrefix}.\n`;
 }
 
 async function waitForBrokerReady(
