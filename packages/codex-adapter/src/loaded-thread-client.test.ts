@@ -52,7 +52,7 @@ describe("shared Codex loaded-thread adapter", () => {
     expect(Object.isFrozen(candidate)).toBe(true);
   });
 
-  it("classifies children, noninteractive sources, incompatible versions, and invalid cwd deterministically", () => {
+  it("classifies roots by the active runtime while preserving historical-thread compatibility", () => {
     const client = createCodexLoadedThreadClient(fakePort(() => null));
     expect(client.candidateFromStartedNotification(started(rawThread({
       id: threadB,
@@ -69,8 +69,13 @@ describe("shared Codex loaded-thread adapter", () => {
     expect(client.candidateFromStartedNotification(started(rawThread({ source: "exec" })))).toMatchObject({
       eligibility: { state: "ineligible", reason: "non_interactive_source" }
     });
-    expect(client.candidateFromStartedNotification(started(rawThread({ cliVersion: "0.146.0" })))).toMatchObject({
-      eligibility: { state: "ineligible", reason: "incompatible_runtime" }
+    expect(client.candidateFromStartedNotification(started(rawThread({
+      cliVersion: "0.144.0",
+      source: "vscode"
+    })))).toMatchObject({
+      runtime_version: "0.147.0",
+      source: "vscode",
+      eligibility: { state: "eligible", reason: null }
     });
     expect(client.candidateFromStartedNotification(started(rawThread({ cwd: "relative/project" })))).toMatchObject({
       cwd: "relative/project",

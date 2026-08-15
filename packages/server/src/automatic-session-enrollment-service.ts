@@ -261,7 +261,11 @@ class DefaultAutomaticSessionEnrollmentService {
 
     const terminal = this.terminalByThread.get(threadId);
     if (terminal !== undefined) return { kind: "enrollment", enrollment: terminal };
-    if (this.options.states.getByThreadId(threadId) !== null) {
+    const existingState = this.options.states.getByThreadId(threadId);
+    if (
+      existingState !== null &&
+      !requiresAutomaticRefresh(existingState, this.options.loaded.runtime_version)
+    ) {
       return { kind: "projected", result: await this.options.events.consume(notification, generation) };
     }
 
@@ -1074,6 +1078,22 @@ function assertCommittedEnrollment(
   ) {
     throw new TypeError("Committed automatic enrollment does not match the exact loaded Codex identity.");
   }
+}
+
+function requiresAutomaticRefresh(
+  state: SelectedSessionState,
+  runtimeVersion: string
+): boolean {
+  if (
+    state.mapping.archived_at !== null ||
+    state.projection.session.session_state === "archived"
+  ) {
+    return false;
+  }
+  return (
+    state.mapping.disposition !== "selected" ||
+    state.mapping.runtime_version !== runtimeVersion
+  );
 }
 
 function replayableNotifications(

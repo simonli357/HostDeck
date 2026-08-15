@@ -243,7 +243,7 @@ class DefaultCodexLoadedThreadClient implements CodexLoadedThreadClient {
     threadId: NativeCodexThreadId | string,
     signal?: AbortSignal
   ): Promise<LoadedThreadCandidate> {
-    void this.runtime_version;
+    const runtimeVersion = this.runtime_version;
     const parsedThreadId = parseInputThreadId(threadId);
     const params = { threadId: parsedThreadId, includeTurns: false } satisfies ThreadReadParams;
     const result = requireRecord(
@@ -257,7 +257,7 @@ class DefaultCodexLoadedThreadClient implements CodexLoadedThreadClient {
       "Codex loaded-thread read result must be an object."
     );
     assertExactKeys(result, ["thread"], "Codex loaded-thread read fields are invalid.");
-    const candidate = normalizeCandidate(result.thread);
+    const candidate = normalizeCandidate(result.thread, runtimeVersion);
     if (candidate.native_thread_id !== parsedThreadId) {
       throw invalidPayload("Codex loaded-thread read returned a different native thread id.");
     }
@@ -267,19 +267,20 @@ class DefaultCodexLoadedThreadClient implements CodexLoadedThreadClient {
   candidateFromStartedNotification(
     notification: CodexConnectionNotification
   ): LoadedThreadCandidate {
+    const runtimeVersion = this.runtime_version;
     if (notification.method !== "thread/started") {
       throw invalidInput("Loaded-thread notification metadata requires thread/started.");
     }
     const params = requireRecord(notification.params, "Codex thread/started params must be an object.");
     assertExactKeys(params, ["thread"], "Codex thread/started params fields are invalid.");
-    return normalizeCandidate(params.thread);
+    return normalizeCandidate(params.thread, runtimeVersion);
   }
 
   async subscribeAndReadSnapshot(
     expected: LoadedThreadCandidate,
     signal?: AbortSignal
   ): Promise<CodexLoadedThreadSnapshot> {
-    void this.runtime_version;
+    const runtimeVersion = this.runtime_version;
     const parsedExpected = loadedThreadCandidateSchema.safeParse(expected);
     if (!parsedExpected.success || parsedExpected.data.eligibility.state !== "eligible") {
       throw invalidInput("Loaded-thread subscription requires one eligible normalized candidate.");
@@ -310,7 +311,7 @@ class DefaultCodexLoadedThreadClient implements CodexLoadedThreadClient {
     const resumed = requireRecord(rawResult, "Codex loaded-thread resume result must be an object.");
     assertExactKeys(resumed, resumeResultKeys, "Codex loaded-thread resume fields are invalid.");
     const resumeEnvelope = validateResumeEnvelope(resumed);
-    const resumeCandidate = normalizeCandidate(resumed.thread);
+    const resumeCandidate = normalizeCandidate(resumed.thread, runtimeVersion);
     const resumeRaw = parseRawThread(resumed.thread).raw;
     if (
       resumeEnvelope.cwd !== resumeCandidate.cwd ||
@@ -410,7 +411,10 @@ class DefaultCodexLoadedThreadClient implements CodexLoadedThreadClient {
   }
 }
 
-function normalizeCandidate(candidate: unknown): LoadedThreadCandidate {
+function normalizeCandidate(
+  candidate: unknown,
+  runtimeVersion: string
+): LoadedThreadCandidate {
   const { raw, cwd } = parseRawThread(candidate);
   const nativeThreadId = parsePayloadThreadId(raw.id);
   const parentThreadId = raw.parentThreadId === null ? null : parsePayloadThreadId(raw.parentThreadId);
@@ -429,7 +433,9 @@ function normalizeCandidate(candidate: unknown): LoadedThreadCandidate {
     source,
     ephemeral: raw.ephemeral,
     archived: false,
-    runtime_version: raw.cliVersion,
+    // cliVersion is creation provenance retained by Codex. The admitted app-server
+    // version is the runtime currently loading and serving this thread.
+    runtime_version: runtimeVersion,
     created_at: unixSecondsToIso(raw.createdAt, "loaded-thread creation"),
     updated_at: unixSecondsToIso(raw.updatedAt, "loaded-thread update"),
     status: status.status,

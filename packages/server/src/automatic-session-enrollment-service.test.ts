@@ -45,7 +45,7 @@ describe("automatic shared-session enrollment", () => {
   it("reconciles every loaded root, imports bounded history, and leaves ineligible threads absent", async () => {
     const harness = storageHarness();
     try {
-      const eligible = candidate(threadA);
+      const eligible = candidate(threadA, { source: "vscode" });
       const ineligible = candidate(threadB, {
         source: "exec",
         eligibility: { state: "ineligible", reason: "non_interactive_source" }
@@ -166,10 +166,10 @@ describe("automatic shared-session enrollment", () => {
     }
   });
 
-  it("refreshes an exact recovery-required mapping when its native thread joins the shared broker", async () => {
+  it("refreshes an exact recovery-required mapping when its native thread starts on the shared broker", async () => {
     const harness = storageHarness();
     try {
-      const eligible = candidate(threadA);
+      const eligible = candidate(threadA, { source: "vscode" });
       const initialLoaded = fakeLoaded({
         ids: [threadA],
         candidates: new Map([[threadA, eligible]]),
@@ -208,6 +208,7 @@ describe("automatic shared-session enrollment", () => {
       const refreshedLoaded = fakeLoaded({
         ids: [threadA],
         candidates: new Map([[threadA, eligible]]),
+        startedCandidate: eligible,
         snapshot: snapshot(eligible, {
           turns: [
             {
@@ -231,18 +232,19 @@ describe("automatic shared-session enrollment", () => {
         capture_branch: () => "main"
       });
 
-      await expect(refreshedService.reconcileLoaded("reconciliation", 2)).resolves.toMatchObject({
-        outcomes: [
-          {
-            state: "enrolled",
-            history: { events_loaded: 1, turns_loaded: 1 },
-            session: {
-              native_thread_id: threadA,
-              internal_session_id: "sess_019f489a1f9d7402ae00eac6ea322f64",
-              runtime_version: "0.147.0"
-            }
+      await expect(
+        refreshedService.observeNotification(startedNotification(threadA), 2)
+      ).resolves.toMatchObject({
+        kind: "enrollment",
+        enrollment: {
+          state: "enrolled",
+          history: { events_loaded: 1, turns_loaded: 1 },
+          session: {
+            native_thread_id: threadA,
+            internal_session_id: "sess_019f489a1f9d7402ae00eac6ea322f64",
+            runtime_version: "0.147.0"
           }
-        ]
+        }
       });
       expect(harness.repository.getByThreadId(threadA)).toMatchObject({
         mapping: { disposition: "selected", runtime_version: "0.147.0" },
