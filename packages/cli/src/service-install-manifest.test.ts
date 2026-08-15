@@ -115,7 +115,7 @@ describe("IFC-V1-056 service install manifest", () => {
       join("releases", parsed.release.id)
     );
     expect(parsed.command.target).toBe(
-      "/home/hostdeck/.local/share/hostdeck/current/package/dist/shell.js"
+      "/home/hostdeck/.local/share/hostdeck/current/package/bin/codexdeck"
     );
     expect(() =>
       assertHostDeckServiceManifestMatchesLayout(parsed, layout)

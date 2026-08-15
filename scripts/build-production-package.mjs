@@ -27,6 +27,8 @@ import {
   computeOwnedOutputIdentity,
   createProductionWebManifest,
   inspectProductionPackageTree,
+  productionLinuxLauncherContent,
+  productionLinuxLauncherPath,
   productionPackageManifestName,
   productionPackageManifestSchemaVersion,
   productionPackageSourceCount,
@@ -186,7 +188,7 @@ function createRuntimeCliBin(candidate) {
   ) {
     throw new TypeError("@hostdeck/cli source bin metadata is invalid.");
   }
-  return { codexdeck: "./dist/shell.js" };
+  return { codexdeck: `./${productionLinuxLauncherPath}` };
 }
 
 export function buildProductionPackage(options = {}) {
@@ -252,6 +254,7 @@ export function buildProductionPackage(options = {}) {
       recursive: true,
       verbatimSymlinks: true
     });
+    const packagedRuntime = installBundledLinuxRuntime(packageRoot, runtime);
     removePackageManagerMetadata(packageRoot);
     pruneProductionSourceMaps(packageRoot);
     pruneNativeBuildIntermediates(packageRoot);
@@ -260,16 +263,26 @@ export function buildProductionPackage(options = {}) {
       join(packageRoot, productionPackageVerifierName)
     );
 
-    const executableFiles = collectExecutableFiles(packageRoot);
+    const executableFiles = [
+      ...new Set([
+        ...collectExecutableFiles(packageRoot),
+        packagedRuntime.bundle.path
+      ])
+    ].sort();
     normalizePackageModes(packageRoot, new Set(executableFiles));
     const command = collectHostDeckCommand(packageRoot, packageVersion);
+    const brokerHost = collectHostDeckProcessHost(
+      packageRoot,
+      packageVersion,
+      "dist/broker-host.js"
+    );
     const serviceHost = collectHostDeckServiceHost(packageRoot, packageVersion);
     const web = verifyProductionWebAssets(join(packageRoot, "web"), {
       browserRoutes: productionWebBrowserRoutes,
       packageVersion,
       viteVersion: productionWebViteVersion
     });
-    const artifact = Object.freeze({ kind: "runtime_tree" });
+    const artifact = Object.freeze({ kind: "native_tree" });
     const target = Object.freeze({
       architecture: runtime.architecture,
       id: "linux-x64",
@@ -299,9 +312,10 @@ export function buildProductionPackage(options = {}) {
       nativeBuildPolicy: "canonical-runtime-binary-only",
       artifact,
       target,
-      runtime,
+      runtime: packagedRuntime,
       codex,
       command,
+      brokerHost,
       serviceHost,
       source: {
         commit: sourceCommit,
@@ -355,8 +369,53 @@ export function productionBuildIdentity(candidate) {
   return Object.freeze(identity);
 }
 
-function collectHostDeckServiceHost(root, packageVersion) {
-  const path = "dist/service-host.js";
+function installBundledLinuxRuntime(root, buildRuntime) {
+  const nodeSource = realpathSync.native(process.execPath);
+  const nodeStats = lstatSync(nodeSource);
+  const runtimeRoot = dirname(dirname(nodeSource));
+  const licenseSource = realpathSync.native(join(runtimeRoot, "LICENSE"));
+  const licenseStats = lstatSync(licenseSource);
+  if (
+    nodeSource !== process.execPath ||
+    !nodeStats.isFile() ||
+    nodeStats.isSymbolicLink() ||
+    (nodeStats.mode & 0o111) === 0 ||
+    !licenseStats.isFile() ||
+    licenseStats.isSymbolicLink() ||
+    licenseStats.size < 1 ||
+    licenseStats.size > 2_097_152
+  ) {
+    throw new Error("Reviewed Node runtime bundle inputs are invalid.");
+  }
+
+  const runtimeBin = join(root, "runtime", "bin");
+  const launcher = join(root, ...productionLinuxLauncherPath.split("/"));
+  mkdirSync(runtimeBin, { mode: 0o755, recursive: true });
+  mkdirSync(dirname(launcher), { mode: 0o755, recursive: true });
+  const nodeTarget = join(runtimeBin, "node");
+  copyFileSync(nodeSource, nodeTarget);
+  copyFileSync(licenseSource, join(root, "runtime", "LICENSE"));
+  writeFileSync(launcher, productionLinuxLauncherContent, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o755
+  });
+  const nodeContent = readFileSync(nodeTarget);
+  return Object.freeze({
+    ...buildRuntime,
+    bundle: Object.freeze({
+      path: "runtime/bin/node",
+      sha256: sha256Hex(nodeContent),
+      size: nodeContent.length
+    }),
+    delivery: "bundled"
+  });
+}
+
+function collectHostDeckProcessHost(root, packageVersion, path) {
+  if (path !== "dist/broker-host.js" && path !== "dist/service-host.js") {
+    throw new TypeError("Production process-host path is invalid.");
+  }
   const absolutePath = resolve(root, path);
   const stats = lstatSync(absolutePath);
   const content = readFileSync(absolutePath);
@@ -370,7 +429,7 @@ function collectHostDeckServiceHost(root, packageVersion) {
       content.toString("utf8")
     )
   ) {
-    throw new Error("Production service-host module is invalid.");
+    throw new Error(`Production ${path} module is invalid.`);
   }
   return Object.freeze({
     lifecycle: "systemd_user",
@@ -382,6 +441,14 @@ function collectHostDeckServiceHost(root, packageVersion) {
   });
 }
 
+function collectHostDeckServiceHost(root, packageVersion) {
+  return collectHostDeckProcessHost(
+    root,
+    packageVersion,
+    "dist/service-host.js"
+  );
+}
+
 function collectHostDeckCommand(root, packageVersion) {
   const manifest = readJson(join(root, "package.json"));
   if (
@@ -391,11 +458,11 @@ function collectHostDeckCommand(root, packageVersion) {
     typeof manifest.bin !== "object" ||
     Array.isArray(manifest.bin) ||
     Object.keys(manifest.bin).length !== 1 ||
-    manifest.bin.codexdeck !== "./dist/shell.js"
+    manifest.bin.codexdeck !== `./${productionLinuxLauncherPath}`
   ) {
     throw new Error("Production CLI command metadata is invalid.");
   }
-  const path = "dist/shell.js";
+  const path = productionLinuxLauncherPath;
   const absolutePath = resolve(root, path);
   const stats = lstatSync(absolutePath);
   const content = readFileSync(absolutePath);
@@ -404,17 +471,17 @@ function collectHostDeckCommand(root, packageVersion) {
     stats.isSymbolicLink() ||
     stats.nlink !== 1 ||
     (stats.mode & 0o777) !== 0o755 ||
-    !content.subarray(0, 20).equals(Buffer.from("#!/usr/bin/env node\n"))
+    content.toString("utf8") !== productionLinuxLauncherContent
   ) {
     throw new Error("Production CLI command target is invalid.");
   }
   return Object.freeze({
-    kind: "node_script",
+    kind: "posix_launcher",
     name: "codexdeck",
     package: "@hostdeck/cli",
     path,
     sha256: sha256Hex(content),
-    shebang: "#!/usr/bin/env node",
+    shebang: "#!/bin/sh",
     size: content.length,
     version: packageVersion
   });

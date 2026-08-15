@@ -223,7 +223,7 @@ export function loadRuntimePackageVersion(packageRoot: string): string {
       typeof bin !== "object" ||
       Array.isArray(bin) ||
       Object.keys(bin).length !== 1 ||
-      (bin as Record<string, unknown>).codexdeck !== "./dist/shell.js"
+      (bin as Record<string, unknown>).codexdeck !== "./bin/codexdeck"
     ) {
       throw new TypeError();
     }

@@ -30,6 +30,7 @@ export type HostDeckSystemdManagerStage =
   | "restart_hostdeck"
   | "show_codex"
   | "show_hostdeck"
+  | "start_codex"
   | "start_hostdeck"
   | "stop_codex"
   | "stop_hostdeck";
@@ -52,6 +53,7 @@ export interface HostDeckSystemdUserManager {
   readonly show: (
     unit: HostDeckSystemdUnitName
   ) => Promise<HostDeckSystemdUnitState>;
+  readonly startCodex: () => Promise<void>;
   readonly startHostDeck: () => Promise<void>;
   readonly stopCodex: () => Promise<void>;
   readonly stopHostDeck: () => Promise<void>;
@@ -205,6 +207,13 @@ export function createHostDeckSystemdUserManager(
       await execute(
         "start_hostdeck",
         ["start", hostDeckSystemdUnitName],
+        lifecycleCommandTimeoutMs
+      );
+    },
+    async startCodex() {
+      await execute(
+        "start_codex",
+        ["start", hostDeckCodexSystemdUnitName],
         lifecycleCommandTimeoutMs
       );
     },

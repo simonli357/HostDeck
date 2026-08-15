@@ -196,7 +196,7 @@ function fixtureLayout(label: string): FixtureLayout {
       version: "0.0.0",
       private: true,
       type: "module",
-      bin: { codexdeck: "./dist/shell.js" }
+      bin: { codexdeck: "./bin/codexdeck" }
     })}\n`,
     { mode: 0o600 }
   );

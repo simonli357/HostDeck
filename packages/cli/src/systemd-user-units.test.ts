@@ -49,8 +49,9 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
     expect(first).toEqual(second);
     expect(first).not.toBe(second);
     expect(first).toEqual({
+      broker_host_path: layout.brokerHostPath,
       package_version: version,
-      schema_version: 1,
+      schema_version: 2,
       service_host_path: layout.serviceHostPath,
       units: [
         {
@@ -92,12 +93,16 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
     );
     const bundle = generateHostDeckSystemdUserUnitsForInstall({
       ...layout.input,
+      node_bin: join(finalPackageRoot, "runtime", "bin", "node"),
       package_root: finalPackageRoot,
       verification_package_root: layout.packageRoot
     });
 
     expect(bundle.service_host_path).toBe(
       join(finalPackageRoot, "dist", "service-host.js")
+    );
+    expect(bundle.broker_host_path).toBe(
+      join(finalPackageRoot, "dist", "broker-host.js")
     );
     expect(bundle.units[1].content).toContain(finalPackageRoot);
     expect(bundle.units[1].content).not.toContain(layout.packageRoot);
@@ -107,6 +112,7 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
     const layout = fixture("install-read-only", "present");
     const distRoot = dirname(layout.serviceHostPath);
     chmodSync(layout.manifestPath, 0o444);
+    chmodSync(layout.brokerHostPath, 0o444);
     chmodSync(layout.serviceHostPath, 0o444);
     chmodSync(distRoot, 0o555);
     chmodSync(layout.packageRoot, 0o555);
@@ -167,9 +173,7 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
     expect(sectionNames(hostDeck)).toEqual(["Unit", "Service", "Install"]);
     expect(matches(codex, /^ExecStart=/gmu)).toHaveLength(1);
     expect(matches(hostDeck, /^ExecStart=/gmu)).toHaveLength(1);
-    expect(matches(combined, /^RuntimeDirectory=hostdeck$/gmu)).toHaveLength(1);
-    expect(codex).toContain("RuntimeDirectoryMode=0700\n");
-    expect(hostDeck).not.toContain("RuntimeDirectory=");
+    expect(combined).not.toContain("RuntimeDirectory=");
     expect(hostDeck).toContain("Wants=hostdeck-codex.service\n");
     expect(hostDeck).toContain("After=hostdeck-codex.service\n");
     expect(codex).not.toContain("hostdeck.service");
@@ -182,18 +186,20 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
       "Type=exec",
       "WorkingDirectory=%h",
       "UMask=0077",
-      "Restart=always",
       "RestartSec=2s",
       "TimeoutStartSec=90s",
       "TimeoutStopSec=30s",
-      "KillMode=control-group",
       "StandardOutput=journal",
       "StandardError=journal"
     ]) {
-      expect(matches(combined, new RegExp(`^${directive}$`, "gmu"))).toHaveLength(
-        2
-      );
+      expect(
+        matches(combined, new RegExp(`^${directive}$`, "gmu"))
+      ).toHaveLength(2);
     }
+    expect(codex).toContain("Restart=on-failure\n");
+    expect(codex).toContain("KillMode=mixed\n");
+    expect(hostDeck).toContain("Restart=always\n");
+    expect(hostDeck).toContain("KillMode=control-group\n");
     expect(combined).not.toMatch(
       /^(?:Requires|Requisite|BindsTo|PartOf|Upholds|PropagatesReloadTo|ReloadPropagatedFrom|StopWhenUnneeded|User|Group|CapabilityBoundingSet|ListenStream)=/gmu
     );
@@ -227,9 +233,7 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
     });
 
     expect(bundle.units[0].content).toContain("%%percent");
-    expect(bundle.units[1].content).toContain("$$dollar");
-    expect(bundle.units[1].content).toContain('\\"quote\\"');
-    expect(bundle.units[1].content).toContain("back\\\\slash");
+    expect(bundle.units[1].content).toContain("$$/dist/service-host.js");
     expect(bundle.units[0].content).toContain("EnvironmentFile=-/tmp/");
     expect(bundle.units[0].content).toContain("\\x20");
     expect(bundle.units[0].content).toContain("\\x22");
@@ -518,6 +522,7 @@ describe("IFC-V1-055 systemd user-unit generator", () => {
 type EnvironmentState = "missing" | "none" | "present";
 
 interface FixtureLayout {
+  readonly brokerHostPath: string;
   readonly codexBin: string;
   readonly environmentFile: string;
   readonly input: GenerateHostDeckSystemdUserUnitsInput;
@@ -544,22 +549,35 @@ function fixture(
     ? join(root, "executable space %percent $dollar")
     : base;
   if (specialPaths) mkdirSync(executableBase, { mode: 0o700 });
-  const nodeBin = join(executableBase, specialPaths ? "node bin % $" : "node");
   const codexBin = join(executableBase, specialPaths ? "codex bin % $" : "codex");
-  writeExecutable(nodeBin);
   writeExecutable(codexBin);
 
-  const packageRoot = join(base, specialPaths ? 'package "root" % $ \\' : "package");
+  const packageRoot = specialPaths
+    ? join(root, "package root % $")
+    : join(base, "package");
   const distRoot = join(packageRoot, "dist");
+  const runtimeBinRoot = join(packageRoot, "runtime", "bin");
   mkdirSync(distRoot, { mode: 0o755, recursive: true });
+  mkdirSync(runtimeBinRoot, { mode: 0o755, recursive: true });
   chmodSync(packageRoot, 0o755);
   chmodSync(distRoot, 0o755);
+  const nodeBin = join(runtimeBinRoot, "node");
+  writeExecutable(nodeBin, 0o755);
+  const brokerHostPath = join(distRoot, "broker-host.js");
+  const brokerHostContent = "export const brokerHostFixture = true;\n";
+  writeFileSync(brokerHostPath, brokerHostContent, { mode: 0o644 });
+  chmodSync(brokerHostPath, 0o644);
   const serviceHostPath = join(distRoot, "service-host.js");
   const serviceHostContent = "export const serviceHostFixture = true;\n";
   writeFileSync(serviceHostPath, serviceHostContent, { mode: 0o644 });
   chmodSync(serviceHostPath, 0o644);
   const manifestPath = join(packageRoot, "hostdeck-package.json");
-  writeManifest(manifestPath, serviceHostContent);
+  writeManifest(
+    manifestPath,
+    brokerHostContent,
+    serviceHostContent,
+    readFileSync(nodeBin)
+  );
 
   const environmentRoot = join(
     base,
@@ -574,6 +592,7 @@ function fixture(
   }
 
   return Object.freeze({
+    brokerHostPath,
     codexBin,
     environmentFile,
     input: Object.freeze({
@@ -591,26 +610,43 @@ function fixture(
   });
 }
 
-function writeExecutable(path: string): void {
-  writeFileSync(path, "#!/bin/sh\nexit 0\n", { mode: 0o700 });
-  chmodSync(path, 0o700);
+function writeExecutable(path: string, mode = 0o700): void {
+  writeFileSync(path, "#!/bin/sh\nexit 0\n", { mode });
+  chmodSync(path, mode);
 }
 
-function writeManifest(path: string, serviceHostContent: string): void {
+function writeManifest(
+  path: string,
+  brokerHostContent: string,
+  serviceHostContent: string,
+  nodeContent: Buffer
+): void {
   rewriteManifestRaw(
     { manifestPath: path },
     `${JSON.stringify(
       {
-        artifact: { kind: "runtime_tree" },
+        artifact: { kind: "native_tree" },
+        brokerHost: {
+          lifecycle: "systemd_user",
+          package: "@hostdeck/cli",
+          path: "dist/broker-host.js",
+          sha256: sha256(brokerHostContent),
+          size: Buffer.byteLength(brokerHostContent),
+          version
+        },
         name: "hostdeck-production-package",
         packageVersion: version,
         runtime: {
           architecture: "x64",
-          bundle: null,
-          delivery: "host_provided",
+          bundle: {
+            path: "runtime/bin/node",
+            sha256: sha256(nodeContent),
+            size: nodeContent.length
+          },
+          delivery: "bundled",
           platform: "linux"
         },
-        schemaVersion: 5,
+        schemaVersion: 6,
         serviceHost: {
           lifecycle: "systemd_user",
           package: "@hostdeck/cli",
@@ -671,7 +707,7 @@ function expectedCodexUnit(layout: FixtureLayout): string {
   return [
     `# Generated by HostDeck ${version}. Do not edit.`,
     "[Unit]",
-    `Description=HostDeck Codex app-server (${version})`,
+    `Description=HostDeck shared Codex broker (${version})`,
     "StartLimitIntervalSec=60s",
     "StartLimitBurst=5",
     "",
@@ -679,11 +715,11 @@ function expectedCodexUnit(layout: FixtureLayout): string {
     "Type=exec",
     "WorkingDirectory=%h",
     `EnvironmentFile=-${encodeFilePath(layout.environmentFile)}`,
+    `Environment=${encodeWord(`HOSTDECK_CODEX_BIN=${layout.codexBin}`, false)}`,
     "UMask=0077",
-    "RuntimeDirectory=hostdeck",
-    "RuntimeDirectoryMode=0700",
-    `ExecStart=${encodeWord(layout.codexBin, false)} app-server --listen unix://%t/hostdeck/app-server.sock`,
-    ...expectedServicePolicy()
+    `ExecStart=${encodeWord(layout.nodeBin, false)} ${encodeWord(layout.brokerHostPath, true)}`,
+    `ExecStartPost=${encodeWord(layout.nodeBin, false)} ${encodeWord(layout.brokerHostPath, true)} --check-ready`,
+    ...expectedBrokerPolicy()
   ].join("\n").concat("\n");
 }
 
@@ -718,6 +754,18 @@ function expectedServicePolicy(): readonly string[] {
     "TimeoutStartSec=90s",
     "TimeoutStopSec=30s",
     "KillMode=control-group",
+    "StandardOutput=journal",
+    "StandardError=journal"
+  ];
+}
+
+function expectedBrokerPolicy(): readonly string[] {
+  return [
+    "Restart=on-failure",
+    "RestartSec=2s",
+    "TimeoutStartSec=90s",
+    "TimeoutStopSec=30s",
+    "KillMode=mixed",
     "StandardOutput=journal",
     "StandardError=journal"
   ];

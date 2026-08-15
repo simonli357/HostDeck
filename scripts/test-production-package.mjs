@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { buildProductionPackage } from "./build-production-package.mjs";
 import {
   computeManifestSha256,
+  productionLinuxLauncherContent,
   productionPackageManifestSchemaVersion,
   verifyProductionPackage
 } from "./verify-production-package.mjs";
@@ -46,7 +47,7 @@ try {
     "utf8"
   );
   assert.equal(firstManifest.schemaVersion, productionPackageManifestSchemaVersion);
-  assert.deepEqual(firstManifest.artifact, { kind: "runtime_tree" });
+  assert.deepEqual(firstManifest.artifact, { kind: "native_tree" });
   assert.deepEqual(firstManifest.target, {
     architecture: "x64",
     id: "linux-x64",
@@ -54,8 +55,18 @@ try {
     platform: "linux",
     publicPackageKind: "linux_archive"
   });
-  assert.equal(firstManifest.runtime.delivery, "host_provided");
-  assert.equal(firstManifest.runtime.bundle, null);
+  assert.equal(firstManifest.runtime.delivery, "bundled");
+  assert.equal(firstManifest.runtime.bundle.path, "runtime/bin/node");
+  assert.ok(firstManifest.runtime.bundle.size > 1_000_000);
+  assert.match(firstManifest.runtime.bundle.sha256, /^[a-f0-9]{64}$/u);
+  assert.equal(lstatSync(join(outputRoot, "runtime", "bin", "node")).mode & 0o777, 0o755);
+  assert.ok(lstatSync(join(outputRoot, "runtime", "LICENSE")).size > 0);
+  assert.equal(
+    readFileSync(join(outputRoot, firstManifest.command.path), "utf8"),
+    productionLinuxLauncherContent
+  );
+  assert.equal(firstManifest.brokerHost.path, "dist/broker-host.js");
+  assert.equal(firstManifest.serviceHost.path, "dist/service-host.js");
   assert.equal(firstManifest.source.commit, first.sourceCommit);
   assert.match(firstManifest.source.commit, /^[a-f0-9]{40}$/u);
   assert.deepEqual(
@@ -132,7 +143,7 @@ try {
     [smokeScript, relocated, "--read-only"],
     unrelatedCwd
   );
-  runServiceHostImport(relocated, relocatedManifest, unrelatedCwd);
+  runProcessHostImports(relocated, relocatedManifest, unrelatedCwd);
   runExecutableInvocationMatrix(relocated, relocatedManifest, unrelatedCwd);
   verifyProductionPackage(relocated);
 
@@ -185,7 +196,8 @@ try {
     () => {
       const path = join(relocated, "hostdeck-package.json");
       return mutateJson(path, (value) => {
-        value.runtime.delivery = "bundled";
+        value.runtime.delivery = "host_provided";
+        value.runtime.bundle = null;
         value.manifestSha256 = computeManifestSha256(value);
       });
     },
@@ -462,6 +474,73 @@ try {
   runMutationProbe(
     relocated,
     unrelatedCwd,
+    "missing bundled Node runtime",
+    () => temporarilyRename(join(relocated, relocatedManifest.runtime.bundle.path)),
+    /bundled runtime executable is missing|file inventory/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "corrupt bundled Node runtime",
+    () =>
+      mutateFile(join(relocated, relocatedManifest.runtime.bundle.path), (content) => {
+        const changed = Buffer.from(content);
+        changed[0] ^= 0xff;
+        return changed;
+      }),
+    /bundled runtime executable integrity|owned output identity|package content/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "non-executable bundled Node runtime",
+    () =>
+      mutateMode(
+        join(relocated, relocatedManifest.runtime.bundle.path),
+        0o644,
+        0o755
+      ),
+    /bundled runtime executable is missing|file mode is invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "executable broker-host module",
+    () => {
+      const path = join(relocated, relocatedManifest.brokerHost.path);
+      chmodSync(path, 0o755);
+      return () => chmodSync(path, 0o644);
+    },
+    /broker-host module is missing or executable|file mode is invalid/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "modified broker-host module",
+    () => {
+      const path = join(relocated, relocatedManifest.brokerHost.path);
+      const original = readFileSync(path);
+      appendFileSync(path, "\n// broker-host drift\n");
+      return () => writeFileSync(path, original);
+    },
+    /broker-host module identity|owned output identity/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
+    "escaping broker-host descriptor",
+    () => {
+      const path = join(relocated, "hostdeck-package.json");
+      return mutateJson(path, (value) => {
+        value.brokerHost.path = "../broker-host.js";
+        value.manifestSha256 = computeManifestSha256(value);
+      });
+    },
+    /broker-host descriptor is inconsistent|broker-host path/iu
+  );
+  runMutationProbe(
+    relocated,
+    unrelatedCwd,
     "escaping CLI command descriptor",
     () => {
       const path = join(relocated, "hostdeck-package.json");
@@ -595,35 +674,65 @@ function runMutationProbe(root, cwd, label, mutate, expected) {
   verifyProductionPackage(root);
 }
 
-function runServiceHostImport(root, manifest, cwd) {
+function runProcessHostImports(root, manifest, cwd) {
   const script = `
     import { pathToFileURL } from "node:url";
-    await import(pathToFileURL(process.argv[1]).href);
-    console.log("service-host import remained inert");
+    for (const modulePath of process.argv.slice(1)) {
+      await import(pathToFileURL(modulePath).href);
+    }
+    console.log("process-host imports remained inert");
   `;
-  const result = runChild(
-    "service-host inert import",
+  const result = runCommand(
+    "process-host inert imports",
+    join(root, manifest.runtime.bundle.path),
     [
       "--input-type=module",
       "--eval",
       script,
+      join(root, manifest.brokerHost.path),
       join(root, manifest.serviceHost.path)
     ],
-    cwd
+    cwd,
+    false,
+    { PATH: "" }
   );
-  assert.equal(result.stdout, "service-host import remained inert\n");
+  assert.equal(result.stdout, "process-host imports remained inert\n");
   assert.equal(result.stderr, "");
 }
 
 function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
   const command = join(root, manifest.command.path);
   assertHelpResult(
-    runChild("Node-path command help", [command, "--help"], unrelatedCwd)
+    runCommand(
+      "bundled-runtime command help",
+      command,
+      ["--help"],
+      unrelatedCwd,
+      false,
+      { PATH: "" }
+    )
   );
   assertVersionResult(
-    runCommand("direct executable version", command, ["version"], unrelatedCwd),
+    runCommand(
+      "direct executable version",
+      command,
+      ["version"],
+      unrelatedCwd,
+      false,
+      { PATH: "" }
+    ),
     manifest.packageVersion
   );
+  const bundledNodeVersion = runCommand(
+    "bundled Node version",
+    join(root, manifest.runtime.bundle.path),
+    ["--version"],
+    unrelatedCwd,
+    false,
+    { PATH: "" }
+  );
+  assert.equal(bundledNodeVersion.stdout, `v${manifest.runtime.node}\n`);
+  assert.equal(bundledNodeVersion.stderr, "");
   const canProbeUninstall = assertUninstallResult(
     runUncheckedCommand(
       "read-only relocated service uninstall",

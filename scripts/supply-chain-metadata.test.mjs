@@ -62,8 +62,8 @@ test("creates canonical checksum, license, CycloneDX, provenance, and index reco
   const licenses = JSON.parse(first["licenses.json"]);
   assert.equal(licenses.schemaVersion, 1);
   assert.deepEqual(licenses.approvedExpressions, supplyChainApprovedLicenseExpressions);
-  assert.equal(licenses.packages.length, 4);
-  assert.equal(licenses.packages.filter(({ native }) => native).length, 3);
+  assert.equal(licenses.packages.length, 5);
+  assert.equal(licenses.packages.filter(({ native }) => native).length, 4);
 
   const sbom = JSON.parse(first["hostdeck.cdx.json"]);
   assert.equal(sbom.bomFormat, "CycloneDX");
@@ -333,21 +333,19 @@ function fixtureSnapshot(target) {
     version
   }));
   const manifest = {
-    artifact: { kind: windows ? "native_tree" : "runtime_tree" },
+    artifact: { kind: "native_tree" },
     content: { bytes: 10, entryCount: 3, sha256: hash("package-tree") },
     manifestSha256: hash("package-manifest-identity"),
     nativeModules,
     packageVersion,
     runtime: {
       architecture: "x64",
-      bundle: windows
-        ? {
-            path: "runtime/node.exe",
-            sha256: hash("node-binary"),
-            size: 123
-          }
-        : null,
-      delivery: windows ? "bundled" : "host_provided",
+      bundle: {
+        path: windows ? "runtime/node.exe" : "runtime/bin/node",
+        sha256: hash("node-binary"),
+        size: 123
+      },
+      delivery: "bundled",
       node: "22.22.2",
       nodeAbi: "127",
       platform: windows ? "win32" : "linux",
@@ -360,7 +358,7 @@ function fixtureSnapshot(target) {
     },
     target: targetIdentity
   };
-  const graph = fixtureGraph(packageVersion, windows);
+  const graph = fixtureGraph(packageVersion, target);
   const evidence = {
     native_dependencies: nativePackages.map(([name, version]) => ({ name, version })),
     source: {
@@ -403,7 +401,7 @@ function fixtureSnapshot(target) {
   };
 }
 
-function fixtureGraph(packageVersion, bundledRuntime) {
+function fixtureGraph(packageVersion, target) {
   const dependencyByWorkspace = {
     "@hostdeck/core": [],
     "@hostdeck/contracts": ["@hostdeck/core", "zod"],
@@ -455,22 +453,21 @@ function fixtureGraph(packageVersion, bundledRuntime) {
     });
   }
   const entryRefs = [npmPurl("@hostdeck/cli", packageVersion), npmPurl("@hostdeck/web", packageVersion)];
-  if (bundledRuntime) {
-    const runtimeRef = "pkg:generic/node@22.22.2?arch=x64&os=win32";
-    nodes.push({
-      dependencies: [],
-      directWorkspaceParents: [],
-      kind: "runtime",
-      licenseExpression: "MIT",
-      name: "node",
-      native: true,
-      notice: { path: "runtime/LICENSE", sha256: hash("node-license") },
-      purl: runtimeRef,
-      ref: runtimeRef,
-      version: "22.22.2"
-    });
-    entryRefs.push(runtimeRef);
-  }
+  const runtimePlatform = target === "windows-x64" ? "win32" : "linux";
+  const runtimeRef = `pkg:generic/node@22.22.2?arch=x64&os=${runtimePlatform}`;
+  nodes.push({
+    dependencies: [],
+    directWorkspaceParents: [],
+    kind: "runtime",
+    licenseExpression: "MIT",
+    name: "node",
+    native: true,
+    notice: { path: "runtime/LICENSE", sha256: hash("node-license") },
+    purl: runtimeRef,
+    ref: runtimeRef,
+    version: "22.22.2"
+  });
+  entryRefs.push(runtimeRef);
   nodes.sort((left, right) => left.ref.localeCompare(right.ref));
   entryRefs.sort();
   return { entryRefs, nodes };

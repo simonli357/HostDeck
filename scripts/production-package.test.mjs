@@ -106,6 +106,7 @@ test("selects the exact non-web production closure", () => {
     sources.filter((path) =>
       [
         "packages/cli/src/device-revoke-client.ts",
+        "packages/cli/src/broker-host.ts",
         "packages/cli/src/broker-control.ts",
         "packages/cli/src/host-status-client.ts",
         "packages/cli/src/local-device-list.ts",
@@ -126,6 +127,7 @@ test("selects the exact non-web production closure", () => {
     ),
     [
       "packages/cli/src/broker-control.ts",
+      "packages/cli/src/broker-host.ts",
       "packages/cli/src/device-revoke-client.ts",
       "packages/cli/src/host-status-client.ts",
       "packages/cli/src/local-device-list.ts",
@@ -180,7 +182,7 @@ test("rewrites source manifests to exact runtime-only package metadata", () => {
     version: "0.0.0",
     private: true,
     type: "module",
-    bin: { codexdeck: "./dist/shell.js" },
+    bin: { codexdeck: "./bin/codexdeck" },
     types: "./dist/index.d.ts",
     exports: {
       ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }
@@ -285,11 +287,15 @@ test("compares repeat builds by package identity rather than output location", (
 
 test("binds native package identity to one coherent target and runtime", () => {
   const linuxIdentity = {
-    artifact: { kind: "runtime_tree" },
+    artifact: { kind: "native_tree" },
     runtime: {
       architecture: "x64",
-      bundle: null,
-      delivery: "host_provided",
+      bundle: {
+        path: "runtime/bin/node",
+        sha256: "f".repeat(64),
+        size: 32_000_000
+      },
+      delivery: "bundled",
       node: "22.22.2",
       nodeAbi: "127",
       platform: "linux",
@@ -337,7 +343,7 @@ test("binds native package identity to one coherent target and runtime", () => {
     }
   };
 
-  assert.equal(productionPackageManifestSchemaVersion, 5);
+  assert.equal(productionPackageManifestSchemaVersion, 6);
   assert.deepEqual(validateNativePackageIdentityContract(linuxIdentity), linuxIdentity);
   assert.deepEqual(validateNativePackageIdentityContract(windowsIdentity), windowsIdentity);
   assert.equal(Object.isFrozen(validateNativePackageIdentityContract(windowsIdentity)), true);
@@ -354,8 +360,9 @@ test("binds native package identity to one coherent target and runtime", () => {
     ["runtime version drift", windowsIdentity, (value) => { value.runtime.node = "22.22.1"; }, /runtime node is unsupported/u],
     ["runtime ABI drift", windowsIdentity, (value) => { value.runtime.nodeAbi = "126"; }, /runtime nodeAbi is unsupported/u],
     ["runtime manager drift", windowsIdentity, (value) => { value.runtime.pnpm = "10.29.1"; }, /runtime pnpm is unsupported/u],
+    ["retired host runtime tree", linuxIdentity, (value) => { value.artifact.kind = "runtime_tree"; }, /artifact kind is unsupported/u],
     ["delivery drift", windowsIdentity, (value) => { value.runtime.delivery = "host_provided"; value.runtime.bundle = null; }, /runtime delivery is inconsistent/u],
-    ["host runtime bundle", linuxIdentity, (value) => { value.runtime.bundle = { path: "runtime/bin/node", sha256: "f".repeat(64), size: 1 }; }, /must not declare a bundled executable/u],
+    ["missing bundled runtime", linuxIdentity, (value) => { value.runtime.bundle = null; }, /Bundled runtime executable must be an object/u],
     ["bundled runtime path drift", windowsIdentity, (value) => { value.runtime.bundle.path = "runtime/bin/node"; }, /path does not match the selected target/u],
     ["bundled runtime hash drift", windowsIdentity, (value) => { value.runtime.bundle.sha256 = "invalid"; }, /SHA-256 is invalid/u],
     ["bundled runtime size drift", windowsIdentity, (value) => { value.runtime.bundle.size = 0; }, /size is invalid/u],

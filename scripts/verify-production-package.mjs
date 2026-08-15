@@ -10,9 +10,19 @@ import { basename, dirname, extname, isAbsolute, join, posix, relative, resolve,
 import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
-export const productionPackageManifestSchemaVersion = 5;
-export const productionPackageSourceCount = 663;
+export const productionPackageManifestSchemaVersion = 6;
+export const productionPackageSourceCount = 664;
 export const productionPackageVerifierName = "verify.mjs";
+export const productionLinuxLauncherPath = "bin/codexdeck";
+export const productionLinuxLauncherContent = `#!/bin/sh
+set -eu
+self=$(/usr/bin/readlink -f -- "$0")
+case "$self" in
+  */bin/codexdeck) root=\${self%/bin/codexdeck} ;;
+  *) exit 70 ;;
+esac
+exec "$root/runtime/bin/node" "$root/dist/shell.js" "$@"
+`;
 export const productionWebManifestName = "hostdeck-web.json";
 export const productionWebManifestSchemaVersion = 1;
 export const productionWebViteVersion = "8.1.4";
@@ -64,10 +74,6 @@ const nativeTargetProfiles = Object.freeze({
   })
 });
 const nativeArtifactProfiles = Object.freeze({
-  runtime_tree: Object.freeze({
-    delivery: "host_provided",
-    targets: Object.freeze(["linux-x64"])
-  }),
   native_tree: Object.freeze({
     delivery: "bundled",
     targets: Object.freeze(["linux-x64", "windows-x64"])
@@ -688,7 +694,20 @@ export function verifyProductionPackage(root, options = {}) {
   verifyBundledRuntime(packageRoot, manifest.runtime, manifest.executableFiles);
   verifyPackageManifests(packageRoot, manifest);
   verifyCommand(packageRoot, manifest.command, manifest.executableFiles);
-  verifyServiceHost(packageRoot, manifest.serviceHost, manifest.executableFiles);
+  verifyProcessHost(
+    packageRoot,
+    manifest.brokerHost,
+    manifest.executableFiles,
+    "Broker-host",
+    "dist/broker-host.js"
+  );
+  verifyProcessHost(
+    packageRoot,
+    manifest.serviceHost,
+    manifest.executableFiles,
+    "Service-host",
+    "dist/service-host.js"
+  );
   const web = verifyProductionWebAssets(
     resolveContained(packageRoot, manifest.web.root, "Production web root"),
     {
@@ -723,12 +742,13 @@ function validateManifest(manifest) {
   assertExactKeys(
     value,
     [
+      "artifact",
+      "brokerHost",
       "codex",
       "command",
       "content",
       "deferrals",
       "executableFiles",
-      "artifact",
       "manifestSha256",
       "name",
       "nativeBuildPolicy",
@@ -798,7 +818,20 @@ function validateManifest(manifest) {
   }
 
   validateCommand(value.command, value.packageVersion, value.target);
-  validateServiceHost(value.serviceHost, value.packageVersion, value.target);
+  validateProcessHost(
+    value.brokerHost,
+    value.packageVersion,
+    value.target,
+    "Broker-host",
+    "dist/broker-host.js"
+  );
+  validateProcessHost(
+    value.serviceHost,
+    value.packageVersion,
+    value.target,
+    "Service-host",
+    "dist/service-host.js"
+  );
   validateWebDescriptor(value.web, value.packageVersion);
 
   if (!Array.isArray(value.deferrals) || !sameArray(value.deferrals, expectedDeferrals)) {
@@ -1211,11 +1244,11 @@ function validateCommand(command, packageVersion, target) {
     "CLI command descriptor"
   );
   if (
-    value.kind !== "node_script" ||
+    value.kind !== "posix_launcher" ||
     value.name !== "codexdeck" ||
     value.package !== "@hostdeck/cli" ||
-    value.path !== "dist/shell.js" ||
-    value.shebang !== "#!/usr/bin/env node" ||
+    value.path !== productionLinuxLauncherPath ||
+    value.shebang !== "#!/bin/sh" ||
     value.version !== packageVersion ||
     target.id !== "linux-x64" ||
     !Number.isSafeInteger(value.size) ||
@@ -1227,25 +1260,25 @@ function validateCommand(command, packageVersion, target) {
   parseSha256(value.sha256, "CLI command SHA-256");
 }
 
-function validateServiceHost(serviceHost, packageVersion, target) {
-  const value = assertRecord(serviceHost, "Service-host descriptor");
+function validateProcessHost(processHost, packageVersion, target, label, expectedPath) {
+  const value = assertRecord(processHost, `${label} descriptor`);
   assertExactKeys(
     value,
     ["lifecycle", "package", "path", "sha256", "size", "version"],
-    "Service-host descriptor"
+    `${label} descriptor`
   );
   if (
     value.lifecycle !== target.lifecycle ||
     value.package !== "@hostdeck/cli" ||
-    value.path !== "dist/service-host.js" ||
+    value.path !== expectedPath ||
     value.version !== packageVersion ||
     !Number.isSafeInteger(value.size) ||
     value.size < 1
   ) {
-    throw new TypeError("Service-host descriptor is inconsistent.");
+    throw new TypeError(`${label} descriptor is inconsistent.`);
   }
-  parseRelativePath(value.path, "Service-host path", false);
-  parseSha256(value.sha256, "Service-host SHA-256");
+  parseRelativePath(value.path, `${label} path`, false);
+  parseSha256(value.sha256, `${label} SHA-256`);
 }
 
 function validateExecutables(executables, commandPath, runtime) {
@@ -1356,7 +1389,8 @@ function verifyPackageManifests(root, manifest) {
       stableJson(runtimeManifest.exports) !==
         stableJson({ ".": { import: "./dist/index.js", types: "./dist/index.d.ts" } }) ||
       (descriptor.name === "@hostdeck/cli"
-        ? stableJson(runtimeManifest.bin) !== stableJson({ codexdeck: "./dist/shell.js" })
+        ? stableJson(runtimeManifest.bin) !==
+          stableJson({ codexdeck: `./${productionLinuxLauncherPath}` })
         : runtimeManifest.bin !== undefined)
     ) {
       throw new TypeError(`${descriptor.name} runtime manifest is inconsistent.`);
@@ -1382,41 +1416,47 @@ function verifyCommand(root, command, executableFiles) {
   }
   assertFileMode(stats.mode, command.path, true);
   const content = readFileSync(path);
+  const shebang = Buffer.from(`${command.shebang}\n`);
   if (
     content.length !== command.size ||
     sha256Hex(content) !== command.sha256 ||
-    !content.subarray(0, 20).equals(Buffer.from(`${command.shebang}\n`))
+    !content.subarray(0, shebang.length).equals(shebang)
   ) {
     throw new TypeError("CLI command target identity is invalid.");
   }
   const text = content.toString("utf8");
-  if (/\b(?:ts-node|tsx)\b|from\s+["'][^"']+\.ts["']/u.test(text)) {
-    throw new TypeError("CLI command target depends on a source runtime loader.");
+  if (text !== productionLinuxLauncherContent) {
+    throw new TypeError(
+      "CLI command target does not match the bundled-runtime launcher contract."
+    );
   }
 }
 
-function verifyServiceHost(root, serviceHost, executableFiles) {
-  const path = resolveContained(root, serviceHost.path, "Service-host path");
+function verifyProcessHost(root, processHost, executableFiles, label, expectedPath) {
+  if (processHost.path !== expectedPath) {
+    throw new TypeError(`${label} path is inconsistent.`);
+  }
+  const path = resolveContained(root, processHost.path, `${label} path`);
   const stats = lstatOrNull(path);
   if (
     stats === null ||
     !stats.isFile() ||
     stats.nlink !== 1 ||
-    executableFiles.includes(serviceHost.path)
+    executableFiles.includes(processHost.path)
   ) {
-    throw new TypeError("Service-host module is missing or executable.");
+    throw new TypeError(`${label} module is missing or executable.`);
   }
-  assertFileMode(stats.mode, serviceHost.path, false);
+  assertFileMode(stats.mode, processHost.path, false);
   const content = readFileSync(path);
   if (
-    content.length !== serviceHost.size ||
-    sha256Hex(content) !== serviceHost.sha256 ||
+    content.length !== processHost.size ||
+    sha256Hex(content) !== processHost.sha256 ||
     content.subarray(0, 2).equals(Buffer.from("#!")) ||
     /\b(?:ts-node|tsx)\b|from\s+["'][^"']+\.ts["']/u.test(
       content.toString("utf8")
     )
   ) {
-    throw new TypeError("Service-host module identity is invalid.");
+    throw new TypeError(`${label} module identity is invalid.`);
   }
 }
 

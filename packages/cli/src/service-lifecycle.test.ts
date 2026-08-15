@@ -119,7 +119,7 @@ describe("IFC-V1-056 service lifecycle owner", () => {
     }
   });
 
-  it("installs without start, stays idempotent, then starts, restarts HostDeck only, reports, and stops both", async () => {
+  it("installs without start, starts both, and stops HostDeck without stopping Codex", async () => {
     const fixture = createFixture();
     const source = createSourcePackage(fixture, "1.0.0", "1");
     const lifecycle = createLifecycle(fixture, source);
@@ -152,7 +152,7 @@ describe("IFC-V1-056 service lifecycle owner", () => {
     const selector = readlinkSync(layout.current_link);
     const releaseRoot = join(layout.data_root, selector);
     expect(readlinkSync(layout.command_path)).toBe(
-      join(layout.current_link, "package", "dist", "shell.js")
+      join(layout.current_link, "package", "bin", "codexdeck")
     );
     expect(readlinkSync(layout.manifest_link)).toBe("current/install.json");
     expect(readlinkSync(layout.enablement_link)).toBe(
@@ -214,12 +214,12 @@ describe("IFC-V1-056 service lifecycle owner", () => {
     const stopped = await lifecycle.execute("stop");
     expect(stopped.api_state).toBe("not_probed");
     expect(stopped.units.hostdeck.main_pid).toBe(0);
-    expect(stopped.units.codex.main_pid).toBe(0);
+    expect(stopped.units.codex.main_pid).toBe(codexPid);
     const repeatedStop = await lifecycle.execute("stop");
     expect(repeatedStop.changed).toBe(false);
     expect(
       fixture.manager.calls.filter((call) => call.startsWith("stop_"))
-    ).toEqual(["stop_hostdeck", "stop_codex"]);
+    ).toEqual(["stop_hostdeck"]);
   });
 
   it("upgrades inactive and active installs, preserves Codex, retains releases, and rolls back failed readiness", async () => {
@@ -309,7 +309,7 @@ describe("IFC-V1-056 service lifecycle owner", () => {
     ).toEqual([]);
   });
 
-  it("stops transient and failed units instead of misclassifying them as stopped", async () => {
+  it("stops a transient HostDeck unit without mutating failed broker state", async () => {
     const fixture = createFixture();
     const source = createSourcePackage(fixture, "1.0.0", "c");
     const lifecycle = createLifecycle(fixture, source);
@@ -335,15 +335,15 @@ describe("IFC-V1-056 service lifecycle owner", () => {
       main_pid: 0
     });
     expect(stopped.units.codex).toMatchObject({
-      active_state: "inactive",
+      active_state: "failed",
       main_pid: 0
     });
     expect(
       fixture.manager.calls.filter((call) => call.startsWith("stop_"))
-    ).toEqual(["stop_hostdeck", "stop_codex"]);
+    ).toEqual(["stop_hostdeck"]);
   });
 
-  it("waits through post-stop deactivation until both units are inactive", async () => {
+  it("waits through HostDeck deactivation while preserving the active broker", async () => {
     const fixture = createFixture();
     const source = createSourcePackage(fixture, "1.0.0", "b");
     const lifecycle = createLifecycle(fixture, source);
@@ -358,8 +358,7 @@ describe("IFC-V1-056 service lifecycle owner", () => {
       main_pid: 0
     });
     expect(stopped.units.codex).toMatchObject({
-      active_state: "inactive",
-      main_pid: 0
+      active_state: "active"
     });
   });
 
@@ -1290,6 +1289,8 @@ function createSourcePackage(
 ): SourcePackage {
   const root = join(fixture.root, `source-${version}-${seed}`);
   mkdirSync(join(root, "dist"), { mode: 0o755, recursive: true });
+  mkdirSync(join(root, "bin"), { mode: 0o755, recursive: true });
+  mkdirSync(join(root, "runtime", "bin"), { mode: 0o755, recursive: true });
   chmodSync(root, 0o755);
   chmodSync(join(root, "dist"), 0o755);
   const manifestSha = seed.repeat(64).slice(0, 64);
@@ -1301,6 +1302,12 @@ function createSourcePackage(
     content_sha256: contentSha
   })}\n`);
   writeFileSync(join(root, "dist", "shell.js"), "#!/usr/bin/env node\n", {
+    mode: 0o755
+  });
+  writeFileSync(join(root, "bin", "codexdeck"), "#!/bin/sh\nexit 0\n", {
+    mode: 0o755
+  });
+  writeFileSync(join(root, "runtime", "bin", "node"), "#!/bin/sh\nexit 0\n", {
     mode: 0o755
   });
   chmodSync(join(root, "dist", "shell.js"), 0o755);
@@ -1388,8 +1395,9 @@ function fakeUnitGenerator(
     })
   ]) as HostDeckSystemdUserUnitBundle["units"];
   return Object.freeze({
+    broker_host_path: join(input.package_root, "dist", "broker-host.js"),
     package_version: input.expected_package_version,
-    schema_version: 1,
+    schema_version: 2,
     service_host_path: join(input.package_root, "dist", "service-host.js"),
     units
   });
@@ -1525,6 +1533,15 @@ class FakeManager implements HostDeckSystemdUserManager {
   async startHostDeck(): Promise<void> {
     this.calls.push("start_hostdeck");
     this.startUnits(false);
+  }
+
+  async startCodex(): Promise<void> {
+    this.calls.push("start_codex");
+    if (this.codex.load_state !== "loaded") throw new Error("not loaded");
+    if (this.codex.active_state !== "active") {
+      this.nextCodexPid += 1;
+      this.codex = active(this.codex, this.nextCodexPid);
+    }
   }
 
   async stopCodex(): Promise<void> {

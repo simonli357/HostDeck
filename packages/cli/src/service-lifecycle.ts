@@ -343,15 +343,13 @@ export function createHostDeckServiceLifecycle(
           let changed: boolean;
           if (action === "start") {
             changed = !isRunning(beforeHostDeck) || !isRunning(beforeCodex);
-            if (changed) await context.manager.startHostDeck();
+            if (!isRunning(beforeCodex)) await context.manager.startCodex();
+            if (!isRunning(beforeHostDeck)) await context.manager.startHostDeck();
             await requireReady(context, manifest);
           } else if (action === "stop") {
-            changed = !isStopped(beforeHostDeck) || !isStopped(beforeCodex);
-            if (changed) {
-              await context.manager.stopHostDeck();
-              await context.manager.stopCodex();
-            }
-            await requireStopped(context, manifest);
+            changed = !isStopped(beforeHostDeck);
+            if (changed) await context.manager.stopHostDeck();
+            await requireHostDeckStopped(context, manifest, beforeCodex);
           } else {
             changed = true;
             await context.manager.restartHostDeck();
@@ -452,8 +450,7 @@ export function assertHostDeckServiceLifecycleResult(
     value.enabled !== (hostDeck.unit_file_state === "enabled") ||
     (value.api_state === "ready" && hostDeck.active_state !== "active") ||
     (value.api_state === "not_probed" && hostDeck.active_state === "active") ||
-    (value.action === "stop" &&
-      (hostDeck.active_state === "active" || codex.active_state === "active")) ||
+    (value.action === "stop" && hostDeck.active_state === "active") ||
     (value.action === "uninstall" &&
       (value.install_state !== "not_installed" ||
         value.enabled ||
@@ -597,8 +594,7 @@ async function installService(
         source,
         environment,
         {
-          codexBin,
-          nodeBin: context.nodeBin
+          codexBin
         },
         transaction.staging_name
       );
@@ -804,8 +800,7 @@ async function upgradeService(
         source,
         environment,
         {
-          codexBin: previous.runtime.codex_bin,
-          nodeBin: previous.runtime.node_bin
+          codexBin: previous.runtime.codex_bin
         },
         transaction.staging_name
       );
@@ -1120,8 +1115,8 @@ function inspectOptionalUninstallAnchors(
   const expectedCommandTarget = join(
     layout.current_link,
     "package",
-    "dist",
-    "shell.js"
+    "bin",
+    "codexdeck"
   );
   if (existsNoFollow(layout.manifest_link)) {
     requireSymlink(layout.manifest_link, "current/install.json");
@@ -1175,10 +1170,7 @@ function assertPreservedPathsOutsideReleases(
     ...(codexHome === undefined
       ? []
       : [parseAbsolutePath(codexHome, "CODEX_HOME")]),
-    ...manifests.flatMap(({ runtime }) => [
-      runtime.codex_bin,
-      runtime.node_bin
-    ])
+    ...manifests.map(({ runtime }) => runtime.codex_bin)
   ];
   const removedPaths = [
     context.layout.releases_dir,
@@ -1228,8 +1220,8 @@ function inspectTransactionOwnedAnchors(
   const expectedCommandTarget = join(
     layout.current_link,
     "package",
-    "dist",
-    "shell.js"
+    "bin",
+    "codexdeck"
   );
   for (const [path, target] of [
     [layout.manifest_link, "current/install.json"],
@@ -1419,7 +1411,7 @@ function removeUninstallAnchors(
   }
   removeExactSymlink(
     layout.command_path,
-    join(layout.current_link, "package", "dist", "shell.js")
+    join(layout.current_link, "package", "bin", "codexdeck")
   );
   removeExactSymlink(layout.manifest_link, "current/install.json");
   if (transaction.active_selector === null) {
@@ -1513,10 +1505,9 @@ async function prepareRelease(
   context: LifecycleContext,
   source: HostDeckProductionPackageIdentity,
   environment: HostDeckServiceEnvironmentDescriptor,
-  runtime: { readonly codexBin: string; readonly nodeBin: string },
+  runtime: { readonly codexBin: string },
   stagingName: string
 ): Promise<PreparedRelease> {
-  assertExecutable(runtime.nodeBin, "package");
   assertExecutable(runtime.codexBin, "package");
   if (!stagingNamePattern.test(stagingName)) {
     throw lifecycleError("recovery_required", "recovery");
@@ -1526,11 +1517,15 @@ async function prepareRelease(
   if (existsNoFollow(releaseRoot)) {
     const manifest = readReleaseManifest(releaseRoot, context.layout);
     await verifyReleasePackage(context, manifest);
+    const nodeBin = bundledNodePath(manifest.release.package_root);
+    if (manifest.runtime.node_bin !== nodeBin) {
+      throw lifecycleError("package_invalid", "package");
+    }
     const units = context.generateUnits({
       codex_bin: runtime.codexBin,
       environment_file: context.layout.environment_file,
       expected_package_version: source.package_version,
-      node_bin: runtime.nodeBin,
+      node_bin: nodeBin,
       package_root: manifest.release.package_root,
       verification_package_root: manifest.release.package_root
     });
@@ -1577,16 +1572,18 @@ async function prepareRelease(
       throw lifecycleError("package_invalid", "package");
     }
     const packageRoot = join(releaseRoot, "package");
+    const nodeBin = bundledNodePath(packageRoot);
     const units = context.generateUnits({
       codex_bin: runtime.codexBin,
       environment_file: context.layout.environment_file,
       expected_package_version: source.package_version,
-      node_bin: runtime.nodeBin,
+      node_bin: nodeBin,
       package_root: packageRoot,
       verification_package_root: stagedPackage
     });
     if (
       units.package_version !== source.package_version ||
+      units.broker_host_path !== join(packageRoot, "dist", "broker-host.js") ||
       units.service_host_path !== join(packageRoot, "dist", "service-host.js")
     ) {
       throw lifecycleError("package_invalid", "package");
@@ -1600,7 +1597,7 @@ async function prepareRelease(
       codex_bin: runtime.codexBin,
       environment_sha256: environment.sha256,
       layout: context.layout,
-      node_bin: runtime.nodeBin,
+      node_bin: nodeBin,
       package_content_sha256: source.content_sha256,
       package_manifest_sha256: source.manifest_sha256,
       package_version: source.package_version,
@@ -1636,6 +1633,10 @@ async function prepareRelease(
     }
     throw error;
   }
+}
+
+function bundledNodePath(packageRoot: string): string {
+  return join(packageRoot, "runtime", "bin", "node");
 }
 
 function restoreCopiedDirectoryModes(source: string, destination: string): void {
@@ -1863,9 +1864,10 @@ async function requireExpectedCodexVersion(
   }
 }
 
-async function requireStopped(
+async function requireHostDeckStopped(
   context: LifecycleContext,
-  manifest: HostDeckServiceInstallManifest
+  manifest: HostDeckServiceInstallManifest,
+  beforeCodex: HostDeckSystemdUnitState
 ): Promise<void> {
   const started = Date.now();
   while (Date.now() - started <= context.readinessTimeoutMs) {
@@ -1874,7 +1876,14 @@ async function requireStopped(
       context.manager.show(hostDeckCodexSystemdUnitName)
     ]);
     requireInstalledManagerIdentity(manifest, hostDeck, codex, "stop");
-    if (isStopped(hostDeck) && isStopped(codex)) return;
+    const codexPreserved = isRunning(beforeCodex)
+      ? isRunning(codex) && codex.main_pid === beforeCodex.main_pid
+      : isStopped(beforeCodex)
+        ? isStopped(codex)
+        : codex.active_state === beforeCodex.active_state &&
+          codex.sub_state === beforeCodex.sub_state &&
+          codex.main_pid === beforeCodex.main_pid;
+    if (isStopped(hostDeck) && codexPreserved) return;
     if (Date.now() - started >= context.readinessTimeoutMs) break;
     await context.sleep(Math.min(250, context.readinessTimeoutMs));
   }
@@ -3203,8 +3212,12 @@ function readProductionPackageManifest(
   const codex = manifest.codex;
   const runtime = manifest.runtime;
   const target = manifest.target;
+  const runtimeBundle =
+    runtime !== null && typeof runtime === "object" && !Array.isArray(runtime)
+      ? (runtime as Record<string, unknown>).bundle
+      : null;
   if (
-    manifest.schemaVersion !== 5 ||
+    manifest.schemaVersion !== 6 ||
     manifest.name !== "hostdeck-production-package" ||
     typeof manifest.packageVersion !== "string" ||
     !isSupportedVersion(manifest.packageVersion) ||
@@ -3213,7 +3226,7 @@ function readProductionPackageManifest(
     artifact === null ||
     typeof artifact !== "object" ||
     Array.isArray(artifact) ||
-    (artifact as Record<string, unknown>).kind !== "runtime_tree" ||
+    (artifact as Record<string, unknown>).kind !== "native_tree" ||
     target === null ||
     typeof target !== "object" ||
     Array.isArray(target) ||
@@ -3226,8 +3239,15 @@ function readProductionPackageManifest(
     Array.isArray(runtime) ||
     (runtime as Record<string, unknown>).platform !== "linux" ||
     (runtime as Record<string, unknown>).architecture !== "x64" ||
-    (runtime as Record<string, unknown>).delivery !== "host_provided" ||
-    (runtime as Record<string, unknown>).bundle !== null ||
+    (runtime as Record<string, unknown>).delivery !== "bundled" ||
+    runtimeBundle === null ||
+    typeof runtimeBundle !== "object" ||
+    Array.isArray(runtimeBundle) ||
+    (runtimeBundle as Record<string, unknown>).path !== "runtime/bin/node" ||
+    typeof (runtimeBundle as Record<string, unknown>).sha256 !== "string" ||
+    !sha256Pattern.test(
+      (runtimeBundle as Record<string, unknown>).sha256 as string
+    ) ||
     codex === null ||
     typeof codex !== "object" ||
     Array.isArray(codex) ||

@@ -61,8 +61,9 @@ export interface HostDeckSystemdUserUnitDescriptor {
 }
 
 export interface HostDeckSystemdUserUnitBundle {
+  readonly broker_host_path: string;
   readonly package_version: string;
-  readonly schema_version: 1;
+  readonly schema_version: 2;
   readonly service_host_path: string;
   readonly units: readonly [
     HostDeckSystemdUserUnitDescriptor,
@@ -97,10 +98,13 @@ const installInputKeys = Object.freeze([
   "verification_package_root"
 ] as const);
 const manifestName = "hostdeck-package.json";
+const brokerHostRelativePath = "dist/broker-host.js";
 const serviceHostRelativePath = "dist/service-host.js";
+const bundledNodeRelativePath = "runtime/bin/node";
 const maximumPathBytes = 4096;
 const maximumManifestBytes = 65_536;
 const maximumServiceHostBytes = 16_777_216;
+const maximumBundledNodeBytes = 268_435_456;
 const maximumEnvironmentFileBytes = 1_048_576;
 const packageFileModes = Object.freeze([0o444, 0o644] as const);
 const exactVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
@@ -108,6 +112,7 @@ const sha256Pattern = /^[a-f0-9]{64}$/u;
 const generatedBundles = new WeakSet<HostDeckSystemdUserUnitBundle>();
 
 interface ValidatedInput {
+  readonly brokerHostPath: string;
   readonly codexBin: string;
   readonly environmentFile: string | null;
   readonly nodeBin: string;
@@ -116,13 +121,23 @@ interface ValidatedInput {
   readonly serviceHostPath: string;
 }
 
-interface ServiceHostManifest {
+interface ProcessHostManifest<Path extends string> {
   readonly lifecycle: "systemd_user";
   readonly package: "@hostdeck/cli";
-  readonly path: typeof serviceHostRelativePath;
+  readonly path: Path;
   readonly sha256: string;
   readonly size: number;
   readonly version: string;
+}
+
+interface PackageRuntimeManifest {
+  readonly brokerHost: ProcessHostManifest<typeof brokerHostRelativePath>;
+  readonly node: Readonly<{
+    readonly path: typeof bundledNodeRelativePath;
+    readonly sha256: string;
+    readonly size: number;
+  }>;
+  readonly serviceHost: ProcessHostManifest<typeof serviceHostRelativePath>;
 }
 
 export function generateHostDeckSystemdUserUnits(
@@ -147,8 +162,9 @@ function generateBundle(input: ValidatedInput): HostDeckSystemdUserUnitBundle {
     descriptor("hostdeck.service", hostDeckContent)
   ]) as HostDeckSystemdUserUnitBundle["units"];
   const bundle = Object.freeze({
+    broker_host_path: input.brokerHostPath,
     package_version: input.packageVersion,
-    schema_version: 1 as const,
+    schema_version: 2 as const,
     service_host_path: input.serviceHostPath,
     units
   });
@@ -206,15 +222,51 @@ function validateInput(
           "environment_file"
         );
 
-  validateExecutable(nodeBin, "node_invalid", "node");
   validateExecutable(codexBin, "codex_invalid", "codex");
-  validatePackage(verificationPackageRoot, packageVersion);
+  const packageRuntime = validatePackage(
+    verificationPackageRoot,
+    packageVersion
+  );
+  if (nodeBin !== join(packageRoot, bundledNodeRelativePath)) {
+    fail("node_invalid", "node");
+  }
+  validateExecutable(
+    join(verificationPackageRoot, packageRuntime.node.path),
+    "node_invalid",
+    "node"
+  );
+  validateDescriptorFile(
+    verificationPackageRoot,
+    packageRuntime.node,
+    0o755,
+    maximumBundledNodeBytes,
+    "node_invalid",
+    "node"
+  );
+  validateDescriptorFile(
+    verificationPackageRoot,
+    packageRuntime.brokerHost,
+    packageFileModes,
+    maximumServiceHostBytes,
+    "package_invalid",
+    "package"
+  );
+  validateDescriptorFile(
+    verificationPackageRoot,
+    packageRuntime.serviceHost,
+    packageFileModes,
+    maximumServiceHostBytes,
+    "package_invalid",
+    "package"
+  );
+  const brokerHostPath = join(packageRoot, brokerHostRelativePath);
   const serviceHostPath = join(packageRoot, serviceHostRelativePath);
   if (environmentFile !== null) {
     validateEnvironmentFile(environmentFile, forInstall);
   }
 
   return Object.freeze({
+    brokerHostPath,
     codexBin,
     environmentFile,
     nodeBin,
@@ -278,7 +330,10 @@ function validateExecutable(
   }
 }
 
-function validatePackage(packageRoot: string, expectedVersion: string): string {
+function validatePackage(
+  packageRoot: string,
+  expectedVersion: string
+): PackageRuntimeManifest {
   try {
     if (realpathSync.native(packageRoot) !== packageRoot) {
       fail("package_invalid", "package");
@@ -303,27 +358,7 @@ function validatePackage(packageRoot: string, expectedVersion: string): string {
       "package_invalid",
       "package"
     );
-    const manifest = parsePackageManifest(manifestBytes, expectedVersion);
-    const serviceHostPath = resolve(packageRoot, manifest.path);
-    assertContained(packageRoot, serviceHostPath);
-    if (realpathSync.native(serviceHostPath) !== serviceHostPath) {
-      fail("package_invalid", "package");
-    }
-    const serviceHostBytes = readSecureRegularFile(
-      serviceHostPath,
-      packageFileModes,
-      manifest.size,
-      true,
-      "package_invalid",
-      "package"
-    );
-    if (
-      serviceHostBytes.length !== manifest.size ||
-      sha256(serviceHostBytes) !== manifest.sha256
-    ) {
-      fail("package_invalid", "package");
-    }
-    return serviceHostPath;
+    return parsePackageManifest(manifestBytes, expectedVersion);
   } catch (error) {
     if (error instanceof HostDeckSystemdUserUnitError) throw error;
     fail("package_invalid", "package");
@@ -333,7 +368,7 @@ function validatePackage(packageRoot: string, expectedVersion: string): string {
 function parsePackageManifest(
   content: Buffer,
   expectedVersion: string
-): ServiceHostManifest {
+): PackageRuntimeManifest {
   let parsed: unknown;
   try {
     parsed = JSON.parse(content.toString("utf8"));
@@ -345,11 +380,11 @@ function parsePackageManifest(
   const runtime = parsed.runtime;
   const target = parsed.target;
   if (
-    parsed.schemaVersion !== 5 ||
+    parsed.schemaVersion !== 6 ||
     parsed.name !== "hostdeck-production-package" ||
     parsed.packageVersion !== expectedVersion ||
     !isRecord(artifact) ||
-    artifact.kind !== "runtime_tree" ||
+    artifact.kind !== "native_tree" ||
     !isRecord(target) ||
     target.id !== "linux-x64" ||
     target.platform !== "linux" ||
@@ -358,40 +393,106 @@ function parsePackageManifest(
     !isRecord(runtime) ||
     runtime.platform !== "linux" ||
     runtime.architecture !== "x64" ||
-    runtime.delivery !== "host_provided" ||
-    runtime.bundle !== null
+    runtime.delivery !== "bundled" ||
+    !isRecord(runtime.bundle)
   ) {
     fail("package_invalid", "package");
   }
-  const serviceHost = parsed.serviceHost;
-  if (!isRecord(serviceHost)) fail("package_invalid", "package");
+  const brokerHost = parseProcessHostManifest(
+    parsed.brokerHost,
+    brokerHostRelativePath,
+    expectedVersion
+  );
+  const serviceHost = parseProcessHostManifest(
+    parsed.serviceHost,
+    serviceHostRelativePath,
+    expectedVersion
+  );
+  const node = runtime.bundle;
   requireExactRecord(
-    serviceHost,
+    node,
+    ["path", "sha256", "size"],
+    "package_invalid",
+    "package"
+  );
+  if (
+    node.path !== bundledNodeRelativePath ||
+    typeof node.sha256 !== "string" ||
+    !sha256Pattern.test(node.sha256) ||
+    !Number.isSafeInteger(node.size) ||
+    (node.size as number) < 1 ||
+    (node.size as number) > maximumBundledNodeBytes
+  ) {
+    fail("package_invalid", "package");
+  }
+  return Object.freeze({
+    brokerHost,
+    node: Object.freeze({
+      path: bundledNodeRelativePath,
+      sha256: node.sha256,
+      size: node.size as number
+    }),
+    serviceHost
+  });
+}
+
+function parseProcessHostManifest<Path extends string>(
+  candidate: unknown,
+  path: Path,
+  expectedVersion: string
+): ProcessHostManifest<Path> {
+  if (!isRecord(candidate)) fail("package_invalid", "package");
+  requireExactRecord(
+    candidate,
     ["lifecycle", "package", "path", "sha256", "size", "version"],
     "package_invalid",
     "package"
   );
   if (
-    serviceHost.lifecycle !== "systemd_user" ||
-    serviceHost.package !== "@hostdeck/cli" ||
-    serviceHost.path !== serviceHostRelativePath ||
-    serviceHost.version !== expectedVersion ||
-    typeof serviceHost.sha256 !== "string" ||
-    !sha256Pattern.test(serviceHost.sha256) ||
-    !Number.isSafeInteger(serviceHost.size) ||
-    (serviceHost.size as number) < 1 ||
-    (serviceHost.size as number) > maximumServiceHostBytes
+    candidate.lifecycle !== "systemd_user" ||
+    candidate.package !== "@hostdeck/cli" ||
+    candidate.path !== path ||
+    candidate.version !== expectedVersion ||
+    typeof candidate.sha256 !== "string" ||
+    !sha256Pattern.test(candidate.sha256) ||
+    !Number.isSafeInteger(candidate.size) ||
+    (candidate.size as number) < 1 ||
+    (candidate.size as number) > maximumServiceHostBytes
   ) {
     fail("package_invalid", "package");
   }
   return Object.freeze({
     lifecycle: "systemd_user" as const,
     package: "@hostdeck/cli" as const,
-    path: serviceHostRelativePath,
-    sha256: serviceHost.sha256,
-    size: serviceHost.size as number,
+    path,
+    sha256: candidate.sha256,
+    size: candidate.size as number,
     version: expectedVersion
   });
+}
+
+function validateDescriptorFile(
+  root: string,
+  descriptor: Readonly<{ path: string; sha256: string; size: number }>,
+  modes: number | readonly number[],
+  maximumBytes: number,
+  code: HostDeckSystemdUserUnitErrorCode,
+  stage: HostDeckSystemdUserUnitErrorStage
+): void {
+  const path = resolve(root, descriptor.path);
+  assertContained(root, path);
+  if (realpathSync.native(path) !== path) fail(code, stage);
+  const bytes = readSecureRegularFile(
+    path,
+    modes,
+    Math.min(descriptor.size, maximumBytes),
+    true,
+    code,
+    stage
+  );
+  if (bytes.length !== descriptor.size || sha256(bytes) !== descriptor.sha256) {
+    fail(code, stage);
+  }
 }
 
 function validateEnvironmentFile(path: string, allowMissingParent: boolean): void {
@@ -545,7 +646,7 @@ function renderCodexUnit(input: ValidatedInput): string {
   const lines = [
     generatedHeader(input.packageVersion),
     "[Unit]",
-    `Description=HostDeck Codex app-server (${input.packageVersion})`,
+    `Description=HostDeck shared Codex broker (${input.packageVersion})`,
     "StartLimitIntervalSec=60s",
     "StartLimitBurst=5",
     "",
@@ -557,11 +658,11 @@ function renderCodexUnit(input: ValidatedInput): string {
     lines.push(`EnvironmentFile=-${encodeSystemdFilePath(input.environmentFile)}`);
   }
   lines.push(
+    `Environment=${encodeSystemdWord(`HOSTDECK_CODEX_BIN=${input.codexBin}`, false)}`,
     "UMask=0077",
-    "RuntimeDirectory=hostdeck",
-    "RuntimeDirectoryMode=0700",
-    `ExecStart=${encodeSystemdWord(input.codexBin, false)} app-server --listen unix://%t/hostdeck/app-server.sock`,
-    ...servicePolicy()
+    `ExecStart=${encodeSystemdWord(input.nodeBin, false)} ${encodeSystemdWord(input.brokerHostPath, true)}`,
+    `ExecStartPost=${encodeSystemdWord(input.nodeBin, false)} ${encodeSystemdWord(input.brokerHostPath, true)} ${brokerCheckArgument}`,
+    ...brokerServicePolicy()
   );
   return `${lines.join("\n")}\n`;
 }
@@ -587,7 +688,7 @@ function renderHostDeckUnit(input: ValidatedInput): string {
     `Environment=${encodeSystemdWord(`HOSTDECK_CODEX_BIN=${input.codexBin}`, false)}`,
     "UMask=0077",
     `ExecStart=${encodeSystemdWord(input.nodeBin, false)} ${encodeSystemdWord(input.serviceHostPath, true)}`,
-    ...servicePolicy(),
+    ...hostDeckServicePolicy(),
     "",
     "[Install]",
     "WantedBy=default.target"
@@ -595,7 +696,21 @@ function renderHostDeckUnit(input: ValidatedInput): string {
   return `${lines.join("\n")}\n`;
 }
 
-function servicePolicy(): readonly string[] {
+const brokerCheckArgument = "--check-ready";
+
+function brokerServicePolicy(): readonly string[] {
+  return [
+    "Restart=on-failure",
+    "RestartSec=2s",
+    "TimeoutStartSec=90s",
+    "TimeoutStopSec=30s",
+    "KillMode=mixed",
+    "StandardOutput=journal",
+    "StandardError=journal"
+  ];
+}
+
+function hostDeckServicePolicy(): readonly string[] {
   return [
     "Restart=always",
     "RestartSec=2s",

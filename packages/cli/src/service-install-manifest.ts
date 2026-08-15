@@ -286,7 +286,7 @@ export function createHostDeckServiceInstallManifest(
   const unsigned = {
     command: {
       path: layout.command_path,
-      target: join(layout.current_link, "package", "dist", "shell.js")
+      target: join(layout.current_link, "package", "bin", "codexdeck")
     },
     enablement: {
       path: layout.enablement_link,
@@ -377,8 +377,8 @@ export function assertHostDeckServiceManifestMatchesLayout(
     command_target: join(
       layout.current_link,
       "package",
-      "dist",
-      "shell.js"
+      "bin",
+      "codexdeck"
     ),
     current_link: layout.current_link,
     data_root: layout.data_root,
