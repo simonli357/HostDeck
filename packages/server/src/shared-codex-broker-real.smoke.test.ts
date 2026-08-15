@@ -70,6 +70,8 @@ describe.skipIf(!requireSmoke)("real shared Codex broker lifecycle", () => {
         "hostdeck-broker-owner.json"
       );
       let owned = false;
+      let primary: unknown = null;
+      const cleanupErrors: unknown[] = [];
       try {
         const first = await startSharedCodexBroker({
           codex_bin: codexBin,
@@ -131,14 +133,31 @@ describe.skipIf(!requireSmoke)("real shared Codex broker lifecycle", () => {
         expect(processIsAlive(pid)).toBe(false);
         expect(existsSync(location.socket_path)).toBe(false);
         expect(existsSync(ownerPath)).toBe(false);
+      } catch (error) {
+        primary = error;
       } finally {
         if (owned) {
-          await stopOwnedSharedCodexBroker({
-            location,
-            stop_timeout_ms: 5_000
-          }).catch(() => undefined);
+          try {
+            await stopOwnedSharedCodexBroker({
+              location,
+              stop_timeout_ms: 5_000
+            });
+          } catch (error) {
+            cleanupErrors.push(error);
+          }
         }
-        rmSync(root, { recursive: true, force: true });
+        try {
+          rmSync(root, { recursive: true, force: true });
+        } catch (error) {
+          cleanupErrors.push(error);
+        }
+      }
+      if (primary !== null && cleanupErrors.length === 0) throw primary;
+      if (primary !== null || cleanupErrors.length > 0) {
+        throw new AggregateError(
+          primary === null ? cleanupErrors : [primary, ...cleanupErrors],
+          "Shared broker smoke and cleanup failed."
+        );
       }
     },
     40_000

@@ -27,6 +27,7 @@
     "release:metadata": "node scripts/supply-chain-metadata.mjs generate",
     "verify:release-metadata": "node scripts/supply-chain-metadata.mjs verify",
     "test:codex": "HOSTDECK_REQUIRE_CODEX_HARDENING=1 vitest run packages/server/src/codex-runtime-hardening.smoke.test.ts",
+    "test:shared-runtime-hardening": "HOSTDECK_REQUIRE_SHARED_RUNTIME_HARDENING=1 vitest run packages/server/src/shared-runtime-hardening.smoke.test.ts --maxWorkers=1",
     "smoke:codex-compatibility": "HOSTDECK_REQUIRE_CODEX_COMPATIBILITY_SMOKE=1 vitest run packages/codex-adapter/src/installed-codex.smoke.test.ts",
     "smoke:codex-ipc": "HOSTDECK_REQUIRE_CODEX_IPC_SMOKE=1 vitest run packages/codex-adapter/src/codex-ipc.smoke.test.ts",
     "smoke:codex-lifecycle": "HOSTDECK_REQUIRE_CODEX_LIFECYCLE_ACCEPTANCE=1 vitest run packages/server/src/codex-runtime-lifecycle-acceptance.smoke.test.ts",

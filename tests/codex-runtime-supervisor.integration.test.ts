@@ -328,6 +328,7 @@ import { createServer } from "node:net";
 const args = process.argv.slice(2);
 if (args.length !== 3 || args[0] !== "app-server" || args[1] !== "--listen" || !args[2].startsWith("unix://")) process.exit(64);
 const socketPath = args[2].slice("unix://".length);
+process.umask(${0o777 ^ socketMode});
 writeFileSync(socketPath + ".argv", JSON.stringify(args), { mode: 0o600 });
 const server = createServer((socket) => socket.destroy());
 server.on("error", () => process.exit(70));

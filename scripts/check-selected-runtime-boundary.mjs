@@ -310,6 +310,8 @@ export const directHostApiOwnerPaths = Object.freeze([
   "packages/server/src/production-web-assets.test-support.ts",
   "packages/server/src/shared-codex-broker-lifecycle.ts",
   "packages/server/src/shared-codex-broker-node.ts",
+  "packages/server/src/shared-runtime-hardening-manifest.ts",
+  "packages/server/src/shared-runtime-hardening.ts",
   "packages/server/src/tailscale-command-adapter.ts",
   "packages/server/src/tailscale-serve-proxy-trust.ts",
   "packages/storage/src/branch-metadata.ts",
