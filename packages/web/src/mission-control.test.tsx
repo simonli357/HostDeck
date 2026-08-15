@@ -31,6 +31,7 @@ import {
   sessionDetailPath
 } from "./app-shell.js";
 import type {
+  BrowserConnectionCatalogState,
   BrowserConnectionFailure,
   BrowserConnectionPhase,
   BrowserConnectionResourceState,
@@ -262,6 +263,45 @@ describe("Mission Control projection", () => {
     expect(screen.getAllByText("stale-session")).toHaveLength(2);
     expect(screen.getByText("Showing stale session state")).toBeTruthy();
     expect(screen.queryByText("Live")).toBeNull();
+  });
+
+  it("uses the live catalog as row authority and exposes retained reset state", () => {
+    const liveItem = sessionItem("sess_mission_catalog", "live-session", {
+      summary: "Updated from the laptop."
+    });
+    const liveData = currentSnapshot({ sessions: [liveItem] }).targetState.data;
+    if (liveData?.kind !== "mission_control") {
+      throw new TypeError("Mission catalog fixture is invalid.");
+    }
+    const currentCatalog = catalogState("current", liveData);
+    const current = currentSnapshot({
+      sessions: [liveItem],
+      catalog: currentCatalog
+    });
+
+    const projection = projectMissionControl(current, nowMs);
+    expect(projection.sections[0]?.rows[0]?.item.session.name).toBe(
+      "live-session"
+    );
+    expect(projection.sections[0]?.rows[0]?.summary).toBe(
+      "Updated from the laptop."
+    );
+    expect(projection.stale).toBe(false);
+
+    const resetting = currentSnapshot({
+      phase: "ready",
+      sessions: [liveItem],
+      catalog: catalogState("resetting", liveData)
+    });
+    const retained = projectMissionControl(resetting, nowMs);
+    expect(retained.sections[0]?.rows[0]?.item.session.name).toBe(
+      "live-session"
+    );
+    expect(retained.stale).toBe(true);
+    expect(retained.notice).toMatchObject({
+      title: "Live session updates reconnecting",
+      tone: "attention"
+    });
   });
 
   it("keeps a same-target recovered failure visible until ownership changes", () => {
@@ -836,6 +876,7 @@ function currentSnapshot(
     readonly causes?: readonly BrowserConnectionWriteBlockCause[];
     readonly epoch?: number;
     readonly lastFailure?: BrowserConnectionFailure | null;
+    readonly catalog?: BrowserConnectionCatalogState;
   } = {}
 ): BrowserConnectionSnapshot {
   const access = options.access === undefined ? pairedAccess("write") : options.access;
@@ -875,6 +916,7 @@ function currentSnapshot(
           }),
       failure
     ),
+    ...(options.catalog === undefined ? {} : { catalog: options.catalog }),
     stream: Object.freeze({
       state: "not_applicable" as const,
       snapshot: null,
@@ -895,6 +937,23 @@ function currentSnapshot(
       causes: Object.freeze([...causes])
     }),
     lastFailure: options.lastFailure === undefined ? failure : options.lastFailure
+  });
+}
+
+function catalogState(
+  state: BrowserConnectionCatalogState["state"],
+  data: Extract<
+    NonNullable<BrowserConnectionSnapshot["targetState"]["data"]>,
+    { kind: "mission_control" }
+  >
+): BrowserConnectionCatalogState {
+  return Object.freeze({
+    state,
+    data,
+    snapshot: null,
+    boundary: null,
+    failure: null,
+    observedAt: timestamp
   });
 }
 

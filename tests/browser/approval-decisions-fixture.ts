@@ -14,6 +14,7 @@ import {
   type SessionDetailApiController,
   type SessionDetailApiVariant,
   type SessionDetailEventFixture,
+  sessionDetailBrowserCodexThreadId,
   sessionDetailBrowserSessionId
 } from "./session-detail-fixture.js";
 
@@ -58,7 +59,7 @@ export interface ApprovalDecisionsApiController {
 }
 
 const sessionId = sessionDetailBrowserSessionId;
-const threadId = "thread-private-browser-detail";
+const threadId = sessionDetailBrowserCodexThreadId;
 const eventRequestId = "request-private-browser-detail";
 const normalRequestId = "string:approval-browser-normal-001";
 const broadRequestId = "string:approval-browser-broad-001";

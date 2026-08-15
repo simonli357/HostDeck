@@ -7,6 +7,7 @@ import {
   selectedSessionListResponseSchema
 } from "../../packages/contracts/src/index.js";
 import type { RemoteIngressUnavailableReason } from "../../packages/core/src/index.js";
+import { installPassiveSessionCatalog } from "./session-catalog-passive-fixture.js";
 
 export type RemoteRecoveryState =
   | "ready"
@@ -53,6 +54,7 @@ export async function installRemoteRecoveryApi(
   initialState: RemoteRecoveryState = "ready",
   options: RemoteRecoveryApiOptions = {}
 ): Promise<RemoteRecoveryApiController> {
+  await installPassiveSessionCatalog(page);
   if (mode === "remote" && options.proxyPrivateOrigin !== false) {
     await installPrivateOriginProxy(page);
   }

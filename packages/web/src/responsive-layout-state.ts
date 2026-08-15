@@ -13,7 +13,7 @@ export interface BrowserMissionNavigationContext {
 
 type ResponsiveMissionContextSource = Pick<
   BrowserConnectionSnapshot,
-  "epoch" | "target" | "phase" | "access" | "targetState"
+  "epoch" | "target" | "phase" | "access" | "targetState" | "catalog"
 >;
 
 export function synchronizeResponsiveMissionContext(
@@ -22,19 +22,28 @@ export function synchronizeResponsiveMissionContext(
 ): BrowserMissionNavigationContext | null {
   if (!hasReadableSessionAuthority(snapshot)) return null;
 
-  const data = snapshot.targetState.data;
-  if (snapshot.target?.kind !== "mission_control" || data?.kind !== "mission_control") {
-    return current;
-  }
+  const catalogData = snapshot.catalog?.data ?? null;
+  const targetData = snapshot.targetState.data;
+  const data = catalogData ?? (
+    snapshot.target?.kind === "mission_control" &&
+    targetData?.kind === "mission_control"
+      ? targetData
+      : null
+  );
+  if (data === null) return current;
   if (current?.data !== data) assertMissionContextSourceData(data);
   if (!Number.isSafeInteger(snapshot.epoch) || snapshot.epoch < 1) {
     throw new TypeError("HostDeck responsive Mission context has an invalid source epoch.");
   }
-  const observedAt = snapshot.targetState.observedAt;
+  const observedAt = catalogData === data
+    ? snapshot.catalog?.observedAt ?? null
+    : snapshot.targetState.observedAt;
   if (observedAt === null || !parseIsoTimestamp(observedAt).ok) {
     throw new TypeError("HostDeck responsive Mission context has an invalid observation time.");
   }
-  const freshness = snapshot.targetState.state === "current" ? "current" : "stale";
+  const freshness = catalogData === data
+    ? snapshot.catalog?.state === "current" ? "current" : "stale"
+    : snapshot.targetState.state === "current" ? "current" : "stale";
   if (
     current !== null &&
     current.data === data &&

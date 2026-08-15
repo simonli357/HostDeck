@@ -10,6 +10,7 @@ import {
 } from "./compact-control-fixture.js";
 import {
   type SessionDetailApiVariant,
+  sessionDetailBrowserCodexThreadId,
   sessionDetailBrowserSessionId
 } from "./session-detail-fixture.js";
 
@@ -41,7 +42,7 @@ export interface SkillsControlApiController {
 }
 
 const timestamp = "2026-07-27T16:00:00.000Z";
-const threadId = "thread-private-browser-detail";
+const threadId = sessionDetailBrowserCodexThreadId;
 const skillsPath = `/api/v1/sessions/${sessionDetailBrowserSessionId}/skills`;
 
 export async function installSkillsControlApi(

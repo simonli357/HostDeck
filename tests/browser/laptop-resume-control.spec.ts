@@ -104,7 +104,7 @@ test("reads and copies one exact local command only from the shared Session acti
   dialog = actionsDialog(page, "Session actions");
   await expect(resumeAction(dialog)).toBeFocused();
   await expect(page.locator("code")).toHaveCount(0);
-  await dialog.getByRole("button", { name: /Host & access/iu }).click();
+  await dialog.getByRole("button", { name: "Open Host and access" }).click();
   const host = actionsDialog(page, "Host & access");
   await expect(host.getByRole("heading", { name: "Secure control ready" })).toBeVisible();
   await host.getByRole("button", { name: "Back to session actions" }).click();
@@ -599,7 +599,8 @@ async function expectCommandProjection(page: Page, command: string): Promise<voi
     const code = document.querySelector(".hostdeck-laptop-resume-command code");
     const commandOccurrences = body.split(exactCommand).length - 1;
     const socket = exactCommand.match(/unix:\/\/[^'\s]+/u)?.[0] ?? "";
-    const thread = exactCommand.match(/thread-[^'\s]+/u)?.[0] ?? "";
+    const thread =
+      exactCommand.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/iu)?.[0] ?? "";
     return {
       commandOccurrences,
       codeText: code?.textContent ?? null,
@@ -615,7 +616,7 @@ async function expectCommandProjection(page: Page, command: string): Promise<voi
     codeText: command,
     dialogCount: 1,
     inputCount: 0,
-    socketOccurrences: 1,
+    socketOccurrences: 0,
     threadOccurrences: 1
   });
 }

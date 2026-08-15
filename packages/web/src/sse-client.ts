@@ -3,7 +3,9 @@ import {
   apiRouteErrorBodySchema,
   outputCursorSchema,
   type SelectedProjectionEvent,
+  type SessionCatalogEvent,
   selectedProjectionEventSchema,
+  sessionCatalogEventSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
 import {
@@ -20,7 +22,10 @@ import {
   type BrowserTransport,
   readSelectedBrowserOrigin
 } from "./browser-origin.js";
-import { browserSseRouteContract } from "./sse-route-contract.js";
+import {
+  browserSessionCatalogSseRouteContract,
+  browserSseRouteContract
+} from "./sse-route-contract.js";
 
 export const browserSseFailureReasons = [
   "connect_timeout",
@@ -123,6 +128,13 @@ export interface BrowserSseConnectOptions {
   readonly onState?: (snapshot: BrowserSseSnapshot) => unknown;
 }
 
+export interface BrowserSessionCatalogSseConnectOptions {
+  readonly after?: number | null;
+  readonly signal?: AbortSignal;
+  readonly onEvent: (event: SessionCatalogEvent) => unknown;
+  readonly onState?: (snapshot: BrowserSessionCatalogSseSnapshot) => unknown;
+}
+
 export interface BrowserSseBoundary {
   readonly after: number | null;
   readonly cursor: number;
@@ -132,6 +144,17 @@ export interface BrowserSseBoundary {
 export interface BrowserSseFailure {
   readonly reason: BrowserSseFailureReason;
   readonly sessionId: string;
+  readonly transport: BrowserTransport;
+  readonly status: number | null;
+  readonly apiError: ApiErrorEnvelope | null;
+  readonly previousReason: Exclude<
+    BrowserSseFailureReason,
+    "reconnect_exhausted"
+  > | null;
+}
+
+export interface BrowserSessionCatalogSseFailure {
+  readonly reason: BrowserSseFailureReason;
   readonly transport: BrowserTransport;
   readonly status: number | null;
   readonly apiError: ApiErrorEnvelope | null;
@@ -156,8 +179,30 @@ export interface BrowserSseSnapshot {
   readonly closeReason: BrowserSseCloseReason | null;
 }
 
+export interface BrowserSessionCatalogSseSnapshot {
+  readonly transport: BrowserTransport;
+  readonly phase: BrowserSsePhase;
+  readonly cursor: number | null;
+  readonly continuity: BrowserSseContinuity;
+  readonly streamId: string | null;
+  readonly resetRequired: boolean;
+  readonly retryCount: number;
+  readonly retryAt: number | null;
+  readonly lastHeartbeatAt: number | null;
+  readonly lastEventAt: number | null;
+  readonly failure: BrowserSessionCatalogSseFailure | null;
+  readonly closeReason: BrowserSseCloseReason | null;
+}
+
 export interface BrowserSseConnection {
   readonly snapshot: () => BrowserSseSnapshot;
+  readonly close: (
+    reason?: Exclude<BrowserSseCloseReason, "caller_aborted">
+  ) => void;
+}
+
+export interface BrowserSessionCatalogSseConnection {
+  readonly snapshot: () => BrowserSessionCatalogSseSnapshot;
   readonly close: (
     reason?: Exclude<BrowserSseCloseReason, "caller_aborted">
   ) => void;
@@ -166,6 +211,9 @@ export interface BrowserSseConnection {
 export interface BrowserSseClient {
   readonly [browserSseClientBrand]: true;
   readonly connect: (input: BrowserSseConnectOptions) => BrowserSseConnection;
+  readonly connectCatalog: (
+    input: BrowserSessionCatalogSseConnectOptions
+  ) => BrowserSessionCatalogSseConnection;
   readonly close: () => void;
 }
 
@@ -177,13 +225,28 @@ interface ParsedClientOptions {
   readonly transport: BrowserTransport;
 }
 
-interface ParsedConnectOptions {
+interface ParsedSessionConnectOptions {
+  readonly scope: "session";
+  readonly connectionKey: string;
   readonly sessionId: string;
   readonly after: number | null;
   readonly signal: AbortSignal | null;
   readonly onEvent: (event: SelectedProjectionEvent) => unknown;
   readonly onState: ((snapshot: BrowserSseSnapshot) => unknown) | null;
 }
+
+interface ParsedCatalogConnectOptions {
+  readonly scope: "catalog";
+  readonly connectionKey: "catalog";
+  readonly after: number | null;
+  readonly signal: AbortSignal | null;
+  readonly onEvent: (event: SessionCatalogEvent) => unknown;
+  readonly onState: ((snapshot: BrowserSessionCatalogSseSnapshot) => unknown) | null;
+}
+
+type ParsedConnectOptions =
+  | ParsedSessionConnectOptions
+  | ParsedCatalogConnectOptions;
 
 interface ResponseSnapshot {
   readonly status: number;
@@ -230,13 +293,15 @@ interface ConnectionRuntime {
   retryAt: number | null;
   lastHeartbeatAt: number | null;
   lastEventAt: number | null;
-  failure: BrowserSseFailure | null;
+  failure: BrowserSseFailure | BrowserSessionCatalogSseFailure | null;
   closeReason: BrowserSseCloseReason | null;
-  snapshot: BrowserSseSnapshot;
+  snapshot: BrowserSseSnapshot | BrowserSessionCatalogSseSnapshot;
   attempt: Attempt | null;
   backoffTimer: TimerSlot | null;
   attemptSequence: number;
   released: boolean;
+  catalogStreamId: string | null;
+  catalogResetRequired: boolean;
 }
 
 class AttemptFailure extends Error {
@@ -275,6 +340,8 @@ const connectOptionKeys = [
   "onEvent",
   "onState"
 ] as const;
+const catalogConnectOptionKeys = ["after", "signal", "onEvent", "onState"] as const;
+const requiredCatalogConnectOptionKeys = ["onEvent"] as const;
 const requiredConnectOptionKeys = ["sessionId", "onEvent"] as const;
 const clockKeys = ["now", "setTimeout", "clearTimeout"] as const;
 const limitKeys = [
@@ -304,8 +371,10 @@ export function createBrowserSseClient(
   input: CreateBrowserSseClientOptions = {}
 ): BrowserSseClient {
   const options = readClientOptions(input);
-  const activeSessionIds = new Set<string>();
-  const activeConnections = new Set<BrowserSseConnection>();
+  const activeConnectionKeys = new Set<string>();
+  const activeConnections = new Set<
+    BrowserSseConnection | BrowserSessionCatalogSseConnection
+  >();
   let closed = false;
 
   const client = Object.freeze({
@@ -318,17 +387,17 @@ export function createBrowserSseClient(
         connectionOptions.signal !== null &&
         readAbortSignalState(connectionOptions.signal);
       if (!alreadyAborted) {
-        if (activeSessionIds.has(connectionOptions.sessionId)) {
+        if (activeConnectionKeys.has(connectionOptions.connectionKey)) {
           throw new TypeError(
             "HostDeck browser SSE session already has an active connection."
           );
         }
-        if (activeSessionIds.size >= options.limits.maxConcurrentStreams) {
+        if (activeConnectionKeys.size >= options.limits.maxConcurrentStreams) {
           throw new TypeError(
             "HostDeck browser SSE connection capacity is exhausted."
           );
         }
-        activeSessionIds.add(connectionOptions.sessionId);
+        activeConnectionKeys.add(connectionOptions.connectionKey);
       }
 
       let connectionReference: BrowserSseConnection | null = null;
@@ -337,7 +406,52 @@ export function createBrowserSseClient(
         connectionOptions,
         alreadyAborted,
         () => {
-          activeSessionIds.delete(connectionOptions.sessionId);
+          activeConnectionKeys.delete(connectionOptions.connectionKey);
+          if (connectionReference !== null) {
+            activeConnections.delete(connectionReference);
+          }
+        }
+      );
+      connectionReference = connection;
+      if (
+        connection.snapshot().phase !== "failed" &&
+        connection.snapshot().phase !== "closed"
+      ) {
+        activeConnections.add(connection);
+      }
+      return connection;
+    },
+    connectCatalog(
+      candidate: BrowserSessionCatalogSseConnectOptions
+    ): BrowserSessionCatalogSseConnection {
+      if (closed) {
+        throw new TypeError("HostDeck browser SSE client is closed.");
+      }
+      const connectionOptions = readCatalogConnectOptions(candidate);
+      const alreadyAborted =
+        connectionOptions.signal !== null &&
+        readAbortSignalState(connectionOptions.signal);
+      if (!alreadyAborted) {
+        if (activeConnectionKeys.has(connectionOptions.connectionKey)) {
+          throw new TypeError(
+            "HostDeck browser SSE catalog already has an active connection."
+          );
+        }
+        if (activeConnectionKeys.size >= options.limits.maxConcurrentStreams) {
+          throw new TypeError(
+            "HostDeck browser SSE connection capacity is exhausted."
+          );
+        }
+        activeConnectionKeys.add(connectionOptions.connectionKey);
+      }
+
+      let connectionReference: BrowserSessionCatalogSseConnection | null = null;
+      const connection = createConnection(
+        options,
+        connectionOptions,
+        alreadyAborted,
+        () => {
+          activeConnectionKeys.delete(connectionOptions.connectionKey);
           if (connectionReference !== null) {
             activeConnections.delete(connectionReference);
           }
@@ -359,7 +473,7 @@ export function createBrowserSseClient(
         connection.close("client_closed");
       }
       activeConnections.clear();
-      activeSessionIds.clear();
+      activeConnectionKeys.clear();
     }
   }) as BrowserSseClient;
   browserSseClientInstances.add(client);
@@ -377,10 +491,22 @@ export function isBrowserSseClient(candidate: unknown): candidate is BrowserSseC
 
 function createConnection(
   options: ParsedClientOptions,
+  connectionOptions: ParsedSessionConnectOptions,
+  alreadyAborted: boolean,
+  release: () => void
+): BrowserSseConnection;
+function createConnection(
+  options: ParsedClientOptions,
+  connectionOptions: ParsedCatalogConnectOptions,
+  alreadyAborted: boolean,
+  release: () => void
+): BrowserSessionCatalogSseConnection;
+function createConnection(
+  options: ParsedClientOptions,
   connectionOptions: ParsedConnectOptions,
   alreadyAborted: boolean,
   release: () => void
-): BrowserSseConnection {
+): BrowserSseConnection | BrowserSessionCatalogSseConnection {
   const runtime: ConnectionRuntime = {
     active: true,
     phase: "connecting",
@@ -393,29 +519,18 @@ function createConnection(
     lastEventAt: null,
     failure: null,
     closeReason: null,
-    snapshot: createSnapshot({
-      sessionId: connectionOptions.sessionId,
-      transport: options.transport,
-      phase: "connecting",
-      cursor: connectionOptions.after,
-      continuity: "unproven",
-      boundary: null,
-      retryCount: 0,
-      retryAt: null,
-      lastHeartbeatAt: null,
-      lastEventAt: null,
-      failure: null,
-      closeReason: null
-    }),
+    snapshot: createInitialConnectionSnapshot(connectionOptions, options.transport),
     attempt: null,
     backoffTimer: null,
     attemptSequence: 0,
-    released: false
+    released: false,
+    catalogStreamId: null,
+    catalogResetRequired: false
   };
   let callerAbortListener: (() => void) | null = null;
 
-  const connection: BrowserSseConnection = Object.freeze({
-    snapshot(): BrowserSseSnapshot {
+  const connection = Object.freeze({
+    snapshot() {
       return runtime.snapshot;
     },
     close(
@@ -434,20 +549,11 @@ function createConnection(
   });
 
   const refreshSnapshot = (): void => {
-    runtime.snapshot = createSnapshot({
-      sessionId: connectionOptions.sessionId,
-      transport: options.transport,
-      phase: runtime.phase,
-      cursor: runtime.cursor,
-      continuity: runtime.continuity,
-      boundary: runtime.boundary,
-      retryCount: runtime.retryCount,
-      retryAt: runtime.retryAt,
-      lastHeartbeatAt: runtime.lastHeartbeatAt,
-      lastEventAt: runtime.lastEventAt,
-      failure: runtime.failure,
-      closeReason: runtime.closeReason
-    });
+    runtime.snapshot = createConnectionSnapshot(
+      connectionOptions,
+      options.transport,
+      runtime
+    );
   };
 
   const releaseCapacity = (): void => {
@@ -487,8 +593,8 @@ function createConnection(
     runtime.phase = "failed";
     runtime.retryAt = null;
     runtime.closeReason = null;
-    runtime.failure = createFailure(
-      connectionOptions.sessionId,
+    runtime.failure = createConnectionFailure(
+      connectionOptions,
       options.transport,
       new AttemptFailure("consumer_error", false)
     );
@@ -502,7 +608,7 @@ function createConnection(
     refreshSnapshot();
     if (connectionOptions.onState === null) return runtime.active;
     try {
-      const result = connectionOptions.onState(runtime.snapshot);
+      const result = invokeStateConsumer(connectionOptions, runtime.snapshot);
       if (isThenable(result)) {
         suppressPromiseRejection(result);
         setConsumerFailureWithoutNotification();
@@ -521,8 +627,8 @@ function createConnection(
     runtime.phase = "failed";
     runtime.retryAt = null;
     runtime.closeReason = null;
-    runtime.failure = createFailure(
-      connectionOptions.sessionId,
+    runtime.failure = createConnectionFailure(
+      connectionOptions,
       options.transport,
       attemptFailure
     );
@@ -540,8 +646,8 @@ function createConnection(
     runtime.phase = "failed";
     runtime.retryAt = null;
     runtime.closeReason = null;
-    runtime.failure = createExhaustedFailure(
-      connectionOptions.sessionId,
+    runtime.failure = createConnectionExhaustedFailure(
+      connectionOptions,
       options.transport,
       previousReason
     );
@@ -564,7 +670,7 @@ function createConnection(
     refreshSnapshot();
     if (connectionOptions.onState !== null) {
       try {
-        const result = connectionOptions.onState(runtime.snapshot);
+        const result = invokeStateConsumer(connectionOptions, runtime.snapshot);
         if (isThenable(result)) suppressPromiseRejection(result);
       } catch {
         // Explicit cancellation remains authoritative over observer failure.
@@ -579,7 +685,9 @@ function createConnection(
     runtime.retryCount = 0;
     runtime.retryAt = null;
     runtime.failure = null;
-    if (runtime.boundary === null) runtime.continuity = "contiguous";
+    if (runtime.boundary === null && !runtime.catalogResetRequired) {
+      runtime.continuity = "contiguous";
+    }
     if (kind === "heartbeat") {
       runtime.lastHeartbeatAt = observedAt;
     } else {
@@ -605,26 +713,37 @@ function createConnection(
     if (!runtime.active || runtime.attempt !== attempt) {
       throw new AttemptCancelled();
     }
-    const event = parseEventMessage(
-      message,
-      connectionOptions.sessionId,
-      runtime.cursor
-    );
-    validateEventContinuity(event, runtime, attempt);
+    const event = parseEventMessage(message, connectionOptions);
+    validateEventContinuity(event, runtime, attempt, connectionOptions.scope);
     const observedAt = readNow(options.clock);
-    invokeEventConsumer(connectionOptions.onEvent, event);
+    invokeEventConsumer(connectionOptions, event);
     if (!runtime.active || runtime.attempt !== attempt) {
       throw new AttemptCancelled();
     }
     runtime.cursor = event.cursor;
     attempt.eventCount += 1;
-    if (event.type === "replay_boundary") {
+    if (connectionOptions.scope === "session" && event.type === "replay_boundary") {
       runtime.boundary = Object.freeze({
         after: event.after,
         cursor: event.cursor,
         reason: event.reason
       });
       runtime.continuity = "boundary";
+    } else if (
+      connectionOptions.scope === "catalog" &&
+      "stream_id" in event
+    ) {
+      if (runtime.catalogStreamId === null) {
+        runtime.catalogStreamId = event.stream_id;
+      }
+      if (event.type === "catalog_reset") {
+        runtime.catalogStreamId = event.stream_id;
+        runtime.catalogResetRequired = false;
+        runtime.continuity = "contiguous";
+      } else if (event.type === "catalog_boundary") {
+        runtime.catalogResetRequired = true;
+        runtime.continuity = "boundary";
+      }
     }
     armIdleDeadline(attempt, options.clock, options.limits.idleTimeoutMs);
     markActivity("event", observedAt);
@@ -644,10 +763,7 @@ function createConnection(
         options.clock,
         options.limits.connectTimeoutMs
       );
-      const path = buildStreamPath(
-        connectionOptions.sessionId,
-        runtime.cursor
-      );
+      const path = buildStreamPath(connectionOptions, runtime.cursor);
       const fetchOperation = invokeFetch(
         options.fetch,
         path,
@@ -737,8 +853,8 @@ function createConnection(
     runtime.retryCount = nextRetry;
     runtime.phase = "reconnecting";
     runtime.closeReason = null;
-    runtime.failure = createFailure(
-      connectionOptions.sessionId,
+    runtime.failure = createConnectionFailure(
+      connectionOptions,
       options.transport,
       failure
     );
@@ -782,18 +898,20 @@ function createConnection(
   }
   if (alreadyAborted) {
     finishClosed("caller_aborted");
-    return connection;
+    return connection as BrowserSseConnection & BrowserSessionCatalogSseConnection;
   }
-  if (!notifyState()) return connection;
+  if (!notifyState()) {
+    return connection as BrowserSseConnection & BrowserSessionCatalogSseConnection;
+  }
   if (
     connectionOptions.signal !== null &&
     readAbortSignalState(connectionOptions.signal)
   ) {
     finishClosed("caller_aborted");
-    return connection;
+    return connection as BrowserSseConnection & BrowserSessionCatalogSseConnection;
   }
   queueMicrotask(launchAttempt);
-  return connection;
+  return connection as BrowserSseConnection & BrowserSessionCatalogSseConnection;
 }
 
 function readClientOptions(candidate: unknown): ParsedClientOptions {
@@ -811,7 +929,7 @@ function readClientOptions(candidate: unknown): ParsedClientOptions {
   });
 }
 
-function readConnectOptions(candidate: unknown): ParsedConnectOptions {
+function readConnectOptions(candidate: unknown): ParsedSessionConnectOptions {
   const values = readExactRecord(
     candidate,
     requiredConnectOptionKeys,
@@ -838,6 +956,8 @@ function readConnectOptions(candidate: unknown): ParsedConnectOptions {
     throw new TypeError("HostDeck browser SSE connection options are invalid.");
   }
   return Object.freeze({
+    scope: "session" as const,
+    connectionKey: `session:${session.value}`,
     sessionId: session.value,
     after: after.value,
     signal: (values.signal as AbortSignal | undefined) ?? null,
@@ -845,6 +965,44 @@ function readConnectOptions(candidate: unknown): ParsedConnectOptions {
     onState:
       (values.onState as
         | ((snapshot: BrowserSseSnapshot) => unknown)
+        | undefined) ?? null
+  });
+}
+
+function readCatalogConnectOptions(
+  candidate: unknown
+): ParsedCatalogConnectOptions {
+  const values = readExactRecord(
+    candidate,
+    requiredCatalogConnectOptionKeys,
+    catalogConnectOptionKeys
+  );
+  if (values === null) {
+    throw new TypeError("HostDeck browser SSE catalog options are invalid.");
+  }
+  const afterCandidate = values.after === undefined ? null : values.after;
+  const after =
+    afterCandidate === null
+      ? ({ ok: true, value: null } as const)
+      : safeParse(outputCursorSchema, afterCandidate);
+  if (
+    !after.ok ||
+    (after.value !== null && typeof after.value !== "number") ||
+    typeof values.onEvent !== "function" ||
+    (values.onState !== undefined && typeof values.onState !== "function") ||
+    (values.signal !== undefined && !isAbortSignal(values.signal))
+  ) {
+    throw new TypeError("HostDeck browser SSE catalog options are invalid.");
+  }
+  return Object.freeze({
+    scope: "catalog" as const,
+    connectionKey: "catalog" as const,
+    after: after.value,
+    signal: (values.signal as AbortSignal | undefined) ?? null,
+    onEvent: values.onEvent as (event: SessionCatalogEvent) => unknown,
+    onState:
+      (values.onState as
+        | ((snapshot: BrowserSessionCatalogSseSnapshot) => unknown)
         | undefined) ?? null
   });
 }
@@ -971,6 +1129,108 @@ function createSnapshot(input: BrowserSseSnapshot): BrowserSseSnapshot {
   });
 }
 
+function createCatalogSnapshot(
+  input: BrowserSessionCatalogSseSnapshot
+): BrowserSessionCatalogSseSnapshot {
+  return Object.freeze({
+    transport: input.transport,
+    phase: input.phase,
+    cursor: input.cursor,
+    continuity: input.continuity,
+    streamId: input.streamId,
+    resetRequired: input.resetRequired,
+    retryCount: input.retryCount,
+    retryAt: input.retryAt,
+    lastHeartbeatAt: input.lastHeartbeatAt,
+    lastEventAt: input.lastEventAt,
+    failure: input.failure,
+    closeReason: input.closeReason
+  });
+}
+
+function createInitialConnectionSnapshot(
+  options: ParsedConnectOptions,
+  transport: BrowserTransport
+): BrowserSseSnapshot | BrowserSessionCatalogSseSnapshot {
+  if (options.scope === "session") {
+    return createSnapshot({
+      sessionId: options.sessionId,
+      transport,
+      phase: "connecting",
+      cursor: options.after,
+      continuity: "unproven",
+      boundary: null,
+      retryCount: 0,
+      retryAt: null,
+      lastHeartbeatAt: null,
+      lastEventAt: null,
+      failure: null,
+      closeReason: null
+    });
+  }
+  return createCatalogSnapshot({
+    transport,
+    phase: "connecting",
+    cursor: options.after,
+    continuity: "unproven",
+    streamId: null,
+    resetRequired: false,
+    retryCount: 0,
+    retryAt: null,
+    lastHeartbeatAt: null,
+    lastEventAt: null,
+    failure: null,
+    closeReason: null
+  });
+}
+
+function createConnectionSnapshot(
+  options: ParsedConnectOptions,
+  transport: BrowserTransport,
+  runtime: ConnectionRuntime
+): BrowserSseSnapshot | BrowserSessionCatalogSseSnapshot {
+  if (options.scope === "session") {
+    return createSnapshot({
+      sessionId: options.sessionId,
+      transport,
+      phase: runtime.phase,
+      cursor: runtime.cursor,
+      continuity: runtime.continuity,
+      boundary: runtime.boundary,
+      retryCount: runtime.retryCount,
+      retryAt: runtime.retryAt,
+      lastHeartbeatAt: runtime.lastHeartbeatAt,
+      lastEventAt: runtime.lastEventAt,
+      failure: runtime.failure as BrowserSseFailure | null,
+      closeReason: runtime.closeReason
+    });
+  }
+  return createCatalogSnapshot({
+    transport,
+    phase: runtime.phase,
+    cursor: runtime.cursor,
+    continuity: runtime.continuity,
+    streamId: runtime.catalogStreamId,
+    resetRequired: runtime.catalogResetRequired,
+    retryCount: runtime.retryCount,
+    retryAt: runtime.retryAt,
+    lastHeartbeatAt: runtime.lastHeartbeatAt,
+    lastEventAt: runtime.lastEventAt,
+    failure: runtime.failure as BrowserSessionCatalogSseFailure | null,
+    closeReason: runtime.closeReason
+  });
+}
+
+function invokeStateConsumer(
+  options: ParsedConnectOptions,
+  snapshot: BrowserSseSnapshot | BrowserSessionCatalogSseSnapshot
+): unknown {
+  if (options.onState === null) return undefined;
+  return options.scope === "session"
+    ? options.onState(snapshot as BrowserSseSnapshot)
+    : options.onState(snapshot as BrowserSessionCatalogSseSnapshot);
+}
+
 function createFailure(
   sessionId: string,
   transport: BrowserTransport,
@@ -984,6 +1244,29 @@ function createFailure(
     apiError: failure.apiError,
     previousReason: null
   });
+}
+
+function createCatalogFailure(
+  transport: BrowserTransport,
+  failure: AttemptFailure
+): BrowserSessionCatalogSseFailure {
+  return Object.freeze({
+    reason: failure.reason,
+    transport,
+    status: failure.status,
+    apiError: failure.apiError,
+    previousReason: null
+  });
+}
+
+function createConnectionFailure(
+  options: ParsedConnectOptions,
+  transport: BrowserTransport,
+  failure: AttemptFailure
+): BrowserSseFailure | BrowserSessionCatalogSseFailure {
+  return options.scope === "session"
+    ? createFailure(options.sessionId, transport, failure)
+    : createCatalogFailure(transport, failure);
 }
 
 function createExhaustedFailure(
@@ -1001,11 +1284,39 @@ function createExhaustedFailure(
   });
 }
 
-function buildStreamPath(sessionId: string, after: number | null): string {
-  const base = browserSseRouteContract.path.replace(
-    ":session_id",
-    encodeURIComponent(sessionId)
-  );
+function createCatalogExhaustedFailure(
+  transport: BrowserTransport,
+  previousReason: Exclude<BrowserSseFailureReason, "reconnect_exhausted">
+): BrowserSessionCatalogSseFailure {
+  return Object.freeze({
+    reason: "reconnect_exhausted",
+    transport,
+    status: null,
+    apiError: null,
+    previousReason
+  });
+}
+
+function createConnectionExhaustedFailure(
+  options: ParsedConnectOptions,
+  transport: BrowserTransport,
+  previousReason: Exclude<BrowserSseFailureReason, "reconnect_exhausted">
+): BrowserSseFailure | BrowserSessionCatalogSseFailure {
+  return options.scope === "session"
+    ? createExhaustedFailure(options.sessionId, transport, previousReason)
+    : createCatalogExhaustedFailure(transport, previousReason);
+}
+
+function buildStreamPath(
+  options: ParsedConnectOptions,
+  after: number | null
+): string {
+  const base = options.scope === "session"
+    ? browserSseRouteContract.path.replace(
+        ":session_id",
+        encodeURIComponent(options.sessionId)
+      )
+    : browserSessionCatalogSseRouteContract.path;
   return after === null ? base : `${base}?after=${String(after)}`;
 }
 
@@ -1644,11 +1955,12 @@ async function consumeEventStream(
   }
 }
 
+type BrowserSseEvent = SelectedProjectionEvent | SessionCatalogEvent;
+
 function parseEventMessage(
   message: EventSourceMessage,
-  expectedSessionId: string,
-  _currentCursor: number | null
-): SelectedProjectionEvent {
+  options: ParsedConnectOptions
+): BrowserSseEvent {
   if (
     typeof message.id !== "string" ||
     typeof message.event !== "string" ||
@@ -1667,15 +1979,21 @@ function parseEventMessage(
   } catch {
     throw new AttemptFailure("invalid_event", false);
   }
-  const parsed = safeParse(selectedProjectionEventSchema, json);
+  const parsed = safeParse(
+    options.scope === "session"
+      ? selectedProjectionEventSchema
+      : sessionCatalogEventSchema,
+    json
+  );
   if (!parsed.ok) {
     throw new AttemptFailure("invalid_event", false);
   }
-  const event = parsed.value as SelectedProjectionEvent;
+  const event = parsed.value as BrowserSseEvent;
   if (
     event.cursor !== cursor.value ||
     event.type !== message.event ||
-    event.session_id !== expectedSessionId
+    (options.scope === "session" &&
+      (!("session_id" in event) || event.session_id !== options.sessionId))
   ) {
     throw new AttemptFailure("invalid_event", false);
   }
@@ -1683,9 +2001,10 @@ function parseEventMessage(
 }
 
 function validateEventContinuity(
-  event: SelectedProjectionEvent,
+  event: BrowserSseEvent,
   runtime: ConnectionRuntime,
-  attempt: Attempt
+  attempt: Attempt,
+  scope: ParsedConnectOptions["scope"]
 ): void {
   const current = runtime.cursor;
   if (current !== null) {
@@ -1696,7 +2015,7 @@ function validateEventContinuity(
       throw new AttemptFailure("out_of_order_event", false);
     }
   }
-  if (event.type === "replay_boundary") {
+  if (scope === "session" && event.type === "replay_boundary") {
     if (
       attempt.eventCount !== 0 ||
       runtime.boundary !== null ||
@@ -1708,6 +2027,30 @@ function validateEventContinuity(
     }
     return;
   }
+  if (scope === "catalog") {
+    if (!("stream_id" in event)) {
+      throw new AttemptFailure("invalid_event", false);
+    }
+    if (event.type === "catalog_reset") {
+      if (attempt.eventCount !== 0) {
+        throw new AttemptFailure("invalid_event", false);
+      }
+      return;
+    }
+    if (
+      current === null ||
+      runtime.catalogStreamId === null ||
+      runtime.catalogResetRequired
+    ) {
+      throw new AttemptFailure("invalid_event", false);
+    }
+    if (
+      runtime.catalogStreamId !== null &&
+      event.stream_id !== runtime.catalogStreamId
+    ) {
+      throw new AttemptFailure("invalid_event", false);
+    }
+  }
   const expected = (current ?? 0) + 1;
   if (!Number.isSafeInteger(expected) || event.cursor !== expected) {
     throw new AttemptFailure("cursor_gap", false);
@@ -1715,12 +2058,14 @@ function validateEventContinuity(
 }
 
 function invokeEventConsumer(
-  consumer: (event: SelectedProjectionEvent) => unknown,
-  event: SelectedProjectionEvent
+  options: ParsedConnectOptions,
+  event: BrowserSseEvent
 ): void {
   let result: unknown;
   try {
-    result = consumer(event);
+    result = options.scope === "session"
+      ? options.onEvent(event as SelectedProjectionEvent)
+      : options.onEvent(event as SessionCatalogEvent);
   } catch {
     throw new AttemptFailure("consumer_error", false);
   }

@@ -403,7 +403,7 @@ test("audits laptop resume and nested Host access", async ({ page }) => {
   await expectAxeClean(page, "laptop resume sheet");
   await dialog.getByRole("button", { name: "Back to session actions" }).click();
   dialog = page.getByRole("dialog", { name: "Session actions", exact: true });
-  await dialog.getByRole("button", { name: /Host & access/iu }).click();
+  await dialog.getByRole("button", { name: "Open Host and access" }).click();
   dialog = page.getByRole("dialog", { name: "Host & access" });
   await expectValidDefinitionLists(page);
   await expectAxeClean(page, "nested Host and access sheet");
@@ -458,10 +458,9 @@ test("audits reduced-motion loading and 320 reflow without focus clipping", asyn
   await expectReducedMotion(page);
   await expectNoHorizontalOverflow(page);
   await expectDisabledContrastPolicy(page);
-  const body = dialog.getByRole("region", { name: "Model settings" });
   const status = dialog.getByRole("status");
   await status.scrollIntoViewIfNeeded();
-  expect(await isContainedBy(status, body)).toBe(true);
+  expect(await isContainedBy(status, dialog)).toBe(true);
   const close = dialog.getByRole("button", { name: "Close model control" });
   await close.focus();
   await expect(close).toBeFocused();

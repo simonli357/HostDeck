@@ -12,7 +12,7 @@ import {
   type SelectedSessionDetailResponse,
   type SelectedSessionListResponse,
   type SelectedSessionReadAccess,
-  type SelectedSessionReadItem,
+  type SessionCatalogEvent,
   selectedAccessStateResponseSchema,
   selectedDeviceRevokeParamsSchema,
   selectedDeviceRevokeRequestSchema,
@@ -20,6 +20,7 @@ import {
   selectedEventPageMaxSize,
   selectedHostLockRequestSchema,
   selectedHostLockStateResponseSchema,
+  selectedSessionDetailResponseSchema,
   selectedSessionListMaximumActiveSessions,
   sessionIdSchema
 } from "@hostdeck/contracts";
@@ -54,6 +55,16 @@ import type {
 } from "./http-route-contracts.js";
 import { browserHttpSelectedSessionReadRouteIds } from "./http-route-contracts.js";
 import {
+  type BrowserMissionSessionItem,
+  type BrowserSessionCatalogBoundary,
+  type BrowserSessionCatalogData,
+  type BrowserSessionCatalogReducerState,
+  createBrowserSessionCatalogReducerState,
+  reduceBrowserSessionCatalogEvent
+} from "./session-catalog-state.js";
+import {
+  type BrowserSessionCatalogSseConnection,
+  type BrowserSessionCatalogSseSnapshot,
   type BrowserSseBoundary,
   type BrowserSseClient,
   type BrowserSseCloseReason,
@@ -62,6 +73,8 @@ import {
   type BrowserSseSnapshot,
   isBrowserSseClient
 } from "./sse-client.js";
+
+export type { BrowserMissionSessionItem } from "./session-catalog-state.js";
 
 export const browserConnectionPhases = Object.freeze([
   "idle",
@@ -94,6 +107,7 @@ export const browserConnectionFailureSources = Object.freeze([
   "host_status",
   "session_list",
   "session_detail",
+  "session_catalog",
   "session_stream",
   "csrf"
 ] as const);
@@ -127,7 +141,8 @@ export type BrowserConnectionFailureReason =
   | BrowserSseFailureReason
   | BrowserCsrfFailureReason
   | "authority_mismatch"
-  | "page_mismatch";
+  | "page_mismatch"
+  | "session_removed";
 
 export type BrowserConnectionTarget =
   | Readonly<{ kind: "mission_control" }>
@@ -136,7 +151,11 @@ export type BrowserConnectionTarget =
 export interface BrowserConnectionFailure {
   readonly source: BrowserConnectionFailureSource;
   readonly reason: BrowserConnectionFailureReason;
-  readonly routeId: BrowserHttpRouteId | "session_event_stream" | null;
+  readonly routeId:
+    | BrowserHttpRouteId
+    | "session_catalog_stream"
+    | "session_event_stream"
+    | null;
   readonly transport: BrowserHttpTransport | null;
   readonly status: number | null;
   readonly apiError: ApiErrorEnvelope | null;
@@ -154,7 +173,7 @@ export interface BrowserConnectionResource<Data> {
 export interface BrowserMissionControlData {
   readonly kind: "mission_control";
   readonly access: SelectedSessionReadAccess;
-  readonly sessions: readonly SelectedSessionReadItem[];
+  readonly sessions: readonly BrowserMissionSessionItem[];
   readonly nextCursor: string | null;
   readonly hasMore: boolean;
   readonly pageCount: number;
@@ -184,6 +203,24 @@ export interface BrowserConnectionStreamState {
   readonly failure: BrowserConnectionFailure | null;
 }
 
+export interface BrowserConnectionCatalogState {
+  readonly state:
+    | "idle"
+    | "connecting"
+    | "resetting"
+    | "current"
+    | "reconnecting"
+    | "stale"
+    | "failed"
+    | "blocked"
+    | "closed";
+  readonly data: BrowserMissionControlData | null;
+  readonly snapshot: BrowserSessionCatalogSseSnapshot | null;
+  readonly boundary: BrowserSessionCatalogBoundary | null;
+  readonly failure: BrowserConnectionFailure | null;
+  readonly observedAt: string | null;
+}
+
 export interface BrowserConnectionWriteEligibility {
   readonly scope: "browser_shell";
   readonly eligible: boolean;
@@ -197,6 +234,7 @@ export interface BrowserConnectionSnapshot {
   readonly access: BrowserConnectionResource<SelectedAccessStateResponse>;
   readonly host: BrowserConnectionResource<SelectedHostStatusResponse>;
   readonly targetState: BrowserConnectionResource<BrowserConnectionTargetData>;
+  readonly catalog?: BrowserConnectionCatalogState;
   readonly stream: BrowserConnectionStreamState;
   readonly csrf: BrowserCsrfSnapshot;
   readonly writeEligibility: BrowserConnectionWriteEligibility;
@@ -339,6 +377,14 @@ interface ActiveStream {
   closeReason: "client_closed" | "route_changed" | "unmounted" | null;
 }
 
+interface ActiveCatalogStream {
+  readonly authorityKey: string;
+  readonly startedAt: string;
+  connection: BrowserSessionCatalogSseConnection | null;
+  active: boolean;
+  closeReason: "client_closed" | "route_changed" | null;
+}
+
 interface PreparedDeviceRevokeInput {
   readonly deviceId: string;
   readonly operationId: string;
@@ -398,12 +444,17 @@ export function createBrowserConnectionStateCoordinator(
   let access = emptyResource<SelectedAccessStateResponse>("idle");
   let host = emptyResource<SelectedHostStatusResponse>("idle");
   let targetState = emptyResource<BrowserConnectionTargetData>("idle");
+  let catalogReducer = createBrowserSessionCatalogReducerState();
+  let catalog = idleCatalog();
   let stream = notApplicableStream();
   let csrf = csrfClient.snapshot();
   let lastFailure: BrowserConnectionFailure | null = null;
   let pendingLoad: PendingLoad | null = null;
   let pendingPage: PendingPage | null = null;
   let activeStream: ActiveStream | null = null;
+  let activeCatalogStream: ActiveCatalogStream | null = null;
+  let catalogAuthority: string | null = null;
+  let catalogRevision = 0;
   let lastClockMs: number | null = null;
   let attemptedBootstrapAuthority: string | null = null;
   let hostLockTransition: BrowserConnectionHostLockTransition = "none";
@@ -416,6 +467,7 @@ export function createBrowserConnectionStateCoordinator(
     access,
     host,
     targetState,
+    catalog,
     stream,
     csrf,
     writeEligibility: deriveWriteEligibility(access, host, csrf, hostLockTransition),
@@ -444,10 +496,19 @@ export function createBrowserConnectionStateCoordinator(
     const nextSnapshot: BrowserConnectionSnapshot = Object.freeze({
       epoch,
       target,
-      phase: derivePhase(closed, target, access, host, targetState, stream, csrf),
+      phase: derivePhase(
+        closed,
+        target,
+        access,
+        host,
+        targetState,
+        stream,
+        csrf
+      ),
       access,
       host,
       targetState,
+      catalog,
       stream,
       csrf,
       writeEligibility,
@@ -502,6 +563,22 @@ export function createBrowserConnectionStateCoordinator(
     stream = target?.kind === "session_detail"
       ? idleStream(boundaryFromTargetData(targetState.data))
       : notApplicableStream();
+  };
+
+  const closeCatalog = (
+    reason: "client_closed" | "route_changed",
+    nextState: "blocked" | "closed"
+  ): void => {
+    const active = activeCatalogStream;
+    activeCatalogStream = null;
+    if (active !== null) {
+      active.active = false;
+      active.closeReason = reason;
+      active.connection?.close(reason);
+    }
+    catalogAuthority = null;
+    catalogReducer = createBrowserSessionCatalogReducerState();
+    catalog = nextState === "closed" ? closedCatalog() : blockedCatalog();
   };
 
   const abortQueries = (): void => {
@@ -583,6 +660,182 @@ export function createBrowserConnectionStateCoordinator(
       observedAt
     });
 
+  const synchronizeCurrentTargetFromCatalog = (): void => {
+    if (
+      catalog.state !== "current" ||
+      catalog.data === null ||
+      catalogReducer.data === null
+    ) {
+      return;
+    }
+    const observedAt = catalogReducer.data.observedAt;
+    if (target?.kind === "mission_control") {
+      if (
+        targetState.state !== "current" ||
+        targetState.data !== catalog.data
+      ) {
+        targetState = currentResource(catalog.data, observedAt);
+      }
+      return;
+    }
+    if (target?.kind !== "session_detail") return;
+    const selectedSessionId = target.sessionId;
+    const item = catalog.data.sessions.find(
+      (candidate) => candidate.session.id === selectedSessionId
+    );
+    if (item === undefined) {
+      if (
+        targetState.state === "not_found" &&
+        targetState.failure?.reason === "session_removed"
+      ) {
+        return;
+      }
+      const failure = catalogSessionRemovedFailure(
+        epoch,
+        observedAt,
+        origin.transport
+      );
+      closeStream("route_changed");
+      targetState = notFoundResource(failure);
+      rememberFailure(failure);
+      return;
+    }
+    if (targetState.data?.kind !== "session_detail") return;
+    const response = mergeCatalogProjectionIntoDetail(
+      targetState.data.response,
+      item
+    );
+    if (response === null) {
+      const failure = catalogClientFailure(epoch, observedAt, origin.transport);
+      const active = activeCatalogStream;
+      activeCatalogStream = null;
+      if (active !== null) {
+        active.active = false;
+        active.closeReason = "route_changed";
+        active.connection?.close("route_changed");
+      }
+      catalog = failedCatalog(catalog, failure);
+      targetState = failedResource(failure);
+      rememberFailure(failure);
+      return;
+    }
+    if (response === targetState.data.response) return;
+    targetState = currentResource(
+      Object.freeze({ kind: "session_detail" as const, response }),
+      observedAt
+    );
+  };
+
+  const ensureCatalogStream = (
+    selectedAccess: SelectedAccessStateResponse,
+    observedAt: string
+  ): void => {
+    const authorityKey = sessionCatalogAuthorityKey(selectedAccess);
+    if (authorityKey === null) {
+      closeCatalog("route_changed", "blocked");
+      return;
+    }
+    if (
+      activeCatalogStream?.active &&
+      activeCatalogStream.authorityKey === authorityKey
+    ) {
+      return;
+    }
+    if (catalogAuthority !== null && catalogAuthority !== authorityKey) {
+      closeCatalog("route_changed", "blocked");
+    } else if (activeCatalogStream !== null) {
+      const previous = activeCatalogStream;
+      activeCatalogStream = null;
+      previous.active = false;
+      previous.closeReason = "route_changed";
+      previous.connection?.close("route_changed");
+    }
+    catalogAuthority = authorityKey;
+    const owner: ActiveCatalogStream = {
+      authorityKey,
+      startedAt: observedAt,
+      connection: null,
+      active: true,
+      closeReason: null
+    };
+    activeCatalogStream = owner;
+    let connection: BrowserSessionCatalogSseConnection;
+    try {
+      connection = sseClient.connectCatalog({
+        onEvent(event: SessionCatalogEvent) {
+          if (
+            !owner.active ||
+            activeCatalogStream !== owner ||
+            closed ||
+            sessionCatalogAuthorityKey(access.data) !== authorityKey
+          ) {
+            return;
+          }
+          catalogReducer = reduceBrowserSessionCatalogEvent(
+            catalogReducer,
+            event
+          );
+          if (catalogRevision === Number.MAX_SAFE_INTEGER) {
+            throw connectionError("client_contract");
+          }
+          catalogRevision += 1;
+        },
+        onState(snapshot) {
+          if (
+            !owner.active ||
+            activeCatalogStream !== owner ||
+            closed ||
+            sessionCatalogAuthorityKey(access.data) !== authorityKey
+          ) {
+            return;
+          }
+          const failure = snapshot.failure === null
+            ? null
+            : catalogSseFailure(snapshot, epoch, owner.startedAt);
+          catalog = catalogStateFromSnapshot(
+            catalog,
+            catalogReducer,
+            snapshot,
+            selectedAccess,
+            failure
+          );
+          if (failure !== null) rememberFailure(failure);
+          synchronizeCurrentTargetFromCatalog();
+          if (
+            snapshot.phase === "failed" ||
+            snapshot.phase === "closed"
+          ) {
+            activeCatalogStream = null;
+            owner.active = false;
+          }
+          publish();
+        }
+      });
+    } catch {
+      if (activeCatalogStream === owner) activeCatalogStream = null;
+      owner.active = false;
+      const failure = catalogClientFailure(epoch, observedAt, origin.transport);
+      catalog = failedCatalog(catalog, failure);
+      rememberFailure(failure);
+      publish();
+      return;
+    }
+    owner.connection = connection;
+    if (activeCatalogStream !== owner || !owner.active) {
+      if (owner.closeReason !== null) connection.close(owner.closeReason);
+      return;
+    }
+    catalog = catalogStateFromSnapshot(
+      catalog,
+      catalogReducer,
+      connection.snapshot(),
+      selectedAccess,
+      null
+    );
+    synchronizeCurrentTargetFromCatalog();
+    publish();
+  };
+
   const markAuthorityLost = (
     failure: BrowserConnectionFailure,
     reason: BrowserCsrfInvalidationReason
@@ -591,6 +844,7 @@ export function createBrowserConnectionStateCoordinator(
     hostLockProvenGeneration = null;
     invalidateCsrf(reason);
     closeStream("route_changed");
+    closeCatalog("route_changed", "blocked");
     access = retainOrFail(access, failure);
     host = emptyResource("blocked");
     targetState = emptyResource("blocked");
@@ -630,6 +884,7 @@ export function createBrowserConnectionStateCoordinator(
     abortQueries();
     invalidateCsrf("device_revoked");
     closeStream("route_changed");
+    closeCatalog("route_changed", "blocked");
     access = currentResource(revokedBrowserAccess(previousAccess), observedAt);
     host = emptyResource("blocked");
     targetState = emptyResource("blocked");
@@ -703,7 +958,8 @@ export function createBrowserConnectionStateCoordinator(
     previousHost: SelectedHostStatusResponse | null,
     loadHostLockGeneration: number,
     loadHostLockProvenGeneration: number | null,
-    mayProveHostLock: boolean
+    mayProveHostLock: boolean,
+    loadCatalogRevision: number
   ): Promise<BrowserConnectionSnapshot> => {
     const accessResult = await query(
       () => httpClient.request("access_state", {}, { signal: controller.signal }),
@@ -743,6 +999,7 @@ export function createBrowserConnectionStateCoordinator(
       host = emptyResource("blocked");
       targetState = emptyResource("blocked");
       closeStream("route_changed");
+      closeCatalog("route_changed", "blocked");
       invalidateCsrf(
         mismatchInvalidation === "remote_authority_changed"
           ? "remote_authority_changed"
@@ -791,6 +1048,7 @@ export function createBrowserConnectionStateCoordinator(
       host = emptyResource("blocked");
       targetState = emptyResource("blocked");
       closeStream("route_changed");
+      closeCatalog("route_changed", "blocked");
       if (
         accessTransition === null &&
         (csrf.phase !== "idle" || previousAccess?.can_read_sessions === true)
@@ -799,6 +1057,8 @@ export function createBrowserConnectionStateCoordinator(
       }
       return publish();
     }
+
+    ensureCatalogStream(nextAccess, observedAt);
 
     host = loadingResource(host, true);
     targetState = loadingResource(targetState, true);
@@ -866,6 +1126,7 @@ export function createBrowserConnectionStateCoordinator(
             : "access_lost"
         );
         closeStream("route_changed");
+        closeCatalog("route_changed", "blocked");
         rememberFailure(failure);
         publish();
         return;
@@ -937,6 +1198,9 @@ export function createBrowserConnectionStateCoordinator(
         );
         stream = idleStream(boundaryFromTargetData(targetState.data));
       }
+      if (catalogRevision !== loadCatalogRevision) {
+        synchronizeCurrentTargetFromCatalog();
+      }
       publish();
     };
 
@@ -972,6 +1236,7 @@ export function createBrowserConnectionStateCoordinator(
     const loadHostLockGeneration = hostLockGeneration;
     const loadHostLockProvenGeneration = hostLockProvenGeneration;
     const mayProveHostLock = hostLockTransition === "unconfirmed";
+    const loadCatalogRevision = catalogRevision;
     abortQueries();
     epoch += 1;
     closeStream("route_changed");
@@ -996,7 +1261,8 @@ export function createBrowserConnectionStateCoordinator(
           previousHost,
           loadHostLockGeneration,
           loadHostLockProvenGeneration,
-          mayProveHostLock
+          mayProveHostLock,
+          loadCatalogRevision
         )
       )
       .finally(() => {
@@ -1619,6 +1885,7 @@ export function createBrowserConnectionStateCoordinator(
       epoch += 1;
       abortQueries();
       closeStream("client_closed");
+      closeCatalog("client_closed", "closed");
       sseClient.close();
       csrfClient.close();
       refreshCsrf();
@@ -1900,7 +2167,19 @@ function hasCurrentSelectedSessionAuthority(
     snapshot.access.data?.can_read_sessions === true &&
     snapshot.targetState.state === "current" &&
     snapshot.targetState.data?.kind === "session_detail" &&
-    snapshot.targetState.data.response.session.session.id === sessionId
+    snapshot.targetState.data.response.session.session.id === sessionId &&
+    !catalogProvesSessionRemoved(snapshot.catalog, sessionId)
+  );
+}
+
+function catalogProvesSessionRemoved(
+  catalog: BrowserConnectionCatalogState | undefined,
+  sessionId: string
+): boolean {
+  return (
+    catalog?.state === "current" &&
+    catalog.data !== null &&
+    !catalog.data.sessions.some((item) => item.session.id === sessionId)
   );
 }
 
@@ -2058,7 +2337,9 @@ function missionData(response: SelectedSessionListResponse): BrowserMissionContr
   return Object.freeze({
     kind: "mission_control",
     access: response.access,
-    sessions: Object.freeze([...response.sessions]),
+    sessions: Object.freeze(
+      response.sessions.map((item) => Object.freeze({ session: item.session }))
+    ),
     nextCursor: response.next_cursor,
     hasMore: response.has_more,
     pageCount: 1
@@ -2075,7 +2356,10 @@ function mergeMissionData(
   ) {
     return null;
   }
-  const combined = [...current.sessions, ...next.sessions];
+  const combined = [
+    ...current.sessions,
+    ...next.sessions.map((item) => Object.freeze({ session: item.session }))
+  ];
   if (combined.length > selectedSessionListMaximumActiveSessions) return null;
   if (combined.length === selectedSessionListMaximumActiveSessions && next.has_more) return null;
   const ids = new Set(combined.map((item) => item.session.id));
@@ -2128,6 +2412,237 @@ function continuationMatches(
   } catch {
     return false;
   }
+}
+
+function sessionCatalogAuthorityKey(
+  access: SelectedAccessStateResponse | null
+): string | null {
+  if (
+    access === null ||
+    !access.can_read_sessions ||
+    expectedAccessMode(access) === null
+  ) {
+    return null;
+  }
+  return JSON.stringify([
+    access.configured_origin,
+    access.network_mode,
+    access.transport,
+    access.authentication_state,
+    access.device_id,
+    access.permission,
+    access.device_expires_at
+  ]);
+}
+
+function sessionReadAccessFromAccess(
+  access: SelectedAccessStateResponse
+): SelectedSessionReadAccess {
+  const mode = expectedAccessMode(access);
+  if (mode === null) throw connectionError("client_contract");
+  return Object.freeze({
+    mode,
+    network_mode: access.network_mode,
+    transport: access.transport
+  });
+}
+
+function catalogMissionData(
+  source: BrowserSessionCatalogData,
+  access: SelectedAccessStateResponse,
+  previous: BrowserMissionControlData | null
+): BrowserMissionControlData {
+  const selectedAccess = sessionReadAccessFromAccess(access);
+  if (
+    previous !== null &&
+    previous.sessions === source.sessions &&
+    sameSessionAccess(previous.access, selectedAccess) &&
+    !previous.hasMore &&
+    previous.nextCursor === null &&
+    previous.pageCount === 1
+  ) {
+    return previous;
+  }
+  return Object.freeze({
+    kind: "mission_control",
+    access: selectedAccess,
+    sessions: source.sessions,
+    nextCursor: null,
+    hasMore: false,
+    pageCount: 1
+  });
+}
+
+function catalogStateFromSnapshot(
+  previous: BrowserConnectionCatalogState,
+  reducer: BrowserSessionCatalogReducerState,
+  snapshot: BrowserSessionCatalogSseSnapshot,
+  access: SelectedAccessStateResponse,
+  failure: BrowserConnectionFailure | null
+): BrowserConnectionCatalogState {
+  const data = reducer.data === null
+    ? null
+    : catalogMissionData(reducer.data, access, previous.data);
+  let state: BrowserConnectionCatalogState["state"];
+  if (failure !== null || snapshot.phase === "failed") {
+    state = data === null ? "failed" : "stale";
+  } else if (
+    reducer.phase === "boundary" ||
+    snapshot.continuity === "boundary" ||
+    snapshot.resetRequired
+  ) {
+    state = data === null ? "failed" : "stale";
+  } else if (
+    reducer.phase === "current" &&
+    snapshot.phase === "connected"
+  ) {
+    state = "current";
+  } else if (reducer.phase === "resetting") {
+    state = "resetting";
+  } else if (snapshot.phase === "reconnecting") {
+    state = "reconnecting";
+  } else if (snapshot.phase === "closed") {
+    state = data === null ? "failed" : "stale";
+  } else {
+    state = "connecting";
+  }
+  return Object.freeze({
+    state,
+    data,
+    snapshot,
+    boundary: reducer.boundary,
+    failure,
+    observedAt: reducer.data?.observedAt ?? null
+  });
+}
+
+function idleCatalog(): BrowserConnectionCatalogState {
+  return Object.freeze({
+    state: "idle",
+    data: null,
+    snapshot: null,
+    boundary: null,
+    failure: null,
+    observedAt: null
+  });
+}
+
+function blockedCatalog(): BrowserConnectionCatalogState {
+  return Object.freeze({
+    state: "blocked",
+    data: null,
+    snapshot: null,
+    boundary: null,
+    failure: null,
+    observedAt: null
+  });
+}
+
+function closedCatalog(): BrowserConnectionCatalogState {
+  return Object.freeze({
+    state: "closed",
+    data: null,
+    snapshot: null,
+    boundary: null,
+    failure: null,
+    observedAt: null
+  });
+}
+
+function failedCatalog(
+  previous: BrowserConnectionCatalogState,
+  failure: BrowserConnectionFailure
+): BrowserConnectionCatalogState {
+  return Object.freeze({
+    state: previous.data === null ? "failed" : "stale",
+    data: previous.data,
+    snapshot: previous.snapshot,
+    boundary: previous.boundary,
+    failure,
+    observedAt: previous.observedAt
+  });
+}
+
+function mergeCatalogProjectionIntoDetail(
+  current: SelectedSessionDetailResponse,
+  item: BrowserMissionSessionItem
+): SelectedSessionDetailResponse | null {
+  if (
+    current.session.session.id !== item.session.id ||
+    current.session.session.codex_thread_id !== item.session.codex_thread_id
+  ) {
+    return null;
+  }
+  const nextProjection = Object.freeze({
+    ...item.session,
+    last_event_cursor: current.session.session.last_event_cursor
+  });
+  if (sameDetailProjection(current.session.session, nextProjection)) return current;
+  const parsed = selectedSessionDetailResponseSchema.safeParse({
+    access: current.access,
+    session: {
+      session: nextProjection,
+      event_window: current.session.event_window
+    }
+  });
+  return parsed.success ? parsed.data : null;
+}
+
+function sameDetailProjection(
+  left: BrowserMissionSessionItem["session"],
+  right: BrowserMissionSessionItem["session"]
+): boolean {
+  return (
+    left.id === right.id &&
+    left.name === right.name &&
+    left.codex_thread_id === right.codex_thread_id &&
+    left.cwd === right.cwd &&
+    left.runtime_source === right.runtime_source &&
+    left.runtime_version === right.runtime_version &&
+    left.created_at === right.created_at &&
+    left.archived_at === right.archived_at &&
+    left.session_state === right.session_state &&
+    left.turn_state === right.turn_state &&
+    left.attention === right.attention &&
+    left.freshness === right.freshness &&
+    left.freshness_reason === right.freshness_reason &&
+    left.updated_at === right.updated_at &&
+    left.last_activity_at === right.last_activity_at &&
+    left.branch === right.branch &&
+    left.model === right.model &&
+    sameSessionSettings(left.settings, right.settings) &&
+    sameGoalCue(left.goal, right.goal) &&
+    left.recent_summary === right.recent_summary &&
+    left.last_event_cursor === right.last_event_cursor
+  );
+}
+
+function sameSessionSettings(
+  left: BrowserMissionSessionItem["session"]["settings"],
+  right: BrowserMissionSessionItem["session"]["settings"]
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.collaboration_mode === right.collaboration_mode &&
+      left.runtime_model === right.runtime_model &&
+      left.reasoning_effort === right.reasoning_effort &&
+      left.observed_at === right.observed_at)
+  );
+}
+
+function sameGoalCue(
+  left: BrowserMissionSessionItem["session"]["goal"],
+  right: BrowserMissionSessionItem["session"]["goal"]
+): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.objective === right.objective &&
+      left.state === right.state)
+  );
 }
 
 function boundaryFromTargetData(
@@ -2356,6 +2871,7 @@ function sameConnectionSnapshot(
     left.access === right.access &&
     left.host === right.host &&
     left.targetState === right.targetState &&
+    left.catalog === right.catalog &&
     sameStreamState(left.stream, right.stream) &&
     left.csrf === right.csrf &&
     sameWriteEligibility(left.writeEligibility, right.writeEligibility) &&
@@ -2442,7 +2958,11 @@ function derivePhase(
     return "access_limited";
   }
   if (targetState.state === "not_found") return "not_found";
-  for (const failure of [host.failure, targetState.failure, stream.failure]) {
+  for (const failure of [
+    host.failure,
+    targetState.failure,
+    stream.failure
+  ]) {
     if (failure !== null && fatalFailureReasons.includes(failure.reason)) return "fatal";
   }
   if (csrf.phase === "failed") {
@@ -2535,6 +3055,59 @@ function sseFailure(
     transport: failure.transport,
     status: failure.status,
     apiError: failure.apiError,
+    epoch: failureEpoch,
+    observedAt
+  });
+}
+
+function catalogSseFailure(
+  snapshot: BrowserSessionCatalogSseSnapshot,
+  failureEpoch: number,
+  observedAt: string
+): BrowserConnectionFailure {
+  const failure = snapshot.failure;
+  if (failure === null) throw connectionError("client_contract");
+  return freezeFailure({
+    source: "session_catalog",
+    reason: failure.reason,
+    routeId: "session_catalog_stream",
+    transport: failure.transport,
+    status: failure.status,
+    apiError: failure.apiError,
+    epoch: failureEpoch,
+    observedAt
+  });
+}
+
+function catalogClientFailure(
+  failureEpoch: number,
+  observedAt: string,
+  transport: BrowserHttpTransport
+): BrowserConnectionFailure {
+  return freezeFailure({
+    source: "session_catalog",
+    reason: "client_contract",
+    routeId: "session_catalog_stream",
+    transport,
+    status: null,
+    apiError: null,
+    epoch: failureEpoch,
+    observedAt
+  });
+}
+
+function catalogSessionRemovedFailure(
+  failureEpoch: number,
+  observedAt: string,
+  transport: BrowserHttpTransport
+): BrowserConnectionFailure {
+  return freezeFailure({
+    source: "session_catalog",
+    reason: "session_removed",
+    routeId: "session_catalog_stream",
+    transport,
+    status: null,
+    apiError: null,
     epoch: failureEpoch,
     observedAt
   });

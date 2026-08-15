@@ -4,7 +4,10 @@ import {
   selectedResumeCommandMaxLength,
   selectedResumeMetadataResponseSchema,
 } from "../../packages/contracts/src/index.js";
-import { sessionDetailBrowserSessionId } from "./session-detail-fixture.js";
+import {
+  sessionDetailBrowserCodexThreadId,
+  sessionDetailBrowserSessionId
+} from "./session-detail-fixture.js";
 
 export type LaptopResumeApiOutcome =
   | "available"
@@ -31,7 +34,7 @@ export interface LaptopResumeApiController {
   readonly setOutcome: (outcome: LaptopResumeApiOutcome) => void;
 }
 
-const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
+const threadId = sessionDetailBrowserCodexThreadId;
 const longExecutable = `/${"x".repeat(
   selectedResumeCommandMaxLength - threadId.length - " resume ".length - 1
 )}`;

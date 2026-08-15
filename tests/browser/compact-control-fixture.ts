@@ -9,6 +9,7 @@ import {
 } from "../../packages/contracts/src/index.js";
 import {
   type SessionDetailApiVariant,
+  sessionDetailBrowserCodexThreadId,
   sessionDetailBrowserSessionId
 } from "./session-detail-fixture.js";
 import {
@@ -58,7 +59,7 @@ export interface CompactControlApiController {
 const timestamp = "2026-07-27T16:00:00.000Z";
 const compactPath = `/api/v1/sessions/${sessionDetailBrowserSessionId}/compact`;
 const fixtureOperationId = "op_server_compact_browser_fixture_001";
-const threadId = "thread-private-browser-detail";
+const threadId = sessionDetailBrowserCodexThreadId;
 
 export async function installCompactControlApi(
   page: Page,

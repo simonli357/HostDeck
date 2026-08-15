@@ -33,7 +33,9 @@ test("keeps one ordered mobile Session actions sheet with idle archive and Host 
   const trigger = page.locator('button[aria-label="Open session actions"]');
   await expect(trigger).toHaveCSS("width", "44px");
   await expect(trigger).toHaveCSS("height", "44px");
-  await expect(page.getByRole("button", { name: "Open Host and access" })).toHaveCount(0);
+  await expect(
+    page.locator(".hostdeck-app-bar").getByRole("button", { name: "Open Host and access" })
+  ).toHaveCount(0);
 
   const dialog = actionsDialog(page, "Session actions");
   await expect(dialog.locator(".hostdeck-utility-menu__item strong")).toHaveText([
@@ -50,7 +52,7 @@ test("keeps one ordered mobile Session actions sheet with idle archive and Host 
   expect(fixture.archive.requests()).toHaveLength(0);
   await capture(page, "menu-idle-390x844.png");
 
-  await dialog.getByRole("button", { name: /Host & access/iu }).click();
+  await dialog.getByRole("button", { name: "Open Host and access" }).click();
   const hostDialog = actionsDialog(page, "Host & access");
   await expect(hostDialog.getByRole("heading", { name: "Secure control ready" })).toBeVisible();
   await expect(page.locator('[role="dialog"]')).toHaveCount(1);
@@ -218,7 +220,9 @@ for (const disabledCase of [
       await expect(interruptAction(dialog)).toBeEnabled();
       await expect(interruptAction(dialog)).toBeFocused();
     } else if (disabledCase.name === "stale") {
-      await expect(dialog.getByRole("button", { name: /Host & access/iu })).toBeFocused();
+      await expect(
+        dialog.getByRole("button", { name: "Open Host and access" })
+      ).toBeFocused();
     } else {
       await expect(dialog.getByRole("button", { name: /Resume on laptop/iu })).toBeFocused();
     }

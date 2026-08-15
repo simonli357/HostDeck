@@ -4,7 +4,10 @@ import {
   interruptRequestSchema,
   interruptResponseSchema
 } from "../../packages/contracts/src/index.js";
-import { sessionDetailBrowserSessionId } from "./session-detail-fixture.js";
+import {
+  sessionDetailBrowserCodexThreadId,
+  sessionDetailBrowserSessionId
+} from "./session-detail-fixture.js";
 
 export type InterruptApiOutcome =
   | "success"
@@ -24,7 +27,7 @@ export interface InterruptApiController {
 export const interruptBrowserTurnId = "turn-browser-interrupt-001";
 
 const timestamp = "2026-07-27T20:00:00.000Z";
-const threadId = "thread-private-browser-detail";
+const threadId = sessionDetailBrowserCodexThreadId;
 
 export async function installInterruptApi(
   page: Page,

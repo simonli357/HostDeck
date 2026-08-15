@@ -427,10 +427,17 @@ export function SessionDetailScreen({
     projection ?? projectSessionDetail(snapshot, sessionId, feed, nowMs, formatTimestamp);
   const showInitialSkeleton =
     (view.loading || view.replayPending) && view.timeline.length === 0;
+  const hasControls =
+    prompt !== undefined ||
+    model !== undefined ||
+    goal !== undefined ||
+    plan !== undefined ||
+    (usage !== undefined && compact !== undefined && skills !== undefined);
+  const showControls = view.canDisclose && hasControls;
 
   return (
     <section
-      className={`hostdeck-route hostdeck-detail${prompt === undefined && model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined || skills === undefined) ? "" : " hostdeck-detail--with-controls"}`}
+      className={`hostdeck-route hostdeck-detail${showControls ? " hostdeck-detail--with-controls" : ""}`}
       aria-labelledby="session-detail-title"
       aria-busy={view.loading || view.replayPending}
     >
@@ -493,7 +500,7 @@ export function SessionDetailScreen({
         )}
       </div>
 
-      {prompt === undefined && model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined || skills === undefined) ? null : (
+      {showControls ? (
         <div className="hostdeck-session-controls">
           {model === undefined && goal === undefined && plan === undefined && (usage === undefined || compact === undefined || skills === undefined) ? null : (
             <fieldset className="hostdeck-primary-action-dock">
@@ -508,7 +515,7 @@ export function SessionDetailScreen({
           )}
           {prompt === undefined ? null : <PromptComposer controller={prompt} />}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -563,7 +570,10 @@ export function projectSessionDetail(
     throw new TypeError("Session Detail time is invalid.");
   }
   const detail = matchingDetail(snapshot, sessionId);
-  const canDisclose = detail !== null && canRetainSessionFeed(snapshot, sessionId);
+  const canDisclose =
+    detail !== null &&
+    canRetainSessionFeed(snapshot, sessionId) &&
+    !catalogSessionRemoved(snapshot, sessionId);
   const row = canDisclose ? projectSessionRow(detail, nowMs) : null;
   const stale =
     canDisclose &&
@@ -1173,6 +1183,17 @@ function projectDetailNotices(
 
 function unavailableNotice(snapshot: BrowserConnectionSnapshot): SessionDetailNotice | null {
   if (snapshot.phase === "loading" || snapshot.phase === "idle") return null;
+  if (
+    snapshot.target?.kind === "session_detail" &&
+    catalogSessionRemoved(snapshot, snapshot.target.sessionId)
+  ) {
+    return notice(
+      "Session no longer active",
+      "This session left the live laptop catalog. Return to Mission Control to choose another session.",
+      "muted",
+      false
+    );
+  }
   if (snapshot.phase === "access_limited") {
     switch (snapshot.access.data?.authentication_state) {
       case "unpaired":
@@ -1207,6 +1228,19 @@ function unavailableNotice(snapshot: BrowserConnectionSnapshot): SessionDetailNo
     case "closed":
       return notice("Session Detail is unavailable", "Return to Mission Control and try again.", "danger", true);
   }
+}
+
+function catalogSessionRemoved(
+  snapshot: BrowserConnectionSnapshot,
+  sessionId: string
+): boolean {
+  return (
+    snapshot.catalog?.state === "current" &&
+    snapshot.catalog.data !== null &&
+    !snapshot.catalog.data.sessions.some(
+      (item) => item.session.id === sessionId
+    )
+  );
 }
 
 function compatibilityDetailNotice(

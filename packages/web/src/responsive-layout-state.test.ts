@@ -1,6 +1,7 @@
 import { selectedAccessStateResponseSchema } from "@hostdeck/contracts";
 import { describe, expect, it } from "vitest";
 import type {
+  BrowserConnectionCatalogState,
   BrowserConnectionPhase,
   BrowserConnectionResourceState,
   BrowserConnectionSnapshot,
@@ -50,6 +51,32 @@ describe("responsive Mission navigation context", () => {
         synchronizeResponsiveMissionContext(current, detailSnapshot({ phase }))
       ).toBe(current);
     }
+  });
+
+  it("updates retained navigation directly from the app-wide catalog on detail routes", () => {
+    const data = missionData();
+    if (data.kind !== "mission_control") {
+      throw new TypeError("Responsive catalog fixture is invalid.");
+    }
+    const source = Object.freeze({
+      ...detailSnapshot(),
+      catalog: responsiveCatalog("current", data)
+    });
+    const current = synchronizeResponsiveMissionContext(null, source);
+    expect(current).toMatchObject({
+      data,
+      observedAt,
+      freshness: "current"
+    });
+
+    const resetting = Object.freeze({
+      ...detailSnapshot({ phase: "degraded" }),
+      catalog: responsiveCatalog("resetting", data)
+    });
+    expect(synchronizeResponsiveMissionContext(current, resetting)).toMatchObject({
+      data,
+      freshness: "stale"
+    });
   });
 
   it.each(["access_limited", "closed"] as const)(
@@ -230,6 +257,20 @@ function missionData(): BrowserConnectionTargetData {
     nextCursor: null,
     hasMore: false,
     pageCount: 1
+  });
+}
+
+function responsiveCatalog(
+  state: BrowserConnectionCatalogState["state"],
+  data: Extract<BrowserConnectionTargetData, { kind: "mission_control" }>
+): BrowserConnectionCatalogState {
+  return Object.freeze({
+    state,
+    data,
+    snapshot: null,
+    boundary: null,
+    failure: null,
+    observedAt
   });
 }
 

@@ -589,6 +589,35 @@ describe("prompt composer controller", () => {
       })
     ).toThrow(TypeError);
     const valid = promptContext();
+    const catalog = Object.freeze({
+      state: "connecting" as const,
+      data: null,
+      snapshot: null,
+      boundary: null,
+      failure: null,
+      observedAt: null
+    });
+    expect(
+      projectPromptComposer({
+        sessionId,
+        ...valid,
+        snapshot: { ...valid.snapshot, catalog },
+        draft: "Catalog-bearing context",
+        operation: idleOperation()
+      })
+    ).toMatchObject({ visible: true, phase: "composing" });
+    expect(() =>
+      projectPromptComposer({
+        sessionId,
+        ...valid,
+        snapshot: {
+          ...valid.snapshot,
+          catalog: { ...catalog, privateFallback: true } as never
+        },
+        draft: "Hostile catalog context",
+        operation: idleOperation()
+      })
+    ).toThrow(TypeError);
     expect(() =>
       projectPromptComposer({
         sessionId,

@@ -58,8 +58,8 @@ test("renders bounded loading, empty, failure, and external-authority states", a
   });
 
   await page.goto("/");
-  await expect.poll(devices.hasPendingList).toBe(true);
   let sheet = await openDeviceSheet(page);
+  await expect.poll(devices.hasPendingList).toBe(true);
   await expect(sheet.getByText("Checking paired devices.")).toBeVisible();
   await captureState(page, "loading-390x844");
 

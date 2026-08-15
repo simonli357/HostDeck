@@ -8,7 +8,10 @@ import {
   type ApprovalSnapshotVariant,
   installApprovalDecisionsApi
 } from "./approval-decisions-fixture.js";
-import { sessionDetailBrowserSessionId } from "./session-detail-fixture.js";
+import {
+  sessionDetailBrowserCodexThreadId,
+  sessionDetailBrowserSessionId
+} from "./session-detail-fixture.js";
 
 const artifactDirectory = resolve("artifacts/fe-v1-022-inline-approval-decisions");
 const detailPath = `/sessions/${sessionDetailBrowserSessionId}`;
@@ -566,7 +569,7 @@ function expectApprovalRequest(
 async function expectPrivateDataAbsent(page: Page): Promise<void> {
   const html = await page.locator("body").evaluate((element) => element.outerHTML);
   expect(html).not.toContain(sessionDetailBrowserSessionId);
-  expect(html).not.toContain("thread-private-browser-detail");
+  expect(html).not.toContain(sessionDetailBrowserCodexThreadId);
   expect(html).not.toContain("request-private-browser-detail");
   expect(html).not.toContain("string:approval-browser");
   expect(html).not.toContain("op_browser_approval_");

@@ -1,6 +1,10 @@
 import {
   type SelectedProjectionEvent,
-  selectedProjectionEventSchema
+  type SessionCatalogEvent,
+  type SharedSessionCatalogEntry,
+  selectedProjectionEventSchema,
+  sessionCatalogEventSchema,
+  sharedSessionCatalogEntrySchema
 } from "@hostdeck/contracts";
 import {
   type BrowserSseClientLimits,
@@ -19,6 +23,8 @@ const origin = "http://127.0.0.1:5173";
 const remoteOrigin = "https://hostdeck-client.fixture-tailnet.ts.net";
 const sessionId = "sess_browser_sse_001";
 const timestamp = "2026-07-22T12:00:00.000Z";
+const catalogStreamId = "catalog_browser_sse_001";
+const nativeThreadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 
 describe("bounded browser SSE client", () => {
   it("uses the exact selected same-origin request and delivers an immutable event", async () => {
@@ -81,6 +87,179 @@ describe("bounded browser SSE client", () => {
     expect(reader.cancelCalls).toBe(1);
     expect(reader.releaseCalls).toBe(1);
     expect(clock.pendingCount).toBe(0);
+  });
+
+  it("uses the exact catalog route and delivers a strict immutable bootstrap", async () => {
+    const reader = new ControlledReader();
+    const requests: Array<{ path: string; init: BrowserSseRequestInit }> = [];
+    const delivered: SessionCatalogEvent[] = [];
+    const connection = createBrowserSseClient({
+      origin,
+      fetch: async (path, init) => {
+        requests.push({ path, init });
+        return sseResponse(reader);
+      }
+    }).connectCatalog({
+      onEvent(event) {
+        delivered.push(event);
+      }
+    });
+
+    await waitFor(() => requests.length === 1);
+    const events = [
+      catalogReset(101, 1),
+      catalogUpsert(102),
+      catalogReady(103, 1)
+    ];
+    reader.pushText(events.map((event) => eventFrame(event)).join(""));
+    await waitFor(() => connection.snapshot().cursor === 103);
+
+    expect(requests[0]?.path).toBe("/api/v1/sessions/catalog/stream");
+    expect(requests[0]?.init).toMatchObject({
+      method: "GET",
+      headers: {
+        accept: "text/event-stream",
+        "cache-control": "no-store"
+      },
+      credentials: "same-origin",
+      mode: "same-origin"
+    });
+    expect(delivered.map((event) => event.type)).toEqual([
+      "catalog_reset",
+      "session_upsert",
+      "catalog_ready"
+    ]);
+    expect(delivered.every((event) => Object.isFrozen(event))).toBe(true);
+    expect(Object.isFrozen(delivered[1]?.type === "session_upsert" ? delivered[1].session : null)).toBe(true);
+    expect(connection.snapshot()).toMatchObject({
+      phase: "connected",
+      cursor: 103,
+      continuity: "contiguous",
+      streamId: catalogStreamId,
+      resetRequired: false,
+      retryCount: 0,
+      failure: null
+    });
+    expect(Object.isFrozen(connection.snapshot())).toBe(true);
+    connection.close();
+  });
+
+  it("reconnects the catalog from its committed cursor on the same stream", async () => {
+    const clock = new ManualClock();
+    const firstReader = new ControlledReader();
+    const secondReader = new ControlledReader();
+    const paths: string[] = [];
+    let attempt = 0;
+    const connection = createBrowserSseClient({
+      origin,
+      clock: clock.port,
+      fetch: async (path) => {
+        paths.push(path);
+        attempt += 1;
+        return sseResponse(attempt === 1 ? firstReader : secondReader);
+      }
+    }).connectCatalog({ onEvent() {} });
+
+    await settle();
+    firstReader.pushText(
+      eventFrame(catalogReset(50, 0)) + eventFrame(catalogReady(51, 0))
+    );
+    await waitFor(() => connection.snapshot().cursor === 51);
+    firstReader.end();
+    await waitFor(() => connection.snapshot().phase === "reconnecting");
+    clock.advance(500);
+    await waitFor(() => paths.length === 2);
+    secondReader.pushText(eventFrame(catalogUpsert(52)));
+    await waitFor(() => connection.snapshot().cursor === 52);
+
+    expect(paths).toEqual([
+      "/api/v1/sessions/catalog/stream",
+      "/api/v1/sessions/catalog/stream?after=51"
+    ]);
+    expect(connection.snapshot()).toMatchObject({
+      phase: "connected",
+      streamId: catalogStreamId,
+      resetRequired: false,
+      continuity: "contiguous"
+    });
+    connection.close();
+  });
+
+  it("keeps a catalog boundary visible until an explicit replacement reset", async () => {
+    const clock = new ManualClock();
+    const firstReader = new ControlledReader();
+    const secondReader = new ControlledReader();
+    let attempt = 0;
+    const replacementStream = "catalog_browser_sse_002";
+    const connection = createBrowserSseClient({
+      origin,
+      clock: clock.port,
+      fetch: async () => {
+        attempt += 1;
+        return sseResponse(attempt === 1 ? firstReader : secondReader);
+      }
+    }).connectCatalog({ onEvent() {} });
+
+    await settle();
+    firstReader.pushText(
+      eventFrame(catalogReset(20, 0)) +
+        eventFrame(catalogReady(21, 0)) +
+        eventFrame(catalogBoundary(22))
+    );
+    await waitFor(() => connection.snapshot().cursor === 22);
+    expect(connection.snapshot()).toMatchObject({
+      continuity: "boundary",
+      resetRequired: true,
+      streamId: catalogStreamId
+    });
+    firstReader.end();
+    await waitFor(() => connection.snapshot().phase === "reconnecting");
+    clock.advance(500);
+    await settle();
+    secondReader.pushText(
+      eventFrame(catalogReset(100, 0, replacementStream)) +
+        eventFrame(catalogReady(101, 0, replacementStream))
+    );
+    await waitFor(() => connection.snapshot().cursor === 101);
+    expect(connection.snapshot()).toMatchObject({
+      phase: "connected",
+      continuity: "contiguous",
+      resetRequired: false,
+      streamId: replacementStream
+    });
+    connection.close();
+  });
+
+  it.each([
+    ["non-reset first event", [catalogReady(1, 0)], "invalid_event"],
+    [
+      "stream identity change",
+      [
+        catalogReset(1, 0),
+        catalogReady(2, 0, "catalog_browser_sse_other")
+      ],
+      "invalid_event"
+    ],
+    [
+      "cursor gap",
+      [catalogReset(1, 0), catalogReady(3, 0)],
+      "cursor_gap"
+    ],
+    [
+      "event after boundary",
+      [catalogReset(1, 0), catalogReady(2, 0), catalogBoundary(3), catalogReady(4, 0)],
+      "invalid_event"
+    ]
+  ] as const)("fails a catalog %s terminally", async (_label, events, reason) => {
+    const reader = new ControlledReader();
+    const connection = createBrowserSseClient({
+      origin,
+      fetch: async () => sseResponse(reader)
+    }).connectCatalog({ onEvent() {} });
+    await settle();
+    reader.pushText(events.map((event) => eventFrame(event)).join(""));
+    await waitFor(() => connection.snapshot().phase === "failed");
+    expect(connection.snapshot().failure?.reason).toBe(reason);
   });
 
   it("rejects hostile constructor/connect inputs, duplicates, and capacity before fetch", async () => {
@@ -178,6 +357,16 @@ describe("bounded browser SSE client", () => {
     ]) {
       expect(() => client.connect(candidate as never)).toThrow(TypeError);
     }
+    for (const candidate of [
+      {},
+      { onEvent: null },
+      { after: -1, onEvent() {} },
+      { signal: { aborted: false }, onEvent() {} },
+      { onEvent() {}, onState: 1 },
+      { onEvent() {}, extra: true }
+    ]) {
+      expect(() => client.connectCatalog(candidate as never)).toThrow(TypeError);
+    }
     for (const limits of [
       selectedLimits({ eventMaxBytes: 1_000 }),
       { ...defaultBrowserSseClientLimits, extra: 1 },
@@ -200,6 +389,38 @@ describe("bounded browser SSE client", () => {
     await settle();
     expect(fetches).toBe(0);
     expect(getterCalls).toBe(0);
+  });
+
+  it("shares one bounded stream budget across catalog and session connections", async () => {
+    const readers: ControlledReader[] = [];
+    const client = createBrowserSseClient({
+      origin,
+      limits: selectedLimits({ maxConcurrentStreams: 2 }),
+      fetch: async () => {
+        const reader = new ControlledReader();
+        readers.push(reader);
+        return sseResponse(reader);
+      }
+    });
+    const catalog = client.connectCatalog({ onEvent() {} });
+    const session = client.connect({ sessionId, onEvent() {} });
+    expect(() => client.connectCatalog({ onEvent() {} })).toThrow(
+      "catalog already has an active connection"
+    );
+    expect(() =>
+      client.connect({ sessionId: "sess_browser_sse_002", onEvent() {} })
+    ).toThrow("capacity is exhausted");
+    await waitFor(() => readers.length === 2);
+
+    catalog.close();
+    const replacement = client.connect({
+      sessionId: "sess_browser_sse_002",
+      onEvent() {}
+    });
+    await waitFor(() => readers.length === 3);
+    session.close();
+    replacement.close();
+    client.close();
   });
 
   it("closes a pre-aborted connection without reserving capacity or fetching", async () => {
@@ -1107,8 +1328,109 @@ function boundaryEvent(
   });
 }
 
+function catalogReset(
+  cursor: number,
+  expectedSessionCount: number,
+  streamId = catalogStreamId
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "catalog_reset",
+    reason: "initial",
+    expected_session_count: expectedSessionCount
+  });
+}
+
+function catalogUpsert(
+  cursor: number,
+  streamId = catalogStreamId
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "session_upsert",
+    session: catalogEntry()
+  });
+}
+
+function catalogReady(
+  cursor: number,
+  sessionCount: number,
+  streamId = catalogStreamId
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "catalog_ready",
+    session_count: sessionCount,
+    endpoint_generation: 1
+  });
+}
+
+function catalogBoundary(
+  cursor: number,
+  streamId = catalogStreamId
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "catalog_boundary",
+    reason: "lag",
+    reset_required: true,
+    detail: "Catalog receiver must reconnect."
+  });
+}
+
+function catalogEntry(): SharedSessionCatalogEntry {
+  return sharedSessionCatalogEntrySchema.parse({
+    tracked: {
+      native_thread_id: nativeThreadId,
+      internal_session_id: sessionId,
+      alias: "browser-sse",
+      cwd: "/workspace/browser-sse",
+      project_cue: "browser-sse",
+      branch: "main",
+      runtime_version: "0.147.0",
+      runtime_source: "codex_app_server",
+      enrollment_origin: "loaded_before",
+      archived: false,
+      created_at: timestamp,
+      updated_at: timestamp,
+      archived_at: null
+    },
+    projection: {
+      id: sessionId,
+      name: "browser-sse",
+      codex_thread_id: nativeThreadId,
+      cwd: "/workspace/browser-sse",
+      runtime_source: "codex_app_server",
+      runtime_version: "0.147.0",
+      created_at: timestamp,
+      archived_at: null,
+      session_state: "active",
+      turn_state: "idle",
+      attention: "none",
+      freshness: "current",
+      freshness_reason: null,
+      updated_at: timestamp,
+      last_activity_at: timestamp,
+      branch: "main",
+      model: "gpt-5.5-codex",
+      settings: null,
+      goal: null,
+      recent_summary: "Bounded catalog fixture.",
+      last_event_cursor: null
+    }
+  });
+}
+
 function eventFrame(
-  event: SelectedProjectionEvent,
+  event: SelectedProjectionEvent | SessionCatalogEvent,
   override: { readonly id?: string; readonly name?: string } = {}
 ): string {
   return `id: ${override.id ?? String(event.cursor)}\nevent: ${

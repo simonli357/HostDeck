@@ -898,20 +898,24 @@ const contextError = "HostDeck prompt composer context is invalid.";
 const operationError = "HostDeck prompt composer operation state is invalid.";
 
 function parseSnapshot(candidate: unknown): BrowserConnectionSnapshot {
+  const record = readRecord(candidate, contextError);
+  const snapshotKeys = [
+    "epoch",
+    "target",
+    "phase",
+    "access",
+    "host",
+    "targetState",
+    "stream",
+    "csrf",
+    "writeEligibility",
+    "lastFailure"
+  ] as const;
   const values = readExactRecord(
     candidate,
-    [
-      "epoch",
-      "target",
-      "phase",
-      "access",
-      "host",
-      "targetState",
-      "stream",
-      "csrf",
-      "writeEligibility",
-      "lastFailure"
-    ],
+    Object.hasOwn(record, "catalog")
+      ? [...snapshotKeys, "catalog"]
+      : snapshotKeys,
     contextError
   );
   if (
@@ -938,6 +942,7 @@ function parseSnapshot(candidate: unknown): BrowserConnectionSnapshot {
     return parsed.data;
   });
   const stream = parseStream(values.stream);
+  if (values.catalog !== undefined) parseCatalog(values.catalog);
   const writeEligibility = parseWriteEligibility(values.writeEligibility);
   if (
     (values.csrf === null || typeof values.csrf !== "object") ||
@@ -957,6 +962,34 @@ function parseSnapshot(candidate: unknown): BrowserConnectionSnapshot {
     stream,
     writeEligibility
   });
+}
+
+function parseCatalog(candidate: unknown): void {
+  const values = readExactRecord(
+    candidate,
+    ["state", "data", "snapshot", "boundary", "failure", "observedAt"],
+    contextError
+  );
+  if (
+    ![
+      "idle",
+      "connecting",
+      "resetting",
+      "current",
+      "reconnecting",
+      "stale",
+      "failed",
+      "blocked",
+      "closed"
+    ].includes(values.state as string) ||
+    (values.data !== null && typeof values.data !== "object") ||
+    (values.snapshot !== null && typeof values.snapshot !== "object") ||
+    (values.boundary !== null && typeof values.boundary !== "object") ||
+    (values.failure !== null && typeof values.failure !== "object") ||
+    (values.observedAt !== null && typeof values.observedAt !== "string")
+  ) {
+    throw new TypeError(contextError);
+  }
 }
 
 function parseTarget(candidate: unknown): BrowserConnectionSnapshot["target"] {

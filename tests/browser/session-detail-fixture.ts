@@ -9,6 +9,7 @@ import {
   selectedProjectionEventSchema,
   selectedSessionDetailResponseSchema
 } from "../../packages/contracts/src/index.js";
+import { installPassiveSessionCatalog } from "./session-catalog-passive-fixture.js";
 
 export type SessionDetailApiVariant =
   | "active"
@@ -77,6 +78,7 @@ export type SessionDetailTurnState =
   | "unknown";
 
 export interface SessionDetailApiOptions {
+  readonly catalogStream?: boolean;
   readonly configuredOrigin?: string;
   readonly initialEvents?: readonly SessionDetailEventFixture[];
   readonly retentionBoundaryCursor?: number;
@@ -99,6 +101,8 @@ const components = [
 ] as const;
 
 export const sessionDetailBrowserSessionId = sessionId;
+export const sessionDetailBrowserCodexThreadId =
+  "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 
 export async function installSessionDetailApi(
   page: Page,
@@ -143,6 +147,9 @@ export async function installSessionDetailApi(
       ? options.retentionBoundaryCursor
       : undefined;
 
+  if (options.catalogStream !== false) {
+    await installPassiveSessionCatalog(page);
+  }
   await installSessionEventStream(page, streamEvents);
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
@@ -702,7 +709,7 @@ async function fulfillPromptOutcome(
     target: {
       type: "managed_session",
       session_id: sessionId,
-      codex_thread_id: "thread-private-browser-prompt"
+      codex_thread_id: sessionDetailBrowserCodexThreadId
     },
     state: "accepted",
     accepted_at: timestamp,
@@ -863,7 +870,7 @@ function sessionDetail(
       session: {
         id: sessionId,
         name: long ? "android-release-validation-long-session-name-2026" : "android-release",
-        codex_thread_id: "thread-private-browser-detail",
+        codex_thread_id: sessionDetailBrowserCodexThreadId,
         cwd: long
           ? `/workspace/${"deep-mobile-project-segment-".repeat(8)}release`
           : "/workspace/hostdeck-mobile",
@@ -924,7 +931,7 @@ function emptyApprovalList() {
     target: {
       type: "managed_session",
       session_id: sessionId,
-      codex_thread_id: "thread-private-browser-detail"
+      codex_thread_id: sessionDetailBrowserCodexThreadId
     },
     approvals: []
   };

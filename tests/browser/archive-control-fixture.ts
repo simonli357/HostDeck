@@ -4,7 +4,10 @@ import {
   archiveSessionRequestSchema,
   selectedOperationDispatchSchema
 } from "../../packages/contracts/src/index.js";
-import { sessionDetailBrowserSessionId } from "./session-detail-fixture.js";
+import {
+  sessionDetailBrowserCodexThreadId,
+  sessionDetailBrowserSessionId
+} from "./session-detail-fixture.js";
 
 export type ArchiveApiOutcome =
   | "success"
@@ -28,7 +31,7 @@ export interface ArchiveApiController {
 }
 
 const timestamp = "2026-07-27T22:00:00.000Z";
-const threadId = "thread-private-browser-detail";
+const threadId = sessionDetailBrowserCodexThreadId;
 
 export async function installArchiveApi(page: Page): Promise<ArchiveApiController> {
   let outcome: ArchiveApiOutcome = "success";

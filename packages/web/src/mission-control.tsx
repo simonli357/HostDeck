@@ -1,4 +1,4 @@
-import type { SelectedHostStatusResponse, SelectedSessionReadItem } from "@hostdeck/contracts";
+import type { SelectedHostStatusResponse } from "@hostdeck/contracts";
 import {
   Activity,
   AlertTriangle,
@@ -19,6 +19,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore
@@ -32,7 +33,8 @@ import {
 import type {
   BrowserConnectionPhase,
   BrowserConnectionSnapshot,
-  BrowserConnectionStateCoordinator
+  BrowserConnectionStateCoordinator,
+  BrowserMissionSessionItem
 } from "./connection-state.js";
 import {
   formatCrossScreenObservationFacts,
@@ -54,7 +56,7 @@ export type MissionTone = "connected" | "attention" | "danger" | "muted";
 export type MissionPendingAction = "refresh" | "load_more" | null;
 
 export interface MissionSessionRow {
-  readonly item: SelectedSessionReadItem;
+  readonly item: BrowserMissionSessionItem;
   readonly group: MissionQueueId;
   readonly stateLabel: string;
   readonly tone: MissionTone;
@@ -206,13 +208,48 @@ export function MissionControlScreen({
   onLoadMore
 }: MissionControlScreenProps) {
   const view = projectMissionControl(snapshot, nowMs);
+  const routeRef = useRef<HTMLElement | null>(null);
+  const focusedSessionPathRef = useRef<string | null>(null);
   const anyActionPending = pendingAction !== null;
   const hasPriorityRows = view.sections.some(
     (section) => section.id !== "quiet" && section.rows.length > 0
   );
 
+  useEffect(() => {
+    const route = routeRef.current;
+    if (route === null) return;
+    const rememberFocusedSession = (event: FocusEvent): void => {
+      const target = event.target;
+      const link = target instanceof Element
+        ? target.closest<HTMLElement>("[data-hostdeck-session-path]")
+        : null;
+      focusedSessionPathRef.current = link?.dataset.hostdeckSessionPath ?? null;
+    };
+    route.addEventListener("focusin", rememberFocusedSession);
+    return () => route.removeEventListener("focusin", rememberFocusedSession);
+  }, []);
+
+  useLayoutEffect(() => {
+    const route = routeRef.current;
+    const path = focusedSessionPathRef.current;
+    if (route === null || path === null) return;
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLElement &&
+      active.dataset.hostdeckSessionPath === path
+    ) {
+      return;
+    }
+    if (active !== document.body && active !== document.documentElement) return;
+    const replacement = [...route.querySelectorAll<HTMLElement>(
+      "[data-hostdeck-session-path]"
+    )].find((candidate) => candidate.dataset.hostdeckSessionPath === path);
+    replacement?.focus({ preventScroll: true });
+  });
+
   return (
     <section
+      ref={routeRef}
       className="hostdeck-route hostdeck-mission"
       aria-labelledby="mission-control-title"
       aria-busy={view.loading}
@@ -393,10 +430,12 @@ export function projectMissionControl(
   }
 
   const targetMatches = snapshot.target?.kind === "mission_control";
-  const missionData =
+  const targetMissionData =
     targetMatches && snapshot.targetState.data?.kind === "mission_control"
       ? snapshot.targetState.data
       : null;
+  const catalogData = snapshot.catalog?.data ?? null;
+  const missionData = targetMissionData ?? catalogData;
   const readable =
     snapshot.access.data?.can_read_sessions === true &&
     snapshot.access.state !== "blocked" &&
@@ -428,7 +467,10 @@ export function projectMissionControl(
   const stale =
     canDisclose &&
     (snapshot.access.state !== "current" ||
-      snapshot.targetState.state !== "current");
+      snapshot.targetState.state !== "current" ||
+      (snapshot.catalog?.data !== null &&
+        snapshot.catalog?.data !== undefined &&
+        snapshot.catalog.state !== "current"));
 
   return Object.freeze({
     loading,
@@ -449,7 +491,7 @@ export function projectMissionControl(
 }
 
 export function projectSessionRow(
-  item: SelectedSessionReadItem,
+  item: BrowserMissionSessionItem,
   nowMs: number
 ): MissionSessionRow {
   const session = item.session;
@@ -761,6 +803,19 @@ function dataStatus(
   snapshot: BrowserConnectionSnapshot
 ): Pick<MissionStatusCell, "value" | "tone" | "icon"> {
   if (
+    snapshot.catalog?.state === "reconnecting" ||
+    snapshot.catalog?.state === "resetting" ||
+    (snapshot.catalog?.state === "connecting" && snapshot.catalog.data !== null)
+  ) {
+    return { value: "Reconnecting", tone: "attention", icon: Clock3 };
+  }
+  if (snapshot.catalog?.state === "stale") {
+    return { value: "Stale", tone: "attention", icon: Clock3 };
+  }
+  if (snapshot.catalog?.state === "failed") {
+    return { value: "Unavailable", tone: "danger", icon: AlertTriangle };
+  }
+  if (
     snapshot.targetState.data !== null &&
     snapshot.targetState.state !== "current"
   ) {
@@ -857,6 +912,8 @@ function projectNotice(
       false
     );
   }
+  const liveCatalogNotice = catalogNotice(snapshot);
+  if (liveCatalogNotice !== null) return liveCatalogNotice;
   if (stale) {
     const observation = formatCrossScreenObservationFacts(
       projectCrossScreenStaleObservations(snapshot, "mission_control")
@@ -902,6 +959,46 @@ function projectNotice(
       "The session list request failed without changing any existing state.",
       "danger",
       false
+    );
+  }
+  return null;
+}
+
+function catalogNotice(snapshot: BrowserConnectionSnapshot): MissionNotice | null {
+  const catalog = snapshot.catalog;
+  if (catalog === undefined || catalog.state === "idle" || catalog.state === "current") {
+    return null;
+  }
+  if (catalog.boundary !== null) {
+    return notice(
+      "Session list resynchronizing",
+      "The last complete list remains visible while HostDeck rebuilds live session state.",
+      "attention",
+      false
+    );
+  }
+  if (
+    catalog.state === "reconnecting" ||
+    catalog.state === "resetting" ||
+    (catalog.state === "connecting" && catalog.data !== null)
+  ) {
+    return notice(
+      "Live session updates reconnecting",
+      catalog.data === null
+        ? "HostDeck is establishing the live session list."
+        : "The last complete list remains visible until continuity is restored.",
+      "attention",
+      false
+    );
+  }
+  if (catalog.state === "failed" || catalog.state === "stale") {
+    return notice(
+      "Live session updates stopped",
+      catalog.data === null
+        ? "HostDeck could not establish the live session list. Refresh to retry."
+        : "The retained list may be out of date. Refresh to retry live updates.",
+      "danger",
+      catalog.data === null
     );
   }
   return null;
@@ -1001,7 +1098,7 @@ function degradedNotice(host: SelectedHostStatusResponse | null): MissionNotice 
   return notice("Host health is degraded", body, "attention", false);
 }
 
-function rowGroup(session: SelectedSessionReadItem["session"]): MissionQueueId {
+function rowGroup(session: BrowserMissionSessionItem["session"]): MissionQueueId {
   if (
     session.freshness !== "current" ||
     session.session_state !== "active" ||
@@ -1021,7 +1118,7 @@ function rowGroup(session: SelectedSessionReadItem["session"]): MissionQueueId {
 }
 
 function rowState(
-  session: SelectedSessionReadItem["session"]
+  session: BrowserMissionSessionItem["session"]
 ): Readonly<{ label: string; tone: MissionTone }> {
   if (session.freshness === "stale" || session.freshness === "disconnected") {
     return { label: "Stale", tone: "attention" };

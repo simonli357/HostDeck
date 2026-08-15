@@ -24,3 +24,30 @@ export const browserSseRouteContract = Object.freeze({
   handler: "events.stream",
   owner_task: "IFC-V1-035"
 } as const);
+
+export const browserSessionCatalogSseRouteContract = Object.freeze({
+  id: "session_catalog_stream",
+  family: "sessions",
+  method: "GET",
+  path: "/api/v1/sessions/catalog/stream",
+  transport: "sse",
+  request: Object.freeze({
+    params: null,
+    query: "selected_stream_cursor_query_v1",
+    body: null
+  }),
+  response: Object.freeze({
+    success: "session_catalog_event_v1",
+    error: "selected_api_error_v1"
+  }),
+  auth: "loopback_or_device_cookie",
+  authority: "session_read",
+  csrf: "none",
+  lock: "not_applicable",
+  target: "host",
+  operation_kind: null,
+  audit: null,
+  credential_effect: "none",
+  handler: "sessions.catalogStream",
+  owner_task: "IFC-V1-112"
+} as const);

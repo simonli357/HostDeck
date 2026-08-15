@@ -8,6 +8,7 @@ import {
   installSessionDetailApi,
   type SessionDetailApiController,
   type SessionDetailApiVariant,
+  sessionDetailBrowserCodexThreadId,
   sessionDetailBrowserSessionId
 } from "./session-detail-fixture.js";
 
@@ -134,7 +135,7 @@ export function usageSnapshot(variant: UsageSnapshotVariant): UsageSnapshot {
     target: {
       type: "managed_session",
       session_id: sessionDetailBrowserSessionId,
-      codex_thread_id: "thread-private-browser-detail"
+      codex_thread_id: sessionDetailBrowserCodexThreadId
     },
     runtime_version: "0.147.0",
     connection_generation: 4,

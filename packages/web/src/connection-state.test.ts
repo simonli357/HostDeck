@@ -16,6 +16,8 @@ import {
   type SelectedProjectionEvent,
   type SelectedSessionReadAccess,
   type SelectedSessionReadItem,
+  type SessionCatalogEvent,
+  type SharedSessionCatalogEntry,
   selectedAccessStateResponseSchema,
   selectedHostLocalHealthComponents,
   selectedHostStatusResponseSchema,
@@ -24,7 +26,9 @@ import {
   selectedSessionDetailResponseSchema,
   selectedSessionListResponseSchema,
   selectedSessionListSortKey,
-  selectedSessionReadItemSchema
+  selectedSessionReadItemSchema,
+  sessionCatalogEventSchema,
+  sharedSessionCatalogEntrySchema
 } from "@hostdeck/contracts";
 import {
   type BrowserSseClientLimits,
@@ -64,6 +68,8 @@ const laterTimestamp = "2026-07-22T18:01:00.000Z";
 const rawCsrfToken = "C".repeat(43);
 const firstSessionId = "sess_connection_001";
 const secondSessionId = "sess_connection_002";
+const catalogStreamA = "catalog_connection_stream_a";
+const catalogStreamB = "catalog_connection_stream_b";
 
 describe("browser shell connection-state coordinator", () => {
   it("accepts only exact same-authority client composition and starts inert", () => {
@@ -1107,9 +1113,225 @@ describe("browser shell connection-state coordinator", () => {
       source: "session_stream",
       reason: "transport_unavailable"
     });
-    expect(sseClock.pendingCount).toBe(1);
+    expect(sseClock.pendingCount).toBe(2);
     harness.coordinator.close();
     expect(sseClock.pendingCount).toBe(0);
+  });
+
+  it("projects live catalog upserts and removals into Mission Control and selected detail", async () => {
+    const harness = createHarness(loopbackOrigin);
+    const initial = catalogSessionItem("a");
+    enqueueLoopbackMission(harness, [initial]);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+    await waitFor(() => harness.sse.catalogReaders.length === 1);
+    const catalogReader = requireCatalogReader(harness.sse, 0);
+
+    catalogReader.pushText(
+      eventFrame(catalogReset(100, 1)) +
+        eventFrame(catalogUpsert(101, "a")) +
+        eventFrame(catalogReady(102, 1))
+    );
+    await waitFor(() => harness.coordinator.snapshot().catalog?.state === "current");
+    expect(missionIds(harness.coordinator.snapshot())).toEqual([
+      "sess_catalog_connection_a"
+    ]);
+
+    catalogReader.pushText(
+      eventFrame(
+        catalogUpsert(103, "a", {
+          attention: "watch",
+          summary: "Laptop activity is now visible.",
+          updatedAt: laterTimestamp
+        })
+      ) + eventFrame(catalogUpsert(104, "b"))
+    );
+    await waitFor(
+      () =>
+        harness.coordinator.snapshot().catalog?.snapshot?.cursor === 104
+    );
+    expect(
+      harness.coordinator.snapshot().catalog?.data?.sessions.map((item) => ({
+        id: item.session.id,
+        summary: item.session.recent_summary
+      }))
+    ).toEqual([
+      {
+        id: "sess_catalog_connection_a",
+        summary: "Laptop activity is now visible."
+      },
+      {
+        id: "sess_catalog_connection_b",
+        summary: "Catalog connection fixture."
+      }
+    ]);
+
+    catalogReader.pushText(eventFrame(catalogRemove(105, "a")));
+    await waitFor(() => missionIds(harness.coordinator.snapshot()).length === 1);
+    expect(missionIds(harness.coordinator.snapshot())).toEqual([
+      "sess_catalog_connection_b"
+    ]);
+
+    harness.http.enqueue("access", jsonResponse(200, loopbackAccess()));
+    harness.http.enqueue(
+      "host",
+      jsonResponse(
+        200,
+        hostStatus({ mode: "loopback_read", origin: loopbackOrigin })
+      )
+    );
+    harness.http.enqueue(
+      "detail",
+      jsonResponse(
+        200,
+        sessionDetail(
+          "loopback_read",
+          loopbackOrigin,
+          catalogSessionItem("b")
+        )
+      )
+    );
+    await harness.coordinator.setTarget({
+      kind: "session_detail",
+      sessionId: "sess_catalog_connection_b"
+    });
+    expect(harness.sse.catalogRequests).toHaveLength(1);
+
+    catalogReader.pushText(
+      eventFrame(
+        catalogUpsert(106, "b", {
+          attention: "watch",
+          summary: "Selected detail updated live.",
+          updatedAt: laterTimestamp
+        })
+      )
+    );
+    await waitFor(() => {
+      const data = harness.coordinator.snapshot().targetState.data;
+      return (
+        data?.kind === "session_detail" &&
+        data.response.session.session.recent_summary ===
+          "Selected detail updated live."
+      );
+    });
+    const selectedDetail = harness.coordinator.snapshot().targetState.data;
+    expect(
+      selectedDetail?.kind === "session_detail"
+        ? selectedDetail.response.session.session.codex_thread_id
+        : null
+    ).toBe(catalogNativeId("b"));
+
+    catalogReader.pushText(eventFrame(catalogRemove(107, "b")));
+    await waitFor(
+      () => harness.coordinator.snapshot().targetState.state === "not_found"
+    );
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      phase: "not_found",
+      targetState: {
+        state: "not_found",
+        data: null,
+        failure: {
+          source: "session_catalog",
+          reason: "session_removed",
+          routeId: "session_catalog_stream"
+        }
+      },
+      stream: { state: "idle" }
+    });
+    harness.coordinator.close();
+  });
+
+  it("retains one complete catalog through a boundary and swaps only on ready", async () => {
+    const sseClock = new ManualSseClock();
+    const harness = createHarness(loopbackOrigin, { sseClock: sseClock.port });
+    enqueueLoopbackMission(harness, [catalogSessionItem("a")]);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+    await waitFor(() => harness.sse.catalogReaders.length === 1);
+    const firstReader = requireCatalogReader(harness.sse, 0);
+    firstReader.pushText(
+      eventFrame(catalogReset(10, 1)) +
+        eventFrame(catalogUpsert(11, "a")) +
+        eventFrame(catalogReady(12, 1)) +
+        eventFrame(catalogBoundary(13))
+    );
+    await waitFor(
+      () => harness.coordinator.snapshot().catalog?.boundary?.cursor === 13
+    );
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      phase: "ready",
+      catalog: {
+        state: "stale",
+        data: { sessions: [{ session: { id: "sess_catalog_connection_a" } }] },
+        boundary: { reason: "lag" }
+      }
+    });
+    firstReader.end();
+    await waitFor(
+      () =>
+        harness.coordinator.snapshot().catalog?.snapshot?.phase ===
+        "reconnecting"
+    );
+    sseClock.advance(defaultBrowserSseClientLimits.reconnectInitialDelayMs);
+    await waitFor(() => harness.sse.catalogReaders.length === 2);
+    expect(harness.sse.catalogRequests[1]?.path).toBe(
+      "/api/v1/sessions/catalog/stream?after=13"
+    );
+    const secondReader = requireCatalogReader(harness.sse, 1);
+    secondReader.pushText(
+      eventFrame(catalogReset(20, 1, catalogStreamB)) +
+        eventFrame(catalogUpsert(21, "b", {}, catalogStreamB))
+    );
+    await waitFor(
+      () => harness.coordinator.snapshot().catalog?.snapshot?.cursor === 21
+    );
+    expect(harness.coordinator.snapshot().catalog).toMatchObject({
+      state: "resetting",
+      data: { sessions: [{ session: { id: "sess_catalog_connection_a" } }] }
+    });
+    expect(missionIds(harness.coordinator.snapshot())).toEqual([
+      "sess_catalog_connection_a"
+    ]);
+
+    secondReader.pushText(eventFrame(catalogReady(22, 1, catalogStreamB)));
+    await waitFor(() => harness.coordinator.snapshot().catalog?.state === "current");
+    expect(missionIds(harness.coordinator.snapshot())).toEqual([
+      "sess_catalog_connection_b"
+    ]);
+    expect(harness.coordinator.snapshot().phase).toBe("ready");
+    harness.coordinator.close();
+  });
+
+  it("fails an invalid live catalog mutation visibly without replacing retained rows", async () => {
+    const harness = createHarness(loopbackOrigin);
+    enqueueLoopbackMission(harness, [catalogSessionItem("a")]);
+    await harness.coordinator.setTarget({ kind: "mission_control" });
+    await waitFor(() => harness.sse.catalogReaders.length === 1);
+    const reader = requireCatalogReader(harness.sse, 0);
+    reader.pushText(
+      eventFrame(catalogReset(1, 1)) +
+        eventFrame(catalogUpsert(2, "a")) +
+        eventFrame(catalogReady(3, 1))
+    );
+    await waitFor(() => harness.coordinator.snapshot().catalog?.state === "current");
+
+    reader.pushText(eventFrame(catalogRemove(4, "b")));
+    await waitFor(
+      () => harness.coordinator.snapshot().catalog?.snapshot?.phase === "failed"
+    );
+    expect(harness.coordinator.snapshot()).toMatchObject({
+      phase: "ready",
+      catalog: {
+        state: "stale",
+        data: { sessions: [{ session: { id: "sess_catalog_connection_a" } }] },
+        failure: {
+          source: "session_catalog",
+          reason: "consumer_error"
+        }
+      }
+    });
+    expect(missionIds(harness.coordinator.snapshot())).toEqual([
+      "sess_catalog_connection_a"
+    ]);
+    harness.coordinator.close();
   });
 
   it("owns host lock outside the generic write path and latches an unconfirmed outcome", async () => {
@@ -2575,12 +2797,23 @@ class SseRouter {
     readonly path: string;
     readonly init: BrowserSseRequestInit;
   }> = [];
+  readonly catalogRequests: Array<{
+    readonly path: string;
+    readonly init: BrowserSseRequestInit;
+  }> = [];
+  readonly catalogReaders: ControlledReader[] = [];
   private readonly handlers: SseHandler[] = [];
 
   readonly fetch = async (
     path: string,
     init: BrowserSseRequestInit
   ): Promise<BrowserSseResponsePort> => {
+    if (path.startsWith("/api/v1/sessions/catalog/stream")) {
+      const reader = new ControlledReader();
+      this.catalogRequests.push({ path, init });
+      this.catalogReaders.push(reader);
+      return sseResponse(reader);
+    }
     this.requests.push({ path, init });
     const handler = this.handlers.shift();
     if (handler === undefined) throw new Error("No SSE test response is configured.");
@@ -3182,6 +3415,13 @@ class ControlledReader implements BrowserSseBodyReaderPort {
     if (waiting === undefined) this.queued.push(next);
     else waiting(next);
   }
+
+  end(): void {
+    const next = { done: true as const };
+    const waiting = this.waiting.shift();
+    if (waiting === undefined) this.queued.push(next);
+    else waiting(next);
+  }
 }
 
 function sseResponse(reader: ControlledReader): BrowserSseResponsePort {
@@ -3219,7 +3459,165 @@ function messageEvent(sessionId: string, cursor: number): SelectedProjectionEven
   });
 }
 
-function eventFrame(event: SelectedProjectionEvent): string {
+function catalogReset(
+  cursor: number,
+  expectedSessionCount: number,
+  streamId = catalogStreamA
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "catalog_reset",
+    reason: "initial",
+    expected_session_count: expectedSessionCount
+  });
+}
+
+function catalogUpsert(
+  cursor: number,
+  suffix: "a" | "b",
+  options: {
+    readonly attention?: "none" | "watch";
+    readonly summary?: string;
+    readonly updatedAt?: string;
+  } = {},
+  streamId = catalogStreamA
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "session_upsert",
+    session: catalogConnectionEntry(suffix, options)
+  });
+}
+
+function catalogReady(
+  cursor: number,
+  sessionCount: number,
+  streamId = catalogStreamA
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "catalog_ready",
+    session_count: sessionCount,
+    endpoint_generation: 7
+  });
+}
+
+function catalogRemove(
+  cursor: number,
+  suffix: "a" | "b",
+  streamId = catalogStreamA
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "session_remove",
+    native_thread_id: catalogNativeId(suffix),
+    internal_session_id: `sess_catalog_connection_${suffix}`,
+    reason: "archived"
+  });
+}
+
+function catalogBoundary(
+  cursor: number,
+  streamId = catalogStreamA
+): SessionCatalogEvent {
+  return sessionCatalogEventSchema.parse({
+    stream_id: streamId,
+    cursor,
+    emitted_at: timestamp,
+    type: "catalog_boundary",
+    reason: "lag",
+    reset_required: true,
+    detail: "Catalog receiver must reconnect."
+  });
+}
+
+function catalogSessionItem(
+  suffix: "a" | "b",
+  options: {
+    readonly attention?: "none" | "watch";
+    readonly summary?: string;
+    readonly updatedAt?: string;
+  } = {}
+): SelectedSessionReadItem {
+  return selectedSessionReadItemSchema.parse({
+    session: catalogConnectionEntry(suffix, options).projection,
+    event_window: {
+      state: "empty",
+      retained_event_count: 0,
+      earliest_retained_cursor: null,
+      boundary_cursor: null
+    }
+  });
+}
+
+function catalogConnectionEntry(
+  suffix: "a" | "b",
+  options: {
+    readonly attention?: "none" | "watch";
+    readonly summary?: string;
+    readonly updatedAt?: string;
+  } = {}
+): SharedSessionCatalogEntry {
+  const sessionId = `sess_catalog_connection_${suffix}`;
+  const nativeThreadId = catalogNativeId(suffix);
+  const updatedAt = options.updatedAt ?? timestamp;
+  return sharedSessionCatalogEntrySchema.parse({
+    tracked: {
+      native_thread_id: nativeThreadId,
+      internal_session_id: sessionId,
+      alias: `catalog-connection-${suffix}`,
+      cwd: `/workspace/catalog-connection-${suffix}`,
+      project_cue: `catalog-connection-${suffix}`,
+      branch: "main",
+      runtime_version: "0.147.0",
+      runtime_source: "codex_app_server",
+      enrollment_origin: "loaded_before",
+      archived: false,
+      created_at: timestamp,
+      updated_at: updatedAt,
+      archived_at: null
+    },
+    projection: {
+      id: sessionId,
+      name: `catalog-connection-${suffix}`,
+      codex_thread_id: nativeThreadId,
+      cwd: `/workspace/catalog-connection-${suffix}`,
+      runtime_source: "codex_app_server",
+      runtime_version: "0.147.0",
+      created_at: timestamp,
+      archived_at: null,
+      session_state: "active",
+      turn_state: "idle",
+      attention: options.attention ?? "none",
+      freshness: "current",
+      freshness_reason: null,
+      updated_at: updatedAt,
+      last_activity_at: updatedAt,
+      branch: "main",
+      model: "gpt-5.5-codex",
+      settings: null,
+      goal: null,
+      recent_summary: options.summary ?? "Catalog connection fixture.",
+      last_event_cursor: null
+    }
+  });
+}
+
+function catalogNativeId(suffix: "a" | "b"): string {
+  return suffix === "a"
+    ? "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4"
+    : "019fc8c8-f71a-7080-9d4d-d5cdbe484587";
+}
+
+function eventFrame(event: SelectedProjectionEvent | SessionCatalogEvent): string {
   return `id: ${String(event.cursor)}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
@@ -3269,6 +3667,12 @@ function missionIds(snapshot: ReturnType<BrowserConnectionStateCoordinator["snap
   return snapshot.targetState.data?.kind === "mission_control"
     ? snapshot.targetState.data.sessions.map((item) => item.session.id)
     : [];
+}
+
+function requireCatalogReader(router: SseRouter, index: number): ControlledReader {
+  const reader = router.catalogReaders[index];
+  if (reader === undefined) throw new Error("Expected catalog SSE reader.");
+  return reader;
 }
 
 function deferred<Value>(): {

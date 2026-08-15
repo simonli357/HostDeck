@@ -32,7 +32,7 @@ export async function openHostAccess(page: Page): Promise<Locator> {
       await page.getByRole("button", { name: "Open session actions" }).click();
       await expect(sessionActions).toBeVisible();
     }
-    await sessionActions.getByRole("button", { name: /Host & access/iu }).click();
+    await sessionActions.getByRole("button", { name: "Open Host and access" }).click();
   }
 
   await expect(hostAccess).toBeVisible();

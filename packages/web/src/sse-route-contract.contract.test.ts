@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { selectedApiRouteManifest } from "../../server/src/selected-api-route-manifest.js";
-import { browserSseRouteContract } from "./sse-route-contract.js";
+import {
+  browserSessionCatalogSseRouteContract,
+  browserSseRouteContract
+} from "./sse-route-contract.js";
 
 describe("browser SSE route contract", () => {
   it("matches the selected per-session production SSE route exactly", () => {
@@ -16,5 +19,20 @@ describe("browser SSE route contract", () => {
     expect(Object.isFrozen(browserSseRouteContract)).toBe(true);
     expect(Object.isFrozen(browserSseRouteContract.request)).toBe(true);
     expect(Object.isFrozen(browserSseRouteContract.response)).toBe(true);
+  });
+
+  it("matches the selected catalog production SSE route exactly", () => {
+    const selected = selectedApiRouteManifest.filter(
+      (route) => route.id === "session_catalog_stream"
+    );
+    expect(selected).toHaveLength(1);
+    expect(browserSessionCatalogSseRouteContract).toEqual(selected[0]);
+    expect(Object.isFrozen(browserSessionCatalogSseRouteContract)).toBe(true);
+    expect(Object.isFrozen(browserSessionCatalogSseRouteContract.request)).toBe(
+      true
+    );
+    expect(Object.isFrozen(browserSessionCatalogSseRouteContract.response)).toBe(
+      true
+    );
   });
 });

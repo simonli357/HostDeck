@@ -162,6 +162,7 @@ const snapshotKeys = [
   "writeEligibility",
   "lastFailure"
 ] as const;
+const snapshotAllowedKeys = [...snapshotKeys, "catalog"] as const;
 const accessResourceKeys = ["state", "data", "failure", "observedAt"] as const;
 const csrfKeys = ["phase", "generation", "rotatedAt", "failure", "invalidationReason"] as const;
 const writeEligibilityKeys = ["scope", "eligible", "causes"] as const;
@@ -795,7 +796,11 @@ function readPortConnection(port: HostLockPort): LockConnectionState {
 }
 
 function readConnection(candidate: unknown): LockConnectionState {
-  const snapshot = readExactRecord(candidate, snapshotKeys, snapshotKeys);
+  const snapshot = readExactRecord(
+    candidate,
+    snapshotKeys,
+    snapshotAllowedKeys
+  );
   if (snapshot === null || !Object.isFrozen(candidate)) {
     throw controllerError("client_contract");
   }

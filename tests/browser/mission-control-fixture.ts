@@ -5,6 +5,7 @@ import {
   selectedSessionListResponseSchema,
   selectedSessionReadItemSchema
 } from "../../packages/contracts/src/index.js";
+import { installPassiveSessionCatalog } from "./session-catalog-passive-fixture.js";
 
 export type MissionApiVariant =
   | "mixed"
@@ -25,6 +26,7 @@ export interface MissionApiController {
 
 export interface MissionApiOptions {
   readonly fallbackUnhandled?: boolean;
+  readonly catalogStream?: boolean;
 }
 
 const origin = "http://127.0.0.1:4175";
@@ -46,6 +48,9 @@ export async function installMissionControlApi(
 ): Promise<MissionApiController> {
   let variant = initialVariant;
   const requests: Request[] = [];
+  if (options.catalogStream !== false) {
+    await installPassiveSessionCatalog(page);
+  }
 
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();

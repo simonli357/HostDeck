@@ -99,12 +99,10 @@ test("renders direct Session Detail safely and rejects invalid routes", async ({
     `/api/v1/sessions/${sessionDetailBrowserSessionId}`,
     `/api/v1/sessions/${sessionDetailBrowserSessionId}/approvals`,
     "/api/v1/access/csrf",
-    "/api/v1/access/devices",
     `/api/v1/sessions/${sessionDetailBrowserSessionId}/approvals`,
     "/api/v1/access",
     "/api/v1/host/status",
-    "/api/v1/sessions",
-    "/api/v1/access/devices"
+    "/api/v1/sessions"
   ]);
 });
 

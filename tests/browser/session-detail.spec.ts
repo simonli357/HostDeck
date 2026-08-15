@@ -4,6 +4,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
   installSessionDetailApi,
   liveActivityEvent,
+  sessionDetailBrowserCodexThreadId,
   sessionDetailBrowserSessionId,
   sessionDetailRequestPaths
 } from "./session-detail-fixture.js";
@@ -65,7 +66,6 @@ test("renders the production structured feed across the approved responsive cont
     expect.stringMatching(
       new RegExp(`^/api/v1/(?:host/status|sessions/${sessionDetailBrowserSessionId})$`, "u")
     ),
-    "/api/v1/access/devices",
     `/api/v1/sessions/${sessionDetailBrowserSessionId}/approvals`,
     "/api/v1/access/csrf",
     `/api/v1/sessions/${sessionDetailBrowserSessionId}/approvals`
@@ -448,7 +448,7 @@ async function expectNoDocumentOverflow(page: Page): Promise<void> {
 async function expectPrivateRuntimeDataAbsent(page: Page): Promise<void> {
   const bodyText = await page.locator("body").innerText();
   expect(bodyText).not.toContain(sessionDetailBrowserSessionId);
-  expect(bodyText).not.toContain("thread-private-browser-detail");
+  expect(bodyText).not.toContain(sessionDetailBrowserCodexThreadId);
   expect(bodyText).not.toContain("request-private-browser-detail");
   expect(bodyText).not.toContain("/workspace/");
   expect(bodyText).not.toContain("codex_app_server");
