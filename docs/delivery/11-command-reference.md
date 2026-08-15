@@ -98,6 +98,7 @@ pnpm test
 pnpm test:unit
 pnpm test:contract
 pnpm check:native-ci
+pnpm check:release-workflow
 pnpm exec vitest run --config vitest.contract.config.ts packages/cli/src/cli.contract.test.ts
 pnpm test:integration
 pnpm test:web
@@ -154,12 +155,16 @@ HOSTDECK_CODEX_BIN="$(readlink -f "$(command -v codex)")" pnpm test:shared-runti
 pnpm smoke:codex-threads
 ```
 
-## Supply-Chain Metadata
+## Supply Chain And Release Bundle
 
 ```bash
 pnpm release:metadata --package /absolute/path/to/hostdeck-package --evidence /absolute/path/to/native-ci.json --output /absolute/path/to/release-metadata --repository /absolute/path/to/HostDeck
 pnpm verify:release-metadata --package /absolute/path/to/hostdeck-package --evidence /absolute/path/to/native-ci.json --output /absolute/path/to/release-metadata --repository /absolute/path/to/HostDeck
+pnpm release:bundle --package /absolute/path/to/hostdeck-package --metadata /absolute/path/to/release-metadata --evidence /absolute/path/to/native-ci.json --output /absolute/path/to/release-bundle --repository /absolute/path/to/HostDeck --tag vX.Y.Z
+pnpm verify:release-bundle --package /absolute/path/to/hostdeck-package --metadata /absolute/path/to/release-metadata --evidence /absolute/path/to/native-ci.json --output /absolute/path/to/release-bundle --repository /absolute/path/to/HostDeck --tag vX.Y.Z
 ```
+
+Bundle generation requires Ubuntu/Linux GNU `tar` and `gzip`. The official `.github/workflows/release.yml` supplies release-event native evidence, attests every verified asset, and creates only a draft release; local fixture evidence is not publication proof.
 
 ## Physical Android Security Acceptance
 
