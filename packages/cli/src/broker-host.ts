@@ -151,6 +151,7 @@ export async function mainHostDeckBrokerHost(
   args = process.argv.slice(2),
   options: HostDeckBrokerHostOptions = {}
 ): Promise<0 | 1> {
+  const processLifetime = createProcessLifetimeOwner();
   const processSignals =
     options.signal === undefined ? createProcessSignalOwner() : null;
   const signal = options.signal ?? processSignals?.signal;
@@ -179,6 +180,7 @@ export async function mainHostDeckBrokerHost(
     return 1;
   } finally {
     processSignals?.close();
+    processLifetime.close();
   }
 }
 
@@ -426,6 +428,15 @@ function createProcessSignalOwner(): Readonly<{
       process.removeListener("SIGTERM", onSignal);
     },
     signal: controller.signal
+  });
+}
+
+function createProcessLifetimeOwner(): Readonly<{ close: () => void }> {
+  const timer = setInterval(() => undefined, maximumPollIntervalMs);
+  return Object.freeze({
+    close() {
+      clearInterval(timer);
+    }
   });
 }
 
