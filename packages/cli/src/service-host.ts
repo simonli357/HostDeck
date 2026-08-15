@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultResourceBudget } from "@hostdeck/contracts";
@@ -55,6 +56,7 @@ export async function runHostDeckServiceHost(
   const input: StartHostDeckProductionServiceServeInput = {
     browser_routes: hostDeckProductionBrowserRoutes,
     codex_bin: codexBin,
+    codex_home: env.CODEX_HOME ?? join(homedir(), ".codex"),
     config_dir: config.configDir,
     database_path: config.databasePath,
     loopback_port: Number(config.baseUrl.port),

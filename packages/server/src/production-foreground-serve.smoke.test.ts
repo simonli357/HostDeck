@@ -9,11 +9,11 @@ import {
   mkdtempSync,
   readdirSync,
   realpathSync,
-  rmSync,
-  symlinkSync
+  rmSync
 } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createServer } from "node:net";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
   codexBindingDescriptor,
@@ -40,6 +40,10 @@ import {
   startHostDeckProductionForegroundServe
 } from "./production-foreground-serve.js";
 import { writeProductionWebTestFixture } from "./production-web-assets.test-support.js";
+import {
+  resolveSharedCodexEndpointLocation,
+  stopOwnedSharedCodexBroker
+} from "./shared-codex-broker-lifecycle.js";
 
 const requireSmoke =
   process.env.HOSTDECK_REQUIRE_PRODUCTION_SERVE_SMOKE === "1";
@@ -51,42 +55,38 @@ const remoteEnableOperationId =
 
 describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => {
   it(
-    "serves local API/static/SSE without Tailscale and signal-closes for same-port restart",
+    "serves local surfaces, restarts HostDeck, and preserves the shared broker",
     async () => {
       const codexCandidate = process.env.HOSTDECK_CODEX_BIN;
       const root = mkdtempSync(
-        join(process.cwd(), "node_modules", ".hd-ps-")
+        join(homedir(), ".hostdeck-production-serve-")
       );
       const configDir = join(root, "config");
       const stateDir = join(root, "state");
       const runtimeDir = join(root, "runtime");
       const codexHome = join(root, "codex-home");
       const buildRoot = join(root, "build");
-      const commandDir = join(root, "bin");
-      const homeDir = join(root, "home");
       const databasePath = join(stateDir, "hostdeck.sqlite");
-      const socketPath = join(runtimeDir, "app-server.sock");
+      const brokerLocation = resolveSharedCodexEndpointLocation({
+        home_directory: root,
+        codex_home: codexHome
+      });
+      const socketPath = brokerLocation.socket_path;
       const previousCodexHome = process.env.CODEX_HOME;
-      const previousHome = process.env.HOME;
-      const previousPath = process.env.PATH;
       let service: HostDeckProductionForegroundServe | null = null;
       let restarted: HostDeckProductionForegroundServe | null = null;
       let emitSignal: ((signal: HostDeckProcessTerminationSignal) => void) | null =
         null;
       let signalSubscriptions = 0;
       let signalUnsubscriptions = 0;
+      let observedRemoteReason: string | null = null;
       let primary: unknown = null;
       const cleanupErrors: unknown[] = [];
 
       try {
         chmodSync(root, 0o700);
         mkdirSync(codexHome, { mode: 0o700 });
-        mkdirSync(commandDir, { mode: 0o700 });
-        mkdirSync(homeDir, { mode: 0o700 });
-        symlinkSync(process.execPath, join(commandDir, "node"));
         process.env.CODEX_HOME = codexHome;
-        process.env.HOME = homeDir;
-        process.env.PATH = commandDir;
         const codexBin = requireExactCodexBinary(codexCandidate);
         createStaticFixture(buildRoot);
         const port = await availableLoopbackPort();
@@ -114,6 +114,7 @@ describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => 
             {
               browser_routes: ["/", "/sessions/:session_id"],
               codex_bin: codexBin,
+              codex_home: codexHome,
               config_dir: configDir,
               database_path: databasePath,
               loopback_port: port,
@@ -132,7 +133,7 @@ describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => 
           phase: "ready",
           application: {
             phase: "runtime_ready",
-            route_registration_count: 24,
+            route_registration_count: 23,
             reconnect: { phase: "ready", current_generation: 1 },
             reconciliation: { phase: "ready", cycle_count: 1 }
           },
@@ -148,11 +149,15 @@ describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => 
         });
         await vi.waitFor(
           () => {
-            expect(service?.snapshot()).toMatchObject({
+            const snapshot = service?.snapshot();
+            expect(snapshot).toMatchObject({
               phase: "ready",
-              remote_availability: "unavailable",
-              remote_reason: "client_not_installed"
+              remote_availability: "unavailable"
             });
+            expect(["client_not_installed", "profile_other"]).toContain(
+              snapshot?.remote_reason
+            );
+            observedRemoteReason = snapshot?.remote_reason ?? null;
           },
           { interval: 25, timeout: 5_000 }
         );
@@ -210,7 +215,7 @@ describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => 
         service = null;
         expect(signalSubscriptions).toBe(1);
         expect(signalUnsubscriptions).toBe(1);
-        expect(existsSync(socketPath)).toBe(false);
+        expect(existsSync(socketPath)).toBe(true);
         await assertLoopbackPortAvailable(port);
 
         restarted = await start();
@@ -228,14 +233,22 @@ describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => 
         restarted = null;
         expect(signalSubscriptions).toBe(2);
         expect(signalUnsubscriptions).toBe(2);
-        expect(existsSync(socketPath)).toBe(false);
+        expect(existsSync(socketPath)).toBe(true);
         await assertLoopbackPortAvailable(port);
-        assertObservationOnlyRemoteState(databasePath);
+        if (observedRemoteReason === null) {
+          throw new Error("Production serve smoke did not observe remote state.");
+        }
+        assertObservationOnlyRemoteState(databasePath, observedRemoteReason);
         expect(
           readdirSync(codexHome, { recursive: true }).some((entry) =>
             String(entry).endsWith(".jsonl")
           )
         ).toBe(false);
+        await stopOwnedSharedCodexBroker({
+          location: brokerLocation,
+          stop_timeout_ms: 5_000
+        });
+        expect(existsSync(socketPath)).toBe(false);
       } catch (error) {
         primary = error;
       } finally {
@@ -253,20 +266,20 @@ describe.skipIf(!requireSmoke)("exact production foreground serve smoke", () => 
             cleanupErrors.push(error);
           }
         }
+        if (existsSync(socketPath)) {
+          try {
+            await stopOwnedSharedCodexBroker({
+              location: brokerLocation,
+              stop_timeout_ms: 5_000
+            });
+          } catch (error) {
+            cleanupErrors.push(error);
+          }
+        }
         if (previousCodexHome === undefined) {
           delete process.env.CODEX_HOME;
         } else {
           process.env.CODEX_HOME = previousCodexHome;
-        }
-        if (previousHome === undefined) {
-          delete process.env.HOME;
-        } else {
-          process.env.HOME = previousHome;
-        }
-        if (previousPath === undefined) {
-          delete process.env.PATH;
-        } else {
-          process.env.PATH = previousPath;
         }
         try {
           rmSync(root, { force: true, recursive: true });
@@ -467,7 +480,10 @@ function seedEnabledRemoteIngress(
   );
 }
 
-function assertObservationOnlyRemoteState(databasePath: string): void {
+function assertObservationOnlyRemoteState(
+  databasePath: string,
+  reason: string
+): void {
   const opened = openMigratedDatabase(databasePath, {
     now: () => new Date("2026-07-20T12:00:05.000Z")
   });
@@ -477,9 +493,8 @@ function assertObservationOnlyRemoteState(databasePath: string): void {
       intent: "enabled",
       availability: "unavailable",
       admission: "closed",
-      client: "not_installed",
       operation_failure: null,
-      reason: "client_not_installed"
+      reason
     });
     expect(
       createRemoteIngressAdmissionProofRepository(opened.db).read()

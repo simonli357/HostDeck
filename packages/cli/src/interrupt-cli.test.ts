@@ -185,7 +185,7 @@ describe("interrupt CLI command", () => {
       );
     }
     const help = renderHelp();
-    expect(help).toContain("codexdeck interrupt SESSION_ID TURN_ID --confirm [--json]");
+    expect(help).toContain("codexdeck interrupt SESSION TURN_ID --confirm [--json]");
     expect(help).not.toMatch(/interrupt.*(?:force|retry|timeout|operation-id|thread-id)/iu);
   });
 

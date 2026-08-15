@@ -7,7 +7,9 @@ import {
   selectedEventPageQuerySchema,
   selectedEventPageResponseSchema,
   selectedSessionMappingRecordSchema,
-  selectedSessionProjectionRecordSchema
+  selectedSessionProjectionRecordSchema,
+  sessionIdSchema,
+  sharedSessionTargetIdMatches
 } from "@hostdeck/contracts";
 import {
   HostDeckSelectedStateRepositoryError,
@@ -48,6 +50,7 @@ interface ParsedStatePort {
 }
 
 interface EventLayout {
+  readonly canonicalSessionId: string;
   readonly earliestCursor: number | null;
   readonly highWaterCursor: number | null;
   readonly retainedBytes: number;
@@ -187,7 +190,7 @@ function readConsistentPage(
     const candidate = invokeListEvents(state.listEvents, sessionId, query);
     const after = readEventLayout(state.require, sessionId);
     if (!sameEventLayout(before, after)) continue;
-    return parseAndValidatePage(candidate, sessionId, query, after);
+    return parseAndValidatePage(candidate, query, after);
   }
   throw unstableStorageFailure();
 }
@@ -210,8 +213,11 @@ function readEventLayout(
     if (!mapping.success || !projection.success) throw new TypeError();
     const session = projection.data.session;
     if (
-      mapping.data.id !== sessionId ||
-      session.id !== sessionId ||
+      !sharedSessionTargetIdMatches(
+        sessionId,
+        mapping.data.id,
+        mapping.data.codex_thread_id
+      ) ||
       mapping.data.id !== session.id ||
       mapping.data.name !== session.name ||
       mapping.data.codex_thread_id !== session.codex_thread_id ||
@@ -237,6 +243,7 @@ function readEventLayout(
     }
 
     const layout = Object.freeze({
+      canonicalSessionId: mapping.data.id,
       earliestCursor: projection.data.earliest_retained_cursor,
       highWaterCursor: session.last_event_cursor,
       retainedBytes: projection.data.retained_event_bytes,
@@ -315,11 +322,12 @@ function mapRepositoryFailure(
     error instanceof HostDeckSelectedStateRepositoryError &&
     error.code === "session_not_found"
   ) {
+    const internalSessionId = sessionIdSchema.safeParse(sessionId);
     return new HostDeckHttpError({
       code: "session_not_found",
       message: "Session was not found.",
       retryable: false,
-      sessionId,
+      ...(internalSessionId.success ? { sessionId: internalSessionId.data } : {}),
       status: 404
     });
   }
@@ -328,7 +336,6 @@ function mapRepositoryFailure(
 
 function parseAndValidatePage(
   candidate: unknown,
-  sessionId: SelectedEventPageParams["session_id"],
   query: SelectedEventPageInput,
   layout: EventLayout
 ): SelectedEventPageResponse {
@@ -342,11 +349,11 @@ function parseAndValidatePage(
   const final = events.at(-1);
 
   if (
-    page.session_id !== sessionId ||
+    page.session_id !== layout.canonicalSessionId ||
     events.length > query.limit ||
     events.some(
       (event) =>
-        event.session_id !== sessionId ||
+        event.session_id !== layout.canonicalSessionId ||
         event.cursor <= baseCursor ||
         event.cursor > highWaterCursor
     )
@@ -410,6 +417,7 @@ function assertCursorNotFuture(
 
 function sameEventLayout(left: EventLayout, right: EventLayout): boolean {
   return (
+    left.canonicalSessionId === right.canonicalSessionId &&
     left.earliestCursor === right.earliestCursor &&
     left.highWaterCursor === right.highWaterCursor &&
     left.retainedBytes === right.retainedBytes &&
@@ -443,11 +451,12 @@ function unavailableSession(
   sessionId: SelectedEventPageParams["session_id"],
   message: string
 ): HostDeckHttpError {
+  const internalSessionId = sessionIdSchema.safeParse(sessionId);
   return new HostDeckHttpError({
     code: "stale_session",
     message,
     retryable: false,
-    sessionId,
+    ...(internalSessionId.success ? { sessionId: internalSessionId.data } : {}),
     status: 409
   });
 }
@@ -455,12 +464,13 @@ function unavailableSession(
 function futureCursor(
   sessionId: SelectedEventPageParams["session_id"]
 ): HostDeckHttpError {
+  const internalSessionId = sessionIdSchema.safeParse(sessionId);
   return new HostDeckHttpError({
     code: "stale_session",
     field: "after",
     message: "Event cursor is ahead of the committed session state.",
     retryable: false,
-    sessionId,
+    ...(internalSessionId.success ? { sessionId: internalSessionId.data } : {}),
     status: 409
   });
 }

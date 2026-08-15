@@ -1,9 +1,8 @@
-import { codexBindingDescriptor } from "@hostdeck/codex-adapter";
 import {
   assertResolvedResourceBudget,
-  type ResourceBudget
+  type ResourceBudget,
+  sharedCodexRuntimeVersion
 } from "@hostdeck/contracts";
-import type { CodexRuntimeProcessExitObservation } from "./codex-runtime-supervisor.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
 import {
   type HostDeckFastifyLifecycle,
@@ -48,9 +47,7 @@ export const hostDeckProductionForegroundServeTerminationTriggers =
     "manual",
     "caller_abort",
     "sigint",
-    "sigterm",
-    "runtime_exit",
-    "runtime_exit_observation_failed"
+    "sigterm"
   ] as const);
 export type HostDeckProductionForegroundServeTerminationTrigger =
   (typeof hostDeckProductionForegroundServeTerminationTriggers)[number];
@@ -180,6 +177,7 @@ export class HostDeckProductionForegroundServeError extends Error {
 interface ParsedServeInput {
   readonly browserRoutes: readonly `/${string}`[];
   readonly codexBin: string;
+  readonly codexHome: string | undefined;
   readonly configDir: string;
   readonly databasePath: string;
   readonly loopbackPort: number;
@@ -218,6 +216,7 @@ const acceptedServiceServeOwners = new WeakSet<object>();
 const inputKeys = [
   "browser_routes",
   "codex_bin",
+  "codex_home",
   "config_dir",
   "database_path",
   "loopback_port",
@@ -229,7 +228,9 @@ const inputKeys = [
   "static_build_root",
   "static_package_version"
 ] as const;
-const requiredInputKeys = inputKeys.filter((key) => key !== "signal");
+const requiredInputKeys = inputKeys.filter(
+  (key) => key !== "signal" && key !== "codex_home"
+);
 const dependencyKeys = [
   "create_application",
   "start_fastify_lifecycle",
@@ -364,6 +365,9 @@ async function startHostDeckProductionServe(
     stage = "resources";
     resources = await ports.startResources({
       codex_bin: parsed.codexBin,
+      ...(parsed.codexHome === undefined
+        ? {}
+        : { codex_home: parsed.codexHome }),
       config_dir: parsed.configDir,
       database_path: parsed.databasePath,
       loopback_port: parsed.loopbackPort,
@@ -372,29 +376,7 @@ async function startHostDeckProductionServe(
       signal: startupController.signal,
       state_dir: parsed.stateDir
     });
-    assertRuntimeOwnership(resources, ownership);
-    if (
-      ownership === "foreground_child" &&
-      resources.runtime.preparation === "ready"
-    ) {
-      const processExit = requireProcessExitObservation(resources);
-      void processExit.then(
-        (observation) => {
-          if (observation.expected || isClosingPhase(application, lifecycle)) {
-            return;
-          }
-          report("serve", "runtime_exit");
-          attemptListenerFailure(application, report);
-          requestTermination("runtime_exit", true);
-        },
-        () => {
-          if (isClosingPhase(application, lifecycle)) return;
-          report("serve", "runtime_exit_observation_failed");
-          attemptListenerFailure(application, report);
-          requestTermination("runtime_exit_observation_failed", true);
-        }
-      );
-    }
+    assertRuntimeReadiness(resources);
     startupController.signal.throwIfAborted();
 
     stage = "application";
@@ -424,7 +406,7 @@ async function startHostDeckProductionServe(
 
     stage = "readiness";
     application.listener.ready();
-    assertReadyProductionServe(resources, application, lifecycle, ownership);
+    assertReadyProductionServe(resources, application, lifecycle);
 
     const owner = createForegroundServeOwner({
       application,
@@ -723,6 +705,14 @@ function parseServeInput(input: unknown): ParsedServeInput {
     }
   }
   if (
+    values.codex_home !== undefined &&
+    typeof values.codex_home !== "string"
+  ) {
+    throw new TypeError(
+      "HostDeck production foreground serve Codex home is invalid."
+    );
+  }
+  if (
     typeof values.loopback_port !== "number" ||
     !Number.isSafeInteger(values.loopback_port)
   ) {
@@ -754,6 +744,7 @@ function parseServeInput(input: unknown): ParsedServeInput {
   return Object.freeze({
     browserRoutes,
     codexBin: values.codex_bin as string,
+    codexHome: values.codex_home as string | undefined,
     configDir: values.config_dir as string,
     databasePath: values.database_path as string,
     loopbackPort: values.loopback_port,
@@ -993,48 +984,27 @@ function reportHttpIssue(
   );
 }
 
-function requireProcessExitObservation(
+function assertRuntimeReadiness(
   resources: HostDeckProductionResources
-): Promise<CodexRuntimeProcessExitObservation> {
-  const processExit = resources.runtime.process_exit;
-  if (processExit === null || !isPromiseLike(processExit)) {
-    throw new TypeError(
-      "HostDeck foreground runtime requires one process-exit observation."
-    );
-  }
-  return Promise.resolve(processExit);
-}
-
-function assertRuntimeOwnership(
-  resources: HostDeckProductionResources,
-  expected: HostDeckServeOwnership
 ): void {
   const snapshot = resources.snapshot();
   const readyRuntime = resources.runtime.preparation === "ready";
-  const hasExpectedProcessExit =
-    expected === "foreground_child"
-      ? isPromiseLike(resources.runtime.process_exit)
-      : resources.runtime.process_exit === null;
   if (
-    resources.runtime.mode !== expected ||
-    resources.runtime.ownership !== expected ||
     snapshot.runtime_preparation !== resources.runtime.preparation ||
+    snapshot.runtime !== resources.runtime.endpoint ||
     snapshot.codex_version !== resources.codex_version ||
+    resources.runtime.socket_path !== resources.runtime.location.socket_path ||
     (readyRuntime
-      ? resources.codex_version !== codexBindingDescriptor.codex_version ||
-        !hasExpectedProcessExit
+      ? resources.codex_version !== sharedCodexRuntimeVersion ||
+        resources.runtime.endpoint.state !== "ready" ||
+        resources.runtime.endpoint.observed_version !== resources.codex_version
       : resources.runtime.preparation !== "version_incompatible" ||
-        resources.codex_version === codexBindingDescriptor.codex_version ||
-        resources.runtime.process_exit !== null ||
-        resources.runtime.socket_mode_repaired ||
-        resources.runtime.stale_socket_removed ||
-        snapshot.runtime.phase !== "idle" ||
-        snapshot.runtime.process_state !== "not_started" ||
-        snapshot.runtime.claim_held ||
-        snapshot.runtime.socket_ready)
+        resources.codex_version === sharedCodexRuntimeVersion ||
+        resources.runtime.endpoint.state !== "failed" ||
+        resources.runtime.endpoint.ownership !== "none")
   ) {
     throw new TypeError(
-      "HostDeck production resource ownership contradicts the selected serve mode."
+      "HostDeck production resource runtime readiness is contradictory."
     );
   }
 }
@@ -1042,8 +1012,7 @@ function assertRuntimeOwnership(
 function assertReadyProductionServe(
   resources: HostDeckProductionResources,
   application: HostDeckProductionApplication,
-  lifecycle: HostDeckFastifyLifecycle<HostDeckProductionApplication>,
-  expectedOwnership: HostDeckServeOwnership
+  lifecycle: HostDeckFastifyLifecycle<HostDeckProductionApplication>
 ): void {
   const resourceSnapshot = resources.snapshot();
   const applicationSnapshot = application.snapshot();
@@ -1075,8 +1044,6 @@ function assertReadyProductionServe(
     lifecycle.context !== application ||
     lifecycle.baseUrl.origin !==
       `http://${application.bind.host}:${application.bind.port}` ||
-    resources.runtime.mode !== expectedOwnership ||
-    resources.runtime.ownership !== expectedOwnership ||
     resourceSnapshot.phase !== "ready" ||
     !resourceSnapshot.database_open ||
     !resourceSnapshot.lease_held ||
@@ -1093,35 +1060,6 @@ function assertReadyProductionServe(
       "HostDeck production serve readiness is inconsistent."
     );
   }
-}
-
-function attemptListenerFailure(
-  application: HostDeckProductionApplication | null,
-  report: (
-    source: HostDeckProductionForegroundServeIssueSource,
-    code: string
-  ) => void
-): void {
-  if (application === null) return;
-  try {
-    application.listener.failed();
-  } catch {
-    report("serve", "listener_failure_update_failed");
-  }
-}
-
-function isClosingPhase(
-  application: HostDeckProductionApplication | null,
-  lifecycle: HostDeckFastifyLifecycle<HostDeckProductionApplication> | null
-): boolean {
-  const applicationPhase = application?.snapshot().phase;
-  const listenerPhase = lifecycle?.snapshot().phase;
-  return (
-    applicationPhase === "draining" ||
-    applicationPhase === "closed" ||
-    listenerPhase === "draining" ||
-    listenerPhase === "closed"
-  );
 }
 
 function createStartupServeError(

@@ -218,7 +218,7 @@ describe("managed-session archive CLI command", () => {
 
   it("advertises archive as the selected command and hides historical stop from help", async () => {
     const result = await runCli(["help"]);
-    expect(result.stdout).toContain("codexdeck archive SESSION_ID [--json]");
+    expect(result.stdout).toContain("codexdeck archive SESSION [--json]");
     expect(result.stdout).not.toContain("codexdeck stop");
   });
 });

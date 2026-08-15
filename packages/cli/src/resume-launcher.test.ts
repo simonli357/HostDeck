@@ -9,12 +9,7 @@ import {
 
 const launch = selectedResumeLaunchSchema.parse({
   executable: "/opt/Codex Tools/cod'ex",
-  args: [
-    "resume",
-    "--remote",
-    "unix:///tmp/host deck/app's.sock",
-    "thread-resume-launcher-001"
-  ]
+  args: ["resume", "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4"]
 });
 
 describe("local Codex TUI resume launcher", () => {
@@ -39,12 +34,7 @@ describe("local Codex TUI resume launcher", () => {
     expect(calls).toEqual([
       {
         executable: "/opt/Codex Tools/cod'ex",
-        args: [
-          "resume",
-          "--remote",
-          "unix:///tmp/host deck/app's.sock",
-          "thread-resume-launcher-001"
-        ],
+        args: ["resume", "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4"],
         options: { shell: false, stdio: "inherit" }
       }
     ]);
@@ -55,7 +45,7 @@ describe("local Codex TUI resume launcher", () => {
     expect(Object.isFrozen(call.args)).toBe(true);
     expect(Object.isFrozen(call.options)).toBe(true);
     expect(calls).not.toContain(
-      "'/opt/Codex Tools/cod'\"'\"'ex' resume --remote"
+      "'/opt/Codex Tools/cod'\"'\"'ex' resume 019fc8bd-25ef-74c3-a3bf-c6e59e4122a4"
     );
   });
 
@@ -129,7 +119,7 @@ describe("local Codex TUI resume launcher", () => {
       { ...launch, args: ["exec", ...launch.args.slice(1)] },
       {
         ...launch,
-        args: ["resume", "--remote", "https://example.test", launch.args[3]]
+        args: ["resume", "--remote", launch.args[1]]
       },
       { ...launch, command: "codex resume --shell" }
     ];

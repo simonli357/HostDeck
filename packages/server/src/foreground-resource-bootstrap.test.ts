@@ -5,14 +5,18 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultResourceBudget } from "@hostdeck/contracts";
+import {
+  defaultResourceBudget,
+  type SharedCodexEndpoint,
+  sharedCodexEndpointSchema,
+  sharedCodexRuntimeVersion
+} from "@hostdeck/contracts";
 import { createOperationDeadline } from "@hostdeck/core";
 import {
   acquireHostDeckDaemonLease,
@@ -22,15 +26,6 @@ import {
   resolveHostDeckLocalPaths
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
-import type {
-  CloseCodexRuntimeSupervisorInput,
-  CodexRuntimeSupervisorSnapshot,
-  CreateCodexRuntimeSupervisorInput,
-  createCodexRuntimeSupervisor,
-  HostDeckCodexRuntimeSupervisor,
-  StartCodexRuntimeSupervisorInput,
-  StartedCodexRuntime
-} from "./codex-runtime-supervisor.js";
 import {
   assertHostDeckForegroundResources,
   assertHostDeckServiceResources,
@@ -39,6 +34,10 @@ import {
   startHostDeckForegroundResources,
   startHostDeckServiceResources
 } from "./foreground-resource-bootstrap.js";
+import type {
+  SharedCodexBrokerAttachment,
+  StartSharedCodexBrokerInput
+} from "./shared-codex-broker-lifecycle.js";
 
 const roots: string[] = [];
 
@@ -51,39 +50,34 @@ afterEach(() => {
 describe("HostDeck foreground resource bootstrap", () => {
   it("rejects hostile or unusable configuration before owned mutation", async () => {
     const layout = fixtureLayout("invalid");
-    const runtime = fakeRuntime();
+    const broker = fakeBroker();
     const nonExecutable = join(layout.root, "not-executable");
     const executableLink = join(layout.root, "codex-link");
     writeFileSync(nonExecutable, "not executable", { mode: 0o600 });
     symlinkSync(layout.executable, executableLink);
 
     let accessorRead = false;
-    const hostile = Object.defineProperty(
-      { ...layout.input },
-      "codex_bin",
-      {
-        enumerable: true,
-        get() {
-          accessorRead = true;
-          return layout.executable;
-        }
+    const hostile = Object.defineProperty({ ...layout.input }, "codex_bin", {
+      enumerable: true,
+      get() {
+        accessorRead = true;
+        return layout.executable;
       }
-    );
-    const candidates: unknown[] = [
+    });
+    for (const candidate of [
       { ...layout.input, codex_bin: "codex" },
       { ...layout.input, codex_bin: join(layout.root, "missing") },
       { ...layout.input, codex_bin: nonExecutable },
       { ...layout.input, codex_bin: executableLink },
+      { ...layout.input, codex_home: "relative" },
       { ...layout.input, loopback_port: 80 },
       { ...layout.input, resource_budget: { ...defaultResourceBudget } },
       { ...layout.input, unexpected: true },
       hostile
-    ];
-
-    for (const candidate of candidates) {
+    ]) {
       const error = await captureStartError(
         candidate as StartHostDeckForegroundResourcesInput,
-        runtime.factory
+        broker.start
       );
       expect(error).toMatchObject({
         name: "HostDeckForegroundResourceError",
@@ -91,69 +85,62 @@ describe("HostDeck foreground resource bootstrap", () => {
         stage: "configuration"
       });
       expect(String(error)).not.toContain(layout.root);
-      expect(JSON.stringify(error)).not.toContain(layout.root);
       expect(existsSync(layout.stateDir)).toBe(false);
     }
 
-    let runtimeAccessorRead = false;
-    const accessorFactory = (() =>
-      Object.defineProperty(
-        {
-          close: async () => undefined,
-          snapshot: () => snapshot("idle")
-        },
-        "start",
-        {
-          enumerable: true,
-          get() {
-            runtimeAccessorRead = true;
-            return async () => runtime.started;
-          }
-        }
-      )) as unknown as typeof createCodexRuntimeSupervisor;
-    const runtimeError = await captureStartError(layout.input, accessorFactory);
-    expect(runtimeError).toMatchObject({
-      code: "invalid_config",
-      stage: "configuration"
+    let dependencyAccessorRead = false;
+    const hostileDependencies = Object.defineProperty({}, "startSharedBroker", {
+      enumerable: true,
+      get() {
+        dependencyAccessorRead = true;
+        return broker.start;
+      }
     });
-
+    await expect(
+      startHostDeckForegroundResources(layout.input, hostileDependencies as never)
+    ).rejects.toMatchObject({ code: "invalid_config", stage: "configuration" });
     expect(accessorRead).toBe(false);
-    expect(runtimeAccessorRead).toBe(false);
-    expect(existsSync(layout.stateDir)).toBe(false);
-    expect(runtime.factoryCalls).toBe(0);
-    expect(runtime.startCalls).toBe(0);
-    expect(runtime.closeCalls).toBe(0);
+    expect(dependencyAccessorRead).toBe(false);
+    expect(broker.startCalls).toBe(0);
   });
 
-  it("acquires resources in order and closes runtime, database, then lease exactly once", async () => {
+  it("acquires resources in order and closes only its broker attachment before storage and lease", async () => {
     const layout = fixtureLayout("success");
     const events: string[] = [];
-    const runtime = fakeRuntime({
+    const broker = fakeBroker({
       onStart() {
-        events.push("runtime:start");
+        events.push("broker:attach");
         expect(existsSync(layout.configDir)).toBe(true);
         expect(existsSync(layout.runtimeDir)).toBe(true);
         expect(existsSync(layout.databasePath)).toBe(true);
         expectLeaseHeld(layout.leasePath);
       },
       onClose() {
-        events.push("runtime:close");
+        events.push("broker:detach");
         expect(existsSync(layout.databasePath)).toBe(true);
         expectLeaseHeld(layout.leasePath);
       }
     });
 
     const resources = await startHostDeckForegroundResources(layout.input, {
-      runtimeSupervisorFactory: runtime.factory,
+      startSharedBroker: broker.start,
       now: () => new Date("2026-07-20T12:00:00.000Z"),
       pid: 12_345
     });
 
-    expect(runtime.factoryInput).toEqual({
-      mode: "foreground_child",
-      codex_bin: layout.executable,
-      socket_path: layout.socketPath
-    });
+    expect(broker.inputs).toEqual([
+      {
+        codex_bin: layout.executable,
+        location: {
+          kind: "standard_unix",
+          codex_home: layout.codexHome,
+          socket_path: layout.socketPath
+        },
+        mode: "attach_or_start",
+        observed_version: sharedCodexRuntimeVersion,
+        startup_timeout_ms: defaultResourceBudget.lifecycle_startup_timeout_ms
+      }
+    ]);
     expect(resources.bind).toEqual({
       host: "127.0.0.1",
       port: layout.input.loopback_port,
@@ -161,32 +148,20 @@ describe("HostDeck foreground resource bootstrap", () => {
     });
     expect(resources.paths.database_path).toBe(layout.databasePath);
     expect(resources.codex_bin).toBe(layout.executable);
-    expect(resources.codex_version).toBe("0.147.0");
-    expect(resources.resource_budget).toBe(defaultResourceBudget);
+    expect(resources.codex_version).toBe(sharedCodexRuntimeVersion);
     expect(resources.database.open).toBe(true);
-    expect(resources.database.readonly).toBe(false);
     expect(resources.migration.currentVersion).toBe(
       defaultMigrations.at(-1)?.version
     );
     expect(resources.runtime).toEqual({
-      ...runtime.started,
-      preparation: "ready"
+      preparation: "ready",
+      endpoint: broker.endpoint,
+      location: broker.inputs[0]?.location,
+      socket_path: layout.socketPath
     });
     expect(Object.isFrozen(resources.runtime)).toBe(true);
-    expect(Object.isFrozen(resources)).toBe(true);
-    expect(Object.isFrozen(resources.bind)).toBe(true);
-    expect(Object.isFrozen(resources.path_repairs)).toBe(true);
-    expect(Object.isFrozen(resources.shutdown)).toBe(true);
-    expect(Object.isFrozen(resources.shutdown.supervisor)).toBe(true);
-    expect(Object.isFrozen(resources.shutdown.storage)).toBe(true);
-    expect(Object.isFrozen(resources.shutdown.lease)).toBe(true);
     expect(() => assertHostDeckForegroundResources(resources)).not.toThrow();
-    expect(() =>
-      assertHostDeckForegroundResources(Object.freeze({ ...resources }))
-    ).toThrow(TypeError);
-    expect(lstatSync(layout.configDir).mode & 0o7777).toBe(0o700);
-    expect(lstatSync(layout.stateDir).mode & 0o7777).toBe(0o700);
-    expect(lstatSync(layout.runtimeDir).mode & 0o7777).toBe(0o700);
+    expect(() => assertHostDeckServiceResources(resources)).toThrow(TypeError);
     expect(lstatSync(layout.databasePath).mode & 0o7777).toBe(0o600);
     expect(JSON.parse(readFileSync(layout.leasePath, "utf8"))).toEqual({
       pid: 12_345,
@@ -194,470 +169,227 @@ describe("HostDeck foreground resource bootstrap", () => {
     });
     expect(resources.snapshot()).toMatchObject({
       phase: "ready",
-      codex_version: "0.147.0",
+      codex_version: sharedCodexRuntimeVersion,
       database_open: true,
       lease_held: true,
       runtime_preparation: "ready",
-      runtime: { phase: "ready" }
-    });
-
-    const firstClose = resources.close();
-    const repeatedClose = resources.close();
-    expect(repeatedClose).toBe(firstClose);
-    await firstClose;
-
-    expect(events).toEqual(["runtime:start", "runtime:close"]);
-    expect(runtime.startCalls).toBe(1);
-    expect(runtime.closeCalls).toBe(1);
-    expect(resources.database.open).toBe(false);
-    expect(resources.snapshot()).toMatchObject({
-      phase: "closed",
-      database_open: false,
-      lease_held: false
-    });
-    acquireAndRelease(layout.leasePath);
-  });
-
-  it("retains valid version drift without starting or attaching the runtime", async () => {
-    const layout = fixtureLayout("version-drift");
-    const runtime = fakeRuntime();
-    let probeCalls = 0;
-    const resources = await startHostDeckForegroundResources(layout.input, {
-      codexVersionProbe: async (input) => {
-        probeCalls += 1;
-        expect(Object.isFrozen(input)).toBe(true);
-        expect(input.executable).toBe(layout.executable);
-        expect(input.signal).toBeInstanceOf(AbortSignal);
-        expect(input.timeout_ms).toBeLessThanOrEqual(10_000);
-        expect(existsSync(layout.databasePath)).toBe(true);
-        expectLeaseHeld(layout.leasePath);
-        return "0.145.0";
-      },
-      runtimeSupervisorFactory: runtime.factory
-    });
-
-    expect(probeCalls).toBe(1);
-    expect(runtime.startCalls).toBe(0);
-    expect(resources.codex_version).toBe("0.145.0");
-    expect(resources.runtime).toEqual({
-      mode: "foreground_child",
-      ownership: "foreground_child",
-      socket_path: layout.socketPath,
-      socket_mode_repaired: false,
-      stale_socket_removed: false,
-      process_exit: null,
-      preparation: "version_incompatible"
-    });
-    expect(resources.snapshot()).toMatchObject({
-      phase: "ready",
-      codex_version: "0.145.0",
-      runtime_preparation: "version_incompatible",
-      runtime: {
-        phase: "idle",
-        spawn_attempts: 0,
-        socket_ready: false
-      }
-    });
-
-    await resources.close();
-    expect(runtime.closeCalls).toBe(1);
-    expect(resources.snapshot()).toMatchObject({
-      phase: "closed",
-      database_open: false,
-      lease_held: false,
-      runtime: { phase: "closed" }
-    });
-    acquireAndRelease(layout.leasePath);
-  });
-
-  it("fails and rolls back when the probe returns malformed state", async () => {
-    const layout = fixtureLayout("invalid-version-state");
-    const runtime = fakeRuntime();
-    const error = await captureStartError(
-      layout.input,
-      runtime.factory,
-      undefined,
-      async () => "nightly"
-    );
-
-    expect(error).toMatchObject({
-      code: "runtime_failed",
-      stage: "runtime"
-    });
-    expect(runtime.startCalls).toBe(0);
-    expect(runtime.closeCalls).toBe(0);
-    acquireAndRelease(layout.leasePath);
-  });
-
-  it("exposes ordered idempotent shutdown ports without releasing a later owner early", async () => {
-    const layout = fixtureLayout("staged-shutdown");
-    const events: string[] = [];
-    const runtime = fakeRuntime({
-      onClose() {
-        events.push("runtime:close");
-        expect(existsSync(layout.databasePath)).toBe(true);
-        expectLeaseHeld(layout.leasePath);
-      }
-    });
-    const resources = await startHostDeckForegroundResources(layout.input, {
-      runtimeSupervisorFactory: runtime.factory
-    });
-    const earlyStorageDeadline = cleanupDeadline();
-    await expect(
-      resources.shutdown.storage.close(earlyStorageDeadline)
-    ).rejects.toThrow("cannot close before");
-    earlyStorageDeadline.dispose();
-    expect(resources.database.open).toBe(true);
-    expectLeaseHeld(layout.leasePath);
-
-    const supervisorDeadline = cleanupDeadline();
-    const supervisorClose = resources.shutdown.supervisor.close(
-      supervisorDeadline
-    );
-    expect(resources.shutdown.supervisor.close(supervisorDeadline)).toBe(
-      supervisorClose
-    );
-    await supervisorClose;
-    supervisorDeadline.dispose();
-    expect(events).toEqual(["runtime:close"]);
-    expect(resources.database.open).toBe(true);
-    expectLeaseHeld(layout.leasePath);
-
-    const earlyLeaseDeadline = cleanupDeadline();
-    await expect(
-      resources.shutdown.lease.release(earlyLeaseDeadline)
-    ).rejects.toThrow("cannot release before");
-    earlyLeaseDeadline.dispose();
-    expectLeaseHeld(layout.leasePath);
-
-    const storageDeadline = cleanupDeadline();
-    const storageClose = resources.shutdown.storage.close(storageDeadline);
-    expect(resources.shutdown.storage.close(storageDeadline)).toBe(storageClose);
-    await storageClose;
-    storageDeadline.dispose();
-    expect(resources.database.open).toBe(false);
-    expectLeaseHeld(layout.leasePath);
-
-    const leaseDeadline = cleanupDeadline();
-    const leaseRelease = resources.shutdown.lease.release(leaseDeadline);
-    expect(resources.shutdown.lease.release(leaseDeadline)).toBe(leaseRelease);
-    await leaseRelease;
-    leaseDeadline.dispose();
-    expect(resources.snapshot()).toMatchObject({
-      phase: "closed",
-      database_open: false,
-      lease_held: false
-    });
-    expect(runtime.closeCalls).toBe(1);
-    await resources.close();
-    expect(runtime.closeCalls).toBe(1);
-    acquireAndRelease(layout.leasePath);
-  });
-
-  it("stops at a held lease before later path, database, or runtime mutation", async () => {
-    const layout = fixtureLayout("held");
-    const paths = resolveHostDeckLocalPaths(layout.input);
-    prepareHostDeckDaemonLeasePath(paths);
-    const owner = acquireHostDeckDaemonLease({
-      lease_path: paths.lease_path
-    });
-    const runtime = fakeRuntime();
-
-    try {
-      const error = await captureStartError(layout.input, runtime.factory);
-      expect(error).toMatchObject({
-        code: "lease_held",
-        stage: "lease"
-      });
-      expect(runtime.factoryCalls).toBe(1);
-      expect(runtime.startCalls).toBe(0);
-      expect(runtime.closeCalls).toBe(0);
-      expect(existsSync(layout.configDir)).toBe(false);
-      expect(existsSync(layout.runtimeDir)).toBe(false);
-      expect(existsSync(layout.databasePath)).toBe(false);
-    } finally {
-      owner.release();
-    }
-  });
-
-  it("releases the lease after insecure later paths without leaking private paths", async () => {
-    const layout = fixtureLayout("insecure-parent");
-    const runtimeParent = join(layout.root, "runtime-parent");
-    const runtimeDir = join(runtimeParent, "runtime");
-    mkdirSync(runtimeParent, { mode: 0o755 });
-    chmodSync(runtimeParent, 0o755);
-    const input = {
-      ...layout.input,
-      runtime_dir: runtimeDir
-    };
-    const runtime = fakeRuntime();
-
-    const error = await captureStartError(input, runtime.factory);
-    expect(error).toMatchObject({ code: "path_failed", stage: "paths" });
-    expect(String(error)).not.toContain(layout.root);
-    expect(JSON.stringify(error)).not.toContain(layout.root);
-    expect(runtime.startCalls).toBe(0);
-    expect(runtime.closeCalls).toBe(0);
-    expect(existsSync(layout.configDir)).toBe(true);
-    expect(existsSync(runtimeDir)).toBe(false);
-    expect(existsSync(layout.databasePath)).toBe(false);
-    acquireAndRelease(layout.leasePath);
-  });
-
-  it("closes and unlocks a corrupt database failure before runtime startup", async () => {
-    const layout = fixtureLayout("corrupt-database");
-    mkdirSync(layout.stateDir, { mode: 0o700 });
-    writeFileSync(layout.databasePath, "not sqlite", { mode: 0o600 });
-    const runtime = fakeRuntime();
-
-    const error = await captureStartError(layout.input, runtime.factory);
-    expect(error).toMatchObject({
-      code: "database_failed",
-      stage: "database"
-    });
-    expect(runtime.startCalls).toBe(0);
-    expect(runtime.closeCalls).toBe(0);
-    expect(readFileSync(layout.databasePath, "utf8")).toBe("not sqlite");
-    acquireAndRelease(layout.leasePath);
-  });
-
-  it("detects database path substitution during migration and rolls back ownership", async () => {
-    const layout = fixtureLayout("database-substitution");
-    const runtime = fakeRuntime();
-    let clockCalls = 0;
-    const now = () => {
-      clockCalls += 1;
-      if (clockCalls === 2) {
-        renameSync(layout.databasePath, `${layout.databasePath}.original`);
-        writeFileSync(layout.databasePath, "substituted", { mode: 0o600 });
-      }
-      return new Date("2026-07-20T13:00:00.000Z");
-    };
-
-    const error = await captureStartError(layout.input, runtime.factory, now);
-    expect(error).toMatchObject({
-      code: "database_failed",
-      stage: "database"
-    });
-    expect(clockCalls).toBeGreaterThanOrEqual(2);
-    expect(runtime.startCalls).toBe(0);
-    expect(runtime.closeCalls).toBe(0);
-    expect(readFileSync(layout.databasePath, "utf8")).toBe("substituted");
-    acquireAndRelease(layout.leasePath);
-  });
-
-  it("rolls back runtime rejection, abort, and invalid startup state", async () => {
-    const cases = [
-      {
-        label: "rejected",
-        expectedCode: "runtime_failed",
-        runtime: (_controller: AbortController) =>
-          fakeRuntime({
-            onStart() {
-              throw new Error("private runtime failure");
-            }
-          })
-      },
-      {
-        label: "aborted",
-        expectedCode: "startup_aborted",
-        runtime(controller: AbortController) {
-          return fakeRuntime({
-            onStart() {
-              const reason = new Error("private abort reason");
-              controller.abort(reason);
-              throw reason;
-            }
-          });
-        }
-      },
-      {
-        label: "invalid-result",
-        expectedCode: "runtime_failed",
-        runtime: (_controller: AbortController) =>
-          fakeRuntime({ startResult: Object.freeze({}) })
-      }
-    ] as const;
-
-    for (const testCase of cases) {
-      const layout = fixtureLayout(testCase.label);
-      const controller = new AbortController();
-      const runtime = testCase.runtime(controller);
-      const input = {
-        ...layout.input,
-        ...(testCase.label === "aborted" ? { signal: controller.signal } : {})
-      };
-
-      const error = await captureStartError(input, runtime.factory);
-      expect(error).toMatchObject({
-        code: testCase.expectedCode,
-        stage: "runtime"
-      });
-      expect(String(error)).not.toContain(layout.root);
-      expect(runtime.startCalls).toBe(1);
-      expect(runtime.closeCalls).toBe(1);
-      expect(existsSync(layout.socketPath)).toBe(false);
-      acquireAndRelease(layout.leasePath);
-    }
-  });
-
-  it("continues database and lease cleanup when runtime close fails", async () => {
-    const layout = fixtureLayout("cleanup-failure");
-    const runtime = fakeRuntime({
-      onClose() {
-        throw new Error(`private close failure at ${layout.root}`);
-      }
-    });
-    const resources = await startHostDeckForegroundResources(layout.input, {
-      runtimeSupervisorFactory: runtime.factory
+      runtime: { state: "ready", ownership: "owned" }
     });
 
     const firstClose = resources.close();
     expect(resources.close()).toBe(firstClose);
-    let closeError: unknown;
+    await firstClose;
+
+    expect(events).toEqual(["broker:attach", "broker:detach"]);
+    expect(broker.closeCalls).toBe(1);
+    expect(resources.database.open).toBe(false);
+    expect(resources.snapshot()).toMatchObject({
+      phase: "closed",
+      database_open: false,
+      lease_held: false
+    });
+    acquireAndRelease(layout.leasePath);
+  });
+
+  it("retains valid version drift without touching the shared endpoint", async () => {
+    const layout = fixtureLayout("version-drift");
+    const broker = fakeBroker();
+    const resources = await startHostDeckForegroundResources(layout.input, {
+      codexVersionProbe: async () => "0.145.0",
+      startSharedBroker: broker.start
+    });
+
+    expect(broker.startCalls).toBe(0);
+    expect(resources.runtime).toMatchObject({
+      preparation: "version_incompatible",
+      socket_path: layout.socketPath,
+      endpoint: {
+        state: "failed",
+        ownership: "none",
+        observed_version: "0.145.0"
+      }
+    });
+    await resources.close();
+    expect(broker.closeCalls).toBe(0);
+    acquireAndRelease(layout.leasePath);
+  });
+
+  it("exposes ordered idempotent shutdown ports", async () => {
+    const layout = fixtureLayout("staged-shutdown");
+    const broker = fakeBroker();
+    const resources = await startHostDeckForegroundResources(layout.input, {
+      startSharedBroker: broker.start
+    });
+
+    const earlyStorage = cleanupDeadline();
+    await expect(resources.shutdown.storage.close(earlyStorage)).rejects.toThrow(
+      "cannot close before"
+    );
+    earlyStorage.dispose();
+
+    const runtimeDeadline = cleanupDeadline();
+    const detached = resources.shutdown.supervisor.close(runtimeDeadline);
+    expect(resources.shutdown.supervisor.close(runtimeDeadline)).toBe(detached);
+    await detached;
+    runtimeDeadline.dispose();
+    expect(broker.closeCalls).toBe(1);
+    expect(resources.database.open).toBe(true);
+
+    const storageDeadline = cleanupDeadline();
+    await resources.shutdown.storage.close(storageDeadline);
+    storageDeadline.dispose();
+    const leaseDeadline = cleanupDeadline();
+    await resources.shutdown.lease.release(leaseDeadline);
+    leaseDeadline.dispose();
+    await resources.close();
+    expect(broker.closeCalls).toBe(1);
+    acquireAndRelease(layout.leasePath);
+  });
+
+  it("stops before broker access for lease, path, and database failures", async () => {
+    const held = fixtureLayout("held");
+    prepareHostDeckDaemonLeasePath(localPaths(held));
+    const owner = acquireHostDeckDaemonLease({ lease_path: held.leasePath });
+    const heldBroker = fakeBroker();
     try {
-      await firstClose;
-    } catch (error) {
-      closeError = error;
+      await expect(
+        startHostDeckForegroundResources(held.input, {
+          startSharedBroker: heldBroker.start
+        })
+      ).rejects.toMatchObject({ code: "lease_held", stage: "lease" });
+      expect(heldBroker.startCalls).toBe(0);
+    } finally {
+      owner.release();
     }
 
-    expect(closeError).toBeInstanceOf(HostDeckForegroundResourceError);
-    expect(closeError).toMatchObject({
-      code: "cleanup_failed",
-      stage: "cleanup"
+    const insecure = fixtureLayout("insecure-parent");
+    const runtimeParent = join(insecure.root, "runtime-parent");
+    const runtimeDir = join(runtimeParent, "runtime");
+    mkdirSync(runtimeParent, { mode: 0o755 });
+    chmodSync(runtimeParent, 0o755);
+    const insecureBroker = fakeBroker();
+    await expect(
+      startHostDeckForegroundResources(
+        { ...insecure.input, runtime_dir: runtimeDir },
+        { startSharedBroker: insecureBroker.start }
+      )
+    ).rejects.toMatchObject({ code: "path_failed", stage: "paths" });
+    expect(insecureBroker.startCalls).toBe(0);
+    acquireAndRelease(insecure.leasePath);
+
+    const corrupt = fixtureLayout("corrupt-database");
+    mkdirSync(corrupt.stateDir, { mode: 0o700 });
+    writeFileSync(corrupt.databasePath, "not sqlite", { mode: 0o600 });
+    const corruptBroker = fakeBroker();
+    await expect(
+      startHostDeckForegroundResources(corrupt.input, {
+        startSharedBroker: corruptBroker.start
+      })
+    ).rejects.toMatchObject({ code: "database_failed", stage: "database" });
+    expect(corruptBroker.startCalls).toBe(0);
+    expect(readFileSync(corrupt.databasePath, "utf8")).toBe("not sqlite");
+    acquireAndRelease(corrupt.leasePath);
+  });
+
+  it("rolls back broker failures and invalid attachment state", async () => {
+    for (const testCase of ["rejected", "aborted", "invalid"] as const) {
+      const layout = fixtureLayout(testCase);
+      const controller = new AbortController();
+      const broker = fakeBroker({
+        ...(testCase === "rejected"
+          ? { startError: new Error("private broker failure") }
+          : {}),
+        ...(testCase === "aborted"
+          ? {
+              onStart() {
+                controller.abort(new Error("private abort reason"));
+                throw controller.signal.reason;
+              }
+            }
+          : {}),
+        ...(testCase === "invalid"
+          ? {
+              endpoint: sharedCodexEndpointSchema.parse({
+                kind: "standard_unix",
+                state: "absent",
+                ownership: "none",
+                generation: 0,
+                observed_version: null,
+                reason: null
+              })
+            }
+          : {})
+      });
+      await expect(
+        startHostDeckForegroundResources(
+          {
+            ...layout.input,
+            ...(testCase === "aborted" ? { signal: controller.signal } : {})
+          },
+          { startSharedBroker: broker.start }
+        )
+      ).rejects.toMatchObject({
+        code: testCase === "aborted" ? "startup_aborted" : "runtime_failed",
+        stage: "runtime"
+      });
+      expect(broker.startCalls).toBe(1);
+      expect(broker.closeCalls).toBe(testCase === "invalid" ? 1 : 0);
+      acquireAndRelease(layout.leasePath);
+    }
+  });
+
+  it("continues storage and lease cleanup when attachment close fails", async () => {
+    const layout = fixtureLayout("cleanup-failure");
+    const broker = fakeBroker({ closeError: new Error("private close failure") });
+    const resources = await startHostDeckForegroundResources(layout.input, {
+      startSharedBroker: broker.start
     });
-    expect(String(closeError)).not.toContain(layout.root);
-    expect(JSON.stringify(closeError)).not.toContain(layout.root);
-    expect(runtime.closeCalls).toBe(1);
+
+    await expect(resources.close()).rejects.toBeInstanceOf(
+      HostDeckForegroundResourceError
+    );
     expect(resources.database.open).toBe(false);
     expect(resources.snapshot()).toMatchObject({
       phase: "failed",
       database_open: false,
       lease_held: false
     });
-    expect(resources.close()).toBe(firstClose);
     acquireAndRelease(layout.leasePath);
   });
 });
 
 describe("HostDeck service resource bootstrap", () => {
-  it("stops at the shared lease before observing the sibling runtime", async () => {
-    const layout = fixtureLayout("service-held-lease");
-    mkdirSync(layout.runtimeDir, { mode: 0o700 });
-    chmodSync(layout.runtimeDir, 0o700);
-    prepareHostDeckDaemonLeasePath(
-      resolveHostDeckLocalPaths({
-        config_dir: layout.configDir,
-        database_path: layout.databasePath,
-        runtime_dir: layout.runtimeDir,
-        state_dir: layout.stateDir
-      })
-    );
-    const owner = acquireHostDeckDaemonLease({ lease_path: layout.leasePath });
-    const runtime = fakeRuntime({ ownership: "service_owned" });
-
-    try {
-      await expect(
-        startHostDeckServiceResources(layout.input, {
-          runtimeSupervisorFactory: runtime.factory
-        })
-      ).rejects.toMatchObject({ code: "lease_held", stage: "lease" });
-      expect(runtime.startCalls).toBe(0);
-      expect(lstatSync(layout.runtimeDir).mode & 0o7777).toBe(0o700);
-      expect(existsSync(layout.socketPath)).toBe(false);
-    } finally {
-      owner.release();
-    }
-  });
-
-  it("awaits an existing service runtime without gaining process or socket ownership", async () => {
+  it("attaches only and never claims broker process ownership", async () => {
     const layout = fixtureLayout("service-success");
     mkdirSync(layout.runtimeDir, { mode: 0o700 });
-    chmodSync(layout.runtimeDir, 0o700);
-    const runtime = fakeRuntime({ ownership: "service_owned" });
+    const broker = fakeBroker({ ownership: "attached" });
 
     const resources = await startHostDeckServiceResources(layout.input, {
-      runtimeSupervisorFactory: runtime.factory
+      startSharedBroker: broker.start
     });
 
-    expect(runtime.factoryInput).toEqual({
-      mode: "service_owned",
-      socket_path: layout.socketPath
-    });
-    expect(resources.runtime).toMatchObject({
-      mode: "service_owned",
-      ownership: "service_owned",
-      process_exit: null,
-      socket_mode_repaired: false,
-      stale_socket_removed: false
+    expect(broker.inputs[0]?.mode).toBe("attach_only");
+    expect(resources.runtime.endpoint).toMatchObject({
+      state: "ready",
+      ownership: "attached"
     });
     expect(() => assertHostDeckServiceResources(resources)).not.toThrow();
-    expect(() => assertHostDeckForegroundResources(resources)).toThrow(
-      TypeError
-    );
-
+    expect(() => assertHostDeckForegroundResources(resources)).toThrow(TypeError);
     await resources.close();
-    expect(runtime.closeCalls).toBe(1);
+    expect(broker.closeCalls).toBe(1);
     expect(existsSync(layout.runtimeDir)).toBe(true);
-    expect(lstatSync(layout.runtimeDir).mode & 0o7777).toBe(0o700);
     acquireAndRelease(layout.leasePath);
   });
 
-  it("requires the externally owned runtime directory without creating or repairing it", async () => {
-    for (const [label, prepare] of [
-      ["missing", (_fixture: FixtureLayout) => undefined],
-      [
-        "insecure",
-        (fixture: FixtureLayout) => {
-          mkdirSync(fixture.runtimeDir, { mode: 0o711 });
-          chmodSync(fixture.runtimeDir, 0o711);
-        }
-      ]
-    ] as const) {
-      const fixture = fixtureLayout(`service-runtime-${label}`);
-      prepare(fixture);
-      const runtime = fakeRuntime({ ownership: "service_owned" });
-      await expect(
-        startHostDeckServiceResources(fixture.input, {
-          runtimeSupervisorFactory: runtime.factory
-        })
-      ).rejects.toMatchObject({ code: "path_failed", stage: "paths" });
-      expect(runtime.startCalls).toBe(0);
-      if (label === "missing") {
-        expect(existsSync(fixture.runtimeDir)).toBe(false);
-      } else {
-        expect(lstatSync(fixture.runtimeDir).mode & 0o7777).toBe(0o711);
-      }
-    }
-  });
-
-  it("rejects foreground runtime identity from a service supervisor", async () => {
-    const layout = fixtureLayout("service-identity");
-    mkdirSync(layout.runtimeDir, { mode: 0o700 });
-    const runtime = fakeRuntime({
-      ownership: "service_owned",
-      startResult: Object.freeze({
-        mode: "foreground_child",
-        ownership: "foreground_child",
-        socket_path: layout.socketPath,
-        socket_mode_repaired: false,
-        stale_socket_removed: false,
-        process_exit: Promise.resolve({
-          kind: "exited" as const,
-          expected: true,
-          code: 0,
-          signal: null
-        })
-      })
-    });
-
+  it("requires the service runtime directory before broker attachment", async () => {
+    const layout = fixtureLayout("service-missing-runtime");
+    const broker = fakeBroker({ ownership: "attached" });
     await expect(
       startHostDeckServiceResources(layout.input, {
-        runtimeSupervisorFactory: runtime.factory
+        startSharedBroker: broker.start
       })
-    ).rejects.toMatchObject({ code: "runtime_failed", stage: "runtime" });
-    expect(runtime.closeCalls).toBe(1);
-    acquireAndRelease(layout.leasePath);
+    ).rejects.toMatchObject({ code: "path_failed", stage: "paths" });
+    expect(broker.startCalls).toBe(0);
   });
 });
 
@@ -668,6 +400,7 @@ interface FixtureLayout {
   readonly runtimeDir: string;
   readonly databasePath: string;
   readonly leasePath: string;
+  readonly codexHome: string;
   readonly socketPath: string;
   readonly executable: string;
   readonly input: StartHostDeckForegroundResourcesInput;
@@ -682,7 +415,12 @@ function fixtureLayout(label: string): FixtureLayout {
   const runtimeDir = join(root, "runtime");
   const databasePath = join(stateDir, "hostdeck.sqlite");
   const leasePath = join(stateDir, "hostdeck.lock");
-  const socketPath = join(runtimeDir, "app-server.sock");
+  const codexHome = join(root, "codex-home");
+  const socketPath = join(
+    codexHome,
+    "app-server-control",
+    "app-server-control.sock"
+  );
   const executable = join(root, "codex-fixture");
   writeFileSync(
     executable,
@@ -697,6 +435,7 @@ function fixtureLayout(label: string): FixtureLayout {
     runtimeDir,
     databasePath,
     leasePath,
+    codexHome,
     socketPath,
     executable,
     input: Object.freeze({
@@ -705,132 +444,80 @@ function fixtureLayout(label: string): FixtureLayout {
       runtime_dir: runtimeDir,
       database_path: databasePath,
       codex_bin: executable,
+      codex_home: codexHome,
       loopback_port: 46_217,
       resource_budget: defaultResourceBudget
     })
   };
 }
 
-interface FakeRuntimeOptions {
-  readonly ownership?: "foreground_child" | "service_owned";
-  readonly onStart?: (
-    input: StartCodexRuntimeSupervisorInput,
-    factoryInput: CreateCodexRuntimeSupervisorInput
-  ) => unknown | Promise<unknown>;
-  readonly onClose?: (
-    input: CloseCodexRuntimeSupervisorInput,
-    factoryInput: CreateCodexRuntimeSupervisorInput
-  ) => unknown | Promise<unknown>;
-  readonly startResult?: unknown;
+interface FakeBrokerOptions {
+  readonly ownership?: "attached" | "owned";
+  readonly endpoint?: SharedCodexEndpoint;
+  readonly startError?: unknown;
+  readonly closeError?: unknown;
+  readonly onStart?: (input: StartSharedCodexBrokerInput) => void | Promise<void>;
+  readonly onClose?: () => void | Promise<void>;
 }
 
-interface FakeRuntimeHarness {
-  factoryCalls: number;
-  startCalls: number;
-  closeCalls: number;
-  factoryInput: CreateCodexRuntimeSupervisorInput | null;
-  started: StartedCodexRuntime;
-  factory: typeof createCodexRuntimeSupervisor;
-}
-
-function fakeRuntime(options: FakeRuntimeOptions = {}): FakeRuntimeHarness {
-  const ownership = options.ownership ?? "foreground_child";
-  const processExit = Promise.resolve({
-    kind: "exited" as const,
-    expected: true,
-    code: 0,
-    signal: null
-  });
-  const started = Object.freeze({
-    mode: ownership,
-    ownership,
-    socket_path: "pending",
-    socket_mode_repaired: ownership === "foreground_child",
-    stale_socket_removed: false,
-    process_exit: ownership === "foreground_child" ? processExit : null
-  });
-  const harness: FakeRuntimeHarness = {
-    factoryCalls: 0,
+function fakeBroker(options: FakeBrokerOptions = {}) {
+  const endpoint =
+    options.endpoint ??
+    sharedCodexEndpointSchema.parse({
+      kind: "standard_unix",
+      state: "ready",
+      ownership: options.ownership ?? "owned",
+      generation: 1,
+      observed_version: sharedCodexRuntimeVersion,
+      reason: null
+    });
+  const inputs: StartSharedCodexBrokerInput[] = [];
+  const harness = {
+    endpoint,
+    inputs,
     startCalls: 0,
     closeCalls: 0,
-    factoryInput: null,
-    started,
-    factory: (() => {
-      throw new Error("Uninitialized fake runtime factory.");
-    }) as typeof createCodexRuntimeSupervisor
+    start: (async (input: StartSharedCodexBrokerInput) => {
+      harness.startCalls += 1;
+      inputs.push(input);
+      await options.onStart?.(input);
+      if (options.startError !== undefined) throw options.startError;
+      let closed = false;
+      const attachment: SharedCodexBrokerAttachment = Object.freeze({
+        endpoint,
+        location: input.location,
+        get closed() {
+          return closed;
+        },
+        async close() {
+          if (closed) return;
+          closed = true;
+          harness.closeCalls += 1;
+          await options.onClose?.();
+          if (options.closeError !== undefined) throw options.closeError;
+        }
+      });
+      return attachment;
+    }) as typeof import("./shared-codex-broker-lifecycle.js").startSharedCodexBroker
   };
-  harness.factory = ((factoryInput: CreateCodexRuntimeSupervisorInput) => {
-    harness.factoryCalls += 1;
-    harness.factoryInput = factoryInput;
-    const validStarted = Object.freeze({
-      ...started,
-      socket_path: factoryInput.socket_path
-    });
-    harness.started = validStarted;
-    let phase: CodexRuntimeSupervisorSnapshot["phase"] = "idle";
-    const supervisor: HostDeckCodexRuntimeSupervisor = {
-      async start(input) {
-        harness.startCalls += 1;
-        phase = "starting";
-        const callbackResult = await options.onStart?.(input, factoryInput);
-        phase = "ready";
-        return (options.startResult ?? callbackResult ?? validStarted) as StartedCodexRuntime;
-      },
-      async close(input) {
-        harness.closeCalls += 1;
-        phase = "closing";
-        await options.onClose?.(input, factoryInput);
-        phase = "closed";
-      },
-      snapshot() {
-        return snapshot(phase, ownership);
-      }
-    };
-    return supervisor;
-  }) as typeof createCodexRuntimeSupervisor;
   return harness;
 }
 
-function snapshot(
-  phase: CodexRuntimeSupervisorSnapshot["phase"],
-  ownership: "foreground_child" | "service_owned" = "foreground_child"
-): CodexRuntimeSupervisorSnapshot {
-  return Object.freeze({
-    mode: ownership,
-    phase,
-    ownership,
-    claim_held: phase === "ready",
-    socket_ready: phase === "ready",
-    socket_mode_repaired: ownership === "foreground_child" && phase === "ready",
-    stale_socket_removed: false,
-    process_state:
-      ownership === "service_owned"
-        ? "not_applicable"
-        : phase === "ready"
-          ? "running"
-          : "not_started",
-    process_exit: null,
-    spawn_attempts:
-      ownership === "service_owned" || phase === "idle" ? 0 : 1,
-    startup_retries: 0,
-    term_signals: 0,
-    kill_signals: 0,
-    cleanup_failures: 0
+function localPaths(layout: FixtureLayout) {
+  return resolveHostDeckLocalPaths({
+    config_dir: layout.configDir,
+    database_path: layout.databasePath,
+    runtime_dir: layout.runtimeDir,
+    state_dir: layout.stateDir
   });
 }
 
 async function captureStartError(
   input: StartHostDeckForegroundResourcesInput,
-  runtimeSupervisorFactory: typeof createCodexRuntimeSupervisor,
-  now?: () => Date,
-  codexVersionProbe?: () => Promise<string>
+  startSharedBroker: typeof import("./shared-codex-broker-lifecycle.js").startSharedCodexBroker
 ): Promise<unknown> {
   try {
-    await startHostDeckForegroundResources(input, {
-      runtimeSupervisorFactory,
-      ...(now === undefined ? {} : { now }),
-      ...(codexVersionProbe === undefined ? {} : { codexVersionProbe })
-    });
+    await startHostDeckForegroundResources(input, { startSharedBroker });
   } catch (error) {
     return error;
   }

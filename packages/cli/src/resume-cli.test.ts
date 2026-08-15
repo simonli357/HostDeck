@@ -9,8 +9,7 @@ import type { HostDeckResumeLauncher } from "./resume-launcher.js";
 import { type CliRunOptions, runCli } from "./shell.js";
 
 const sessionId = "sess_resume_cli_001";
-const threadId = "thread-resume-cli-001";
-const socketPath = "/run/user/1000/hostdeck/app-server.sock";
+const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 
 describe("managed-thread resume CLI command", () => {
   it("parses only one session id argument with no alias or command options", () => {
@@ -52,7 +51,7 @@ describe("managed-thread resume CLI command", () => {
   it("includes only the selected resume surface in help", async () => {
     const help = await runCli(["help"]);
     expect(help).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
-    expect(help.stdout).toContain("codexdeck resume SESSION_ID");
+    expect(help.stdout).toContain("codexdeck resume SESSION");
     expect(help.stdout).not.toMatch(
       /codexdeck (?:reconnect|import)|resume .*thread-id|resume .*command/iu
     );
@@ -203,13 +202,13 @@ describe("managed-thread resume CLI command", () => {
       }
     ) as CliRunOptions;
 
-    for (const target of ["resume-cli", threadId, "sess with spaces"]) {
+    for (const target of ["resume-cli", "sess with spaces"]) {
       const result = await runCli(["resume", target], options);
       expect(result).toMatchObject({
         exitCode: cliExitCodes.usage,
         stdout: ""
       });
-      expect(result.stderr).toContain("valid managed session id");
+      expect(result.stderr).toContain("valid session target");
       expect(result.stderr).not.toContain("private-sentinel");
     }
     expect(clientAccesses).toBe(0);
@@ -221,7 +220,10 @@ describe("managed-thread resume CLI command", () => {
       { ...availableResponse(), session_id: "sess_resume_cli_other" },
       { ...availableResponse(), command: "codex resume arbitrary" },
       { ...availableResponse(), launch: null },
-      { ...availableResponse(), codex_thread_id: threadId }
+      {
+        ...availableResponse(),
+        codex_thread_id: "019fc8bd-25ef-74c3-a3bf-c6e59e4122a5"
+      }
     ];
     let launcherAccesses = 0;
     for (const candidate of candidates) {
@@ -238,7 +240,7 @@ describe("managed-thread resume CLI command", () => {
             throw new Error("launcher-private-sentinel");
           }
         }
-      ) as CliRunOptions;
+      ) as unknown as CliRunOptions;
       const result = await runCli(["resume", sessionId], options);
       expect(result).toMatchObject({
         exitCode: cliExitCodes.internal,
@@ -336,12 +338,13 @@ describe("managed-thread resume CLI command", () => {
 function availableResponse() {
   return selectedResumeMetadataResponseSchema.parse({
     session_id: sessionId,
+    codex_thread_id: threadId,
     local_only: true,
     available: true,
-    command: `codex resume --remote unix://${socketPath} ${threadId}`,
+    command: `codex resume ${threadId}`,
     launch: {
       executable: "codex",
-      args: ["resume", "--remote", `unix://${socketPath}`, threadId]
+      args: ["resume", threadId]
     },
     unavailable_reason: null
   });
@@ -350,6 +353,7 @@ function availableResponse() {
 function unavailableResponse() {
   return selectedResumeMetadataResponseSchema.parse({
     session_id: sessionId,
+    codex_thread_id: threadId,
     local_only: true,
     available: false,
     command: null,

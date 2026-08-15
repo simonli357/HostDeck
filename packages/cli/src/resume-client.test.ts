@@ -8,8 +8,7 @@ import { CliFailure, clientOperationFailure } from "./errors.js";
 import { createHostDeckResumeClient } from "./resume-client.js";
 
 const sessionId = "sess_resume_client_001";
-const threadId = "thread-resume-client-001";
-const socketPath = "/run/user/1000/hostdeck/app-server.sock";
+const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const baseUrl = new URL("http://127.0.0.1:3777");
 
 describe("managed-thread resume CLI client", () => {
@@ -160,7 +159,7 @@ describe("managed-thread resume CLI client", () => {
     ]);
   });
 
-  it("rejects malformed targets before fetch and never accepts a thread id as a session", async () => {
+  it("rejects malformed targets before fetch and accepts the native UUID", async () => {
     let calls = 0;
     const client = createHostDeckResumeClient({
       baseUrl,
@@ -172,7 +171,6 @@ describe("managed-thread resume CLI client", () => {
     for (const candidate of [
       "",
       "resume-client",
-      threadId,
       "sess with spaces",
       `${sessionId}/other`,
       `sess_${"x".repeat(200)}`
@@ -184,6 +182,8 @@ describe("managed-thread resume CLI client", () => {
       });
     }
     expect(calls).toBe(0);
+    await expect(client.read(threadId)).resolves.toEqual(availableResponse());
+    expect(calls).toBe(1);
   });
 
   it("rejects cross-target, oversized, extra, incomplete, and invalid success payloads", async () => {
@@ -196,7 +196,10 @@ describe("managed-thread resume CLI client", () => {
       { ...availableResponse(), command: longCommand },
       { ...availableResponse(), launch: null },
       { ...availableResponse(), local_only: false },
-      { ...availableResponse(), codex_thread_id: threadId },
+      {
+        ...availableResponse(),
+        codex_thread_id: "019fc8bd-25ef-74c3-a3bf-c6e59e4122a5"
+      },
       { ...unavailableResponse(), unavailable_reason: null },
       null,
       []
@@ -315,12 +318,13 @@ describe("managed-thread resume CLI client", () => {
 function availableResponse() {
   return selectedResumeMetadataResponseSchema.parse({
     session_id: sessionId,
+    codex_thread_id: threadId,
     local_only: true,
     available: true,
-    command: `codex resume --remote unix://${socketPath} ${threadId}`,
+    command: `codex resume ${threadId}`,
     launch: {
       executable: "codex",
-      args: ["resume", "--remote", `unix://${socketPath}`, threadId]
+      args: ["resume", threadId]
     },
     unavailable_reason: null
   });
@@ -329,6 +333,7 @@ function availableResponse() {
 function unavailableResponse() {
   return selectedResumeMetadataResponseSchema.parse({
     session_id: sessionId,
+    codex_thread_id: threadId,
     local_only: true,
     available: false,
     command: null,

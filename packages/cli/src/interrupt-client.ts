@@ -4,7 +4,8 @@ import {
   type InterruptResponse,
   interruptRequestSchema,
   interruptResponseSchema,
-  sessionTurnParamsSchema
+  sessionTurnParamsSchema,
+  sharedSessionTargetIdMatches
 } from "@hostdeck/contracts";
 import type { HttpFetch } from "./api-client.js";
 import { CliFailure, internalFailure, usageFailure } from "./errors.js";
@@ -99,7 +100,11 @@ async function requestInterrupt(
     if (
       !parsed.success ||
       parsed.data.operation_id !== request.operation_id ||
-      parsed.data.target.session_id !== request.session_id ||
+      !sharedSessionTargetIdMatches(
+        request.session_id,
+        parsed.data.target.session_id,
+        parsed.data.target.codex_thread_id
+      ) ||
       parsed.data.target.turn_id !== request.turn_id ||
       parsed.data.turn_id !== request.turn_id
     ) {

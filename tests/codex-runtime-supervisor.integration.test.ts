@@ -18,7 +18,7 @@ import { createOperationDeadline } from "../packages/core/src/index.js";
 import {
   createCodexRuntimeSupervisor,
   type HostDeckCodexRuntimeSupervisor
-} from "../packages/server/src/index.js";
+} from "../packages/server/src/codex-runtime-supervisor.js";
 
 const roots: string[] = [];
 const externalChildren: ChildProcess[] = [];

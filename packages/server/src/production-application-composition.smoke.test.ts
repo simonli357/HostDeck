@@ -31,13 +31,17 @@ import {
   type HostDeckProductionApplication
 } from "./production-application-composition.js";
 import { writeProductionWebTestFixture } from "./production-web-assets.test-support.js";
+import {
+  resolveSharedCodexEndpointLocation,
+  stopOwnedSharedCodexBroker
+} from "./shared-codex-broker-lifecycle.js";
 
 const requireSmoke =
   process.env.HOSTDECK_REQUIRE_PRODUCTION_COMPOSITION_SMOKE === "1";
 
 describe.skipIf(!requireSmoke)("exact production application composition smoke", () => {
   it(
-    "reaches durable runtime readiness without a model call and leaves no residue",
+    "reaches durable readiness and detaches without stopping the shared broker",
     async () => {
       const codexBin = requireExactCodexBinary(
         process.env.HOSTDECK_CODEX_BIN
@@ -52,7 +56,11 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
       const codexHome = join(root, "codex-home");
       const buildRoot = join(root, "build");
       const databasePath = join(stateDir, "hostdeck.sqlite");
-      const socketPath = join(runtimeDir, "app-server.sock");
+      const brokerLocation = resolveSharedCodexEndpointLocation({
+        home_directory: homedir(),
+        codex_home: codexHome
+      });
+      const socketPath = brokerLocation.socket_path;
       mkdirSync(codexHome, { mode: 0o700 });
       createStaticFixture(buildRoot);
       const port = await availableLoopbackPort();
@@ -68,6 +76,7 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
       try {
         resources = await startHostDeckForegroundResources({
           codex_bin: codexBin,
+          codex_home: codexHome,
           config_dir: configDir,
           database_path: databasePath,
           loopback_port: port,
@@ -231,7 +240,6 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
         await assertLoopbackPortAvailable(port);
 
         await closeApplication(application);
-        await resources.runtime.process_exit;
         expect(application.snapshot()).toMatchObject({
           phase: "closed",
           shutdown: {
@@ -245,10 +253,15 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
           database_open: false,
           lease_held: false,
           runtime: {
-            phase: "closed",
-            process_state: "exited",
-            cleanup_failures: 0
+            state: "ready",
+            ownership: "owned",
+            observed_version: codexBindingDescriptor.codex_version
           }
+        });
+        expect(existsSync(socketPath)).toBe(true);
+        await stopOwnedSharedCodexBroker({
+          location: brokerLocation,
+          stop_timeout_ms: 5_000
         });
         expect(existsSync(socketPath)).toBe(false);
       } catch (error) {
@@ -264,6 +277,16 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
         if (resources !== null) {
           try {
             await resources.close();
+          } catch (error) {
+            cleanupErrors.push(error);
+          }
+        }
+        if (existsSync(socketPath)) {
+          try {
+            await stopOwnedSharedCodexBroker({
+              location: brokerLocation,
+              stop_timeout_ms: 5_000
+            });
           } catch (error) {
             cleanupErrors.push(error);
           }

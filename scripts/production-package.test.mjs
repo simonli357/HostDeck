@@ -106,42 +106,53 @@ test("selects the exact non-web production closure", () => {
     sources.filter((path) =>
       [
         "packages/cli/src/device-revoke-client.ts",
+        "packages/cli/src/broker-control.ts",
         "packages/cli/src/host-status-client.ts",
         "packages/cli/src/local-device-list.ts",
-        "packages/cli/src/native-session-client.ts",
         "packages/cli/src/service-host.ts",
         "packages/cli/src/session-list-client.ts",
         "packages/cli/src/systemd-user-units.ts",
-        "packages/codex-adapter/src/native-session-client.ts",
+        "packages/codex-adapter/src/loaded-thread-client.ts",
         "packages/contracts/src/browser-http-resource-policy.ts",
         "packages/contracts/src/native-session.ts",
+        "packages/server/src/automatic-session-enrollment-service.ts",
         "packages/server/src/foreground-resource-bootstrap.ts",
-        "packages/server/src/native-session-adoption-service.ts",
-        "packages/server/src/native-session-routes.ts",
         "packages/server/src/production-application-composition.ts",
         "packages/server/src/production-foreground-serve.ts",
+        "packages/server/src/shared-codex-broker-lifecycle.ts",
+        "packages/server/src/shared-codex-broker-node.ts",
         "packages/storage/src/read-only-database.ts"
       ].includes(path)
     ),
     [
+      "packages/cli/src/broker-control.ts",
       "packages/cli/src/device-revoke-client.ts",
       "packages/cli/src/host-status-client.ts",
       "packages/cli/src/local-device-list.ts",
-      "packages/cli/src/native-session-client.ts",
       "packages/cli/src/service-host.ts",
       "packages/cli/src/session-list-client.ts",
       "packages/cli/src/systemd-user-units.ts",
-      "packages/codex-adapter/src/native-session-client.ts",
+      "packages/codex-adapter/src/loaded-thread-client.ts",
       "packages/contracts/src/browser-http-resource-policy.ts",
       "packages/contracts/src/native-session.ts",
+      "packages/server/src/automatic-session-enrollment-service.ts",
       "packages/server/src/foreground-resource-bootstrap.ts",
-      "packages/server/src/native-session-adoption-service.ts",
-      "packages/server/src/native-session-routes.ts",
       "packages/server/src/production-application-composition.ts",
       "packages/server/src/production-foreground-serve.ts",
+      "packages/server/src/shared-codex-broker-lifecycle.ts",
+      "packages/server/src/shared-codex-broker-node.ts",
       "packages/storage/src/read-only-database.ts"
     ]
   );
+  for (const removedPath of [
+    "packages/cli/src/native-session-client.ts",
+    "packages/codex-adapter/src/native-session-client.ts",
+    "packages/server/src/codex-runtime-supervisor.ts",
+    "packages/server/src/native-session-adoption-service.ts",
+    "packages/server/src/native-session-routes.ts"
+  ]) {
+    assert.equal(sources.includes(removedPath), false, removedPath);
+  }
   assert.deepEqual(
     [...new Set(sources.map((path) => path.split("/")[1]))].sort(),
     ["cli", "codex-adapter", "contracts", "core", "server", "storage"]

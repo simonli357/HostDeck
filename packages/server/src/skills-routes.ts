@@ -6,6 +6,8 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema,
   sessionIdParamsSchema,
+  sessionIdSchema,
+  sharedSessionTargetIdMatches,
   skillsOperationIntentSchema,
   skillsSnapshotSchema
 } from "@hostdeck/contracts";
@@ -203,8 +205,8 @@ function resolveManagedTarget(
       state.projection
     );
     if (
-      mapping.id !== sessionId ||
-      projection.session.id !== sessionId ||
+      !sharedSessionTargetIdMatches(sessionId, mapping.id, mapping.codex_thread_id) ||
+      mapping.id !== projection.session.id ||
       mapping.codex_thread_id !== projection.session.codex_thread_id ||
       mapping.name !== projection.session.name ||
       mapping.cwd !== projection.session.cwd ||
@@ -367,11 +369,12 @@ function skillsHttpError(
   sessionId: SkillsParams["session_id"],
   retryable: boolean
 ): HostDeckHttpError {
+  const internalSessionId = sessionIdSchema.safeParse(sessionId);
   return new HostDeckHttpError({
     code,
     message,
     retryable,
-    sessionId,
+    ...(internalSessionId.success ? { sessionId: internalSessionId.data } : {}),
     status
   });
 }

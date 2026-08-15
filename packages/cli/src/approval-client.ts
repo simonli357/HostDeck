@@ -8,7 +8,8 @@ import {
   pendingApprovalResponseSchema,
   runtimeRequestIdSchema,
   sessionIdParamsSchema,
-  sessionIdSchema
+  sharedSessionTargetIdMatches,
+  sharedSessionTargetIdSchema
 } from "@hostdeck/contracts";
 import type { HttpFetch, HttpRequestInit } from "./api-client.js";
 import { CliFailure, internalFailure, usageFailure } from "./errors.js";
@@ -20,7 +21,7 @@ import {
 } from "./loopback-http.js";
 
 const approvalClientResponseRequestSchema = approvalResponseRequestSchema.extend({
-  session_id: sessionIdSchema,
+  session_id: sharedSessionTargetIdSchema,
   request_id: runtimeRequestIdSchema
 });
 
@@ -132,7 +133,14 @@ async function requestApprovals(
   try {
     if (request === null) {
       const parsed = pendingApprovalListResponseSchema.safeParse(payload);
-      if (!parsed.success || parsed.data.target.session_id !== sessionId) throw invalidResponse();
+      if (
+        !parsed.success ||
+        !sharedSessionTargetIdMatches(
+          sessionId,
+          parsed.data.target.session_id,
+          parsed.data.target.codex_thread_id
+        )
+      ) throw invalidResponse();
       return deepFreeze(parsed.data);
     }
     const parsed = pendingApprovalResponseSchema.safeParse(payload);
@@ -140,7 +148,11 @@ async function requestApprovals(
       !parsed.success ||
       parsed.data.operation_id !== request.operation_id ||
       parsed.data.requested_decision !== request.decision ||
-      parsed.data.approval.target.session_id !== sessionId ||
+      !sharedSessionTargetIdMatches(
+        sessionId,
+        parsed.data.approval.target.session_id,
+        parsed.data.approval.target.codex_thread_id
+      ) ||
       parsed.data.approval.target.request_id !== request.request_id
     ) {
       throw invalidResponse();

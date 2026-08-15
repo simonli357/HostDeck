@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { outputCursorSchema, sessionIdSchema } from "./scalars.js";
+import { outputCursorSchema } from "./scalars.js";
 import { selectedSessionEventStreamSchema } from "./selected-runtime.js";
+import { sharedSessionTargetIdSchema } from "./shared-codex-runtime.js";
 
 export const selectedEventPageMaxSize = 100;
 export const selectedEventPageDefaultSize = selectedEventPageMaxSize;
@@ -30,7 +31,7 @@ const canonicalEventCursorTextSchema = z
 
 export const selectedEventPageParamsSchema = z
   .object({
-    session_id: sessionIdSchema
+    session_id: sharedSessionTargetIdSchema
   })
   .strict();
 

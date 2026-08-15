@@ -1,10 +1,8 @@
 import { isAbsolute } from "node:path";
-import { codexThreadIdSchema } from "@hostdeck/contracts";
+import { nativeCodexThreadIdSchema } from "@hostdeck/contracts";
 import { HostDeckCodexAdapterError } from "./errors.js";
-import { formatCodexUnixRemoteAddress } from "./transport.js";
 
 export interface CodexTuiResumeCommandInput {
-  readonly socket_path: string;
   readonly thread_id: string;
   readonly codex_bin?: string;
 }
@@ -15,13 +13,23 @@ export interface CodexTuiResumeCommand {
 }
 
 export function buildCodexTuiResumeCommand(input: CodexTuiResumeCommandInput): CodexTuiResumeCommand {
-  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+  if (
+    input === null ||
+    typeof input !== "object" ||
+    Array.isArray(input) ||
+    (Object.getPrototypeOf(input) !== Object.prototype &&
+      Object.getPrototypeOf(input) !== null) ||
+    !Object.hasOwn(input, "thread_id") ||
+    Reflect.ownKeys(input).some(
+      (key) => key !== "thread_id" && key !== "codex_bin"
+    )
+  ) {
     throw invalidResumeCommand("Codex TUI resume command input must be an object.");
   }
-  const threadId = codexThreadIdSchema.safeParse(input.thread_id);
+  const threadId = nativeCodexThreadIdSchema.safeParse(input.thread_id);
   if (!threadId.success) throw invalidResumeCommand("Codex TUI resume thread id is invalid.", threadId.error);
   const executable = parseExecutable(input.codex_bin ?? "codex");
-  const args = Object.freeze(["resume", "--remote", formatCodexUnixRemoteAddress(input.socket_path), threadId.data]);
+  const args = Object.freeze(["resume", threadId.data] as const);
   return Object.freeze({ executable, args });
 }
 

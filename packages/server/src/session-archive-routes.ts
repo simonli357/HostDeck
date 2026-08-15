@@ -8,7 +8,8 @@ import {
   selectedOperationDispatchSchema,
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema,
-  sessionIdParamsSchema
+  sessionIdParamsSchema,
+  sharedSessionTargetIdMatches
 } from "@hostdeck/contracts";
 import type { ErrorCode } from "@hostdeck/core";
 import type { FastifyReply } from "fastify";
@@ -398,7 +399,7 @@ function resolveManagedTarget(
     mapping.runtime_version !== session.runtime_version ||
     mapping.created_at !== session.created_at ||
     mapping.archived_at !== session.archived_at ||
-    mapping.id !== sessionId
+    !sharedSessionTargetIdMatches(sessionId, mapping.id, mapping.codex_thread_id)
   ) {
     throw archiveHttpError(
       409,

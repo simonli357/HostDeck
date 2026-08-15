@@ -24,7 +24,7 @@ pnpm check:codex-bindings
 ## Packaged Service Lifecycle
 
 ```bash
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" dist/hostdeck/dist/shell.js service install --json
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" dist/hostdeck/dist/shell.js service install --json
 dist/hostdeck/dist/shell.js service status --json
 dist/hostdeck/dist/shell.js service start --json
 dist/hostdeck/dist/shell.js service restart --json
@@ -36,7 +36,9 @@ dist/hostdeck/dist/shell.js service uninstall --json
 ## Installed User Workflow
 
 ```bash
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" /absolute/path/to/hostdeck/dist/shell.js service install
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" /absolute/path/to/hostdeck/dist/shell.js service install
+~/.local/bin/codexdeck broker start
+~/.local/bin/codexdeck broker status
 ~/.local/bin/codexdeck service start
 ~/.local/bin/codexdeck service status
 ~/.local/bin/codexdeck status
@@ -56,12 +58,12 @@ tailscale switch HOSTDECK_PROFILE_ID
 ```
 
 ```bash
-~/.local/bin/codexdeck start --name "Session name" --cwd /absolute/project/path
+codex
+codex resume NATIVE_CODEX_UUID
 ~/.local/bin/codexdeck list
-~/.local/bin/codexdeck discover --limit 20
-~/.local/bin/codexdeck adopt THREAD_ID --name existing-work --confirm-handoff
-~/.local/bin/codexdeck resume SESSION_ID
-~/.local/bin/codexdeck unmanage SESSION_ID --confirm
+~/.local/bin/codexdeck send NATIVE_CODEX_UUID "Prompt text"
+~/.local/bin/codexdeck resume NATIVE_CODEX_UUID
+~/.local/bin/codexdeck start --name "Session name" --cwd /absolute/project/path
 ~/.local/bin/codexdeck devices --limit 20
 ~/.local/bin/codexdeck revoke DEVICE_ID --confirm
 ~/.local/bin/codexdeck lock
@@ -83,6 +85,7 @@ tailscale switch HOSTDECK_PROFILE_ID
 ```bash
 ~/.local/bin/codexdeck remote disable
 ~/.local/bin/codexdeck service stop
+~/.local/bin/codexdeck broker stop
 ~/.local/bin/codexdeck service uninstall
 ```
 
@@ -118,8 +121,7 @@ pnpm exec vitest run packages/cli/src/remote-control-client.test.ts packages/cli
 pnpm exec vitest run packages/cli/src/start-client.test.ts packages/cli/src/start-cli.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/session-start-routes.test.ts packages/server/src/managed-thread-service.test.ts packages/storage/src/session-start-audit-catalog-migration.test.ts
 pnpm exec vitest run packages/cli/src/config.test.ts packages/cli/src/host-lock-client.test.ts packages/cli/src/host-lock-cli.test.ts packages/cli/src/pairing-link-client.test.ts packages/cli/src/selected-api-route-inventory.test.ts packages/cli/src/legacy-session-admin.test.ts packages/storage/src/legacy-session-repository.test.ts
 pnpm exec vitest run packages/cli/src/host-status-client.test.ts packages/cli/src/session-list-client.test.ts packages/cli/src/device-revoke-client.test.ts packages/cli/src/administrative-cli.test.ts packages/cli/src/selected-api-route-inventory.test.ts
-pnpm exec vitest run packages/cli/src/native-session-cli.test.ts packages/cli/src/native-session-loopback.smoke.test.ts packages/server/src/native-session-routes.test.ts
-HOSTDECK_CODEX_BIN="$PWD/node_modules/.bin/codex" HOSTDECK_CODEX_FAKE_AUTH_FIXTURE=1 HOSTDECK_REQUIRE_NATIVE_SESSION_ADAPTER_SMOKE=1 HOSTDECK_REQUIRE_NATIVE_SESSION_SERVICE_SMOKE=1 pnpm exec vitest run packages/codex-adapter/src/native-session-client.smoke.test.ts packages/server/src/native-session-adoption-service.smoke.test.ts --maxWorkers=1
+pnpm exec vitest run packages/cli/src/broker-cli.test.ts packages/cli/src/selected-api-route-inventory.test.ts packages/server/src/selected-api-route-composition.test.ts packages/server/src/resume-routes.test.ts
 pnpm exec vitest run packages/storage/src/read-only-database.test.ts packages/cli/src/local-device-list.test.ts
 pnpm exec vitest run packages/cli/src/archive-client.test.ts packages/cli/src/archive-cli.test.ts packages/server/src/selected-write-audit-executor.test.ts packages/server/src/selected-write-gate.test.ts packages/server/src/session-archive-routes.test.ts packages/server/src/managed-thread-service.test.ts
 pnpm exec vitest run --config vitest.integration.config.ts tests/archive-vertical.integration.test.ts
@@ -142,8 +144,6 @@ pnpm exec vitest run --config vitest.contract.config.ts packages/contracts/src/i
 pnpm exec vitest run --config vitest.integration.config.ts tests/interrupt-vertical.integration.test.ts
 pnpm exec vitest run packages/server/src/selected-write-admission-policy.test.ts packages/server/src/selected-write-gate.test.ts
 pnpm exec vitest run --config vitest.integration.config.ts tests/selected-write-admission.integration.test.ts
-pnpm exec vitest run packages/server/src/codex-runtime-supervisor.test.ts
-pnpm exec vitest run --config vitest.integration.config.ts tests/codex-runtime-supervisor.integration.test.ts
 pnpm smoke:remote-control
 pnpm smoke:codex-compatibility
 pnpm smoke:codex-ipc
@@ -190,35 +190,30 @@ All five device harnesses capture the original mobile-data, Wi-Fi, and USB stay-
 ## Codex Runtime Probes
 
 ```bash
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm test:codex
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-semantics
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-model
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-goal
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-plan
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-usage
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-compact
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-skills
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-prompt
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-approval
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-interrupt
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-vertical
-# Native Windows PowerShell, clean checkout, authenticated Codex home
-node scripts/run-windows-codex-vertical.mjs --output "$env:TEMP\windows-structured-vertical-report.json"
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-supervisor
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-restart
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.144.0 pnpm smoke:codex-tui-coexistence
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:codex-lifecycle
-HOSTDECK_REQUIRE_NATIVE_SESSION_INTEROPERABILITY_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm exec vitest run packages/cli/src/native-session-interoperability.smoke.test.ts
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:executable-serve
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm test:codex
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-semantics
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-model
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-goal
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-plan
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-usage
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-compact
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-skills
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-prompt
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-approval
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-interrupt
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-vertical
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:codex-shared-broker
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:codex-shared-sessions
+HOSTDECK_REQUIRE_PRODUCTION_COMPOSITION_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm exec vitest run packages/server/src/production-application-composition.smoke.test.ts --maxWorkers=1
+HOSTDECK_REQUIRE_PRODUCTION_SERVE_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm exec vitest run packages/server/src/production-foreground-serve.smoke.test.ts --maxWorkers=1
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:executable-serve
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/unsupported-codex)" HOSTDECK_EXPECT_DIAGNOSTIC=1 pnpm smoke:executable-serve
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:service-host
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:systemd-user-units
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.144.0)" pnpm smoke:service-lifecycle
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:service-host
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:systemd-user-units
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:service-lifecycle
 ```
 
 `HOSTDECK_EXPECT_DIAGNOSTIC=1` is validation-only. It requires a valid Codex semver different from the reviewed version and proves the packaged listener remains read-only and reachable without app-server admission; ordinary HostDeck startup never reads this variable.
-
-The native-session interoperability smoke is model-backed. It requires `tmux` and an authenticated Codex home, copies only authentication into a private temporary Codex home, and removes its isolated runtime, state, project, and transcript data during cleanup.
 
 ## Regenerate Reviewed Codex Binding
 

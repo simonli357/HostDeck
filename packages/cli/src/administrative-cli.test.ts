@@ -31,7 +31,7 @@ const operationId = clientOperationIdSchema.parse(
   "op_device_revoke_admin_cli_001"
 );
 const privateCwd = "/private/workspaces/admin-cli";
-const privateThread = "thread-private-admin-cli";
+const privateThread = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const privateObjective = "Private objective must stay out of human output.";
 const privateSummary = "Private summary must stay out of human output.";
 
@@ -139,12 +139,9 @@ describe("required administrative CLI operations", () => {
     const listHuman = renderSessionList(sessionList(), false);
     expect(listHuman).toContain("admin-cli");
     expect(listHuman).toContain("[needs_input]");
-    for (const privateValue of [
-      privateCwd,
-      privateThread,
-      privateObjective,
-      privateSummary
-    ]) {
+    expect(listHuman).toContain(`Codex UUID: ${privateThread}`);
+    expect(listHuman).toContain("Internal ID: sess_admin_cli_001");
+    for (const privateValue of [privateCwd, privateObjective, privateSummary]) {
       expect(listHuman).not.toContain(privateValue);
     }
     const listJson = JSON.parse(renderSessionList(sessionList(), true));

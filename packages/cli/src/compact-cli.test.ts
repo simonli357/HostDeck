@@ -294,8 +294,8 @@ describe("managed-session compact CLI command", () => {
 
   it("documents only the exact read and explicit confirmation forms", () => {
     const help = renderHelp();
-    expect(help).toContain("codexdeck compact SESSION_ID [--json]");
-    expect(help).toContain("codexdeck compact SESSION_ID --confirm [--json]");
+    expect(help).toContain("codexdeck compact SESSION [--json]");
+    expect(help).toContain("codexdeck compact SESSION --confirm [--json]");
     expect(help).not.toMatch(/compact.*--force|compact.*--retry|compact.*--thread|compact.*--operation/iu);
   });
 

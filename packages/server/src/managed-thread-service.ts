@@ -12,8 +12,7 @@ import {
   type SelectedSessionStartRecoveryRecord,
   type SelectedStartSessionRequest,
   selectedSessionStartRecoveryRecordSchema,
-  selectedStartSessionRequestSchema,
-  sessionIdSchema
+  selectedStartSessionRequestSchema
 } from "@hostdeck/contracts";
 import type { ErrorCode, IsoTimestamp, OperationDeadline, SessionId } from "@hostdeck/core";
 import { parseSessionId } from "@hostdeck/core";
@@ -201,12 +200,11 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
   }
 
   read(sessionId: string): SelectedSessionState {
-    const parsed = parseSelectedSessionId(sessionId);
     try {
-      return this.options.states.require(parsed);
+      return this.options.states.requireByTargetId(sessionId);
     } catch (error) {
       if (error instanceof HostDeckSelectedStateRepositoryError && error.code === "session_not_found") {
-        throw serviceError("thread_not_found", `Managed session ${parsed} does not exist.`, "not_sent", false, null, error);
+        throw serviceError("thread_not_found", "Managed session target does not exist.", "not_sent", false, null, error);
       }
       throw mapStorageError(error, "Managed session could not be read.");
     }
@@ -214,7 +212,7 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
 
   async archive(sessionId: string, deadlineInput: OperationDeadline): Promise<SelectedSessionState> {
     const deadline = requireManagedThreadDeadline(deadlineInput);
-    const parsedSessionId = parseSelectedSessionId(sessionId);
+    const parsedSessionId = this.read(sessionId).mapping.id;
     if (this.archiveInFlight.has(parsedSessionId)) {
       throw serviceError("thread_conflict", "Managed session archive is already in flight.", "not_sent", false);
     }
@@ -948,12 +946,6 @@ function projectionFromThread(thread: CodexThreadRecord): {
 function parseStartRequest(input: unknown): SelectedStartSessionRequest {
   const parsed = selectedStartSessionRequestSchema.safeParse(input);
   if (!parsed.success) throw serviceError("invalid_request", "Managed session start request is invalid.", "not_sent", false, null, parsed.error);
-  return parsed.data;
-}
-
-function parseSelectedSessionId(input: string): SessionId {
-  const parsed = sessionIdSchema.safeParse(input);
-  if (!parsed.success) throw serviceError("invalid_request", "Managed session id is invalid.", "not_sent", false, null, parsed.error);
   return parsed.data;
 }
 

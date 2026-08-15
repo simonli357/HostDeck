@@ -267,7 +267,7 @@ const physicalDashboardEvidenceDirectory = join(
 );
 const physicalUiSessionId = "sess_physical_pairing_ui";
 const physicalUiSessionName = "physical-pairing-review";
-const physicalUiThreadId = "thread-physical-pairing-ui";
+const physicalUiThreadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const physicalModelChoiceLabels = Object.freeze([
   "Codex Current",
   "Codex Fast"
@@ -5124,8 +5124,7 @@ describe("physical Android phone-driver protocol", () => {
 
       expect(dashboard.resume.read(physicalUiSessionId)).toMatchObject({
         available: true,
-        command:
-          `codex resume --remote unix:///hostdeck-physical.sock ${physicalUiThreadId}`,
+        command: `codex resume ${physicalUiThreadId}`,
         local_only: true
       });
       await dashboard.managed.archive(physicalUiSessionId, deadline);
@@ -8634,17 +8633,6 @@ describePhysical("selected remote-ingress physical Android acceptance", () => {
             securityAudit: auditExecutor,
             sessions: Object.freeze({
               managed: dashboardControls.managed,
-              native: Object.freeze({
-                adopt: async () => {
-                  throw new Error("Physical native-session adoption is not exercised by this fixture.");
-                },
-                discover: async () => {
-                  throw new Error("Physical native-session discovery is not exercised by this fixture.");
-                },
-                unmanage: async () => {
-                  throw new Error("Physical native-session unmanage is not exercised by this fixture.");
-                }
-              }),
               read: sessionReads,
               resume: dashboardControls.resume,
               subscribers: promptSubscribers

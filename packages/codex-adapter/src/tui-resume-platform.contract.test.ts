@@ -3,14 +3,16 @@ import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  buildCodexPlatformTuiResumeCommand,
   type CodexAuthenticatedLoopbackWebSocketEndpoint,
-  type CodexPlatformTuiResumeCommand,
   codexRemoteAuthEnvironmentVariable,
+  createCodexUnixSocketEndpoint
+} from "./transport-endpoint.js";
+import {
+  buildCodexPlatformTuiResumeCommand,
+  type CodexPlatformTuiResumeCommand,
   createCodexPlatformTuiResumeExecutor,
-  createCodexUnixSocketEndpoint,
   HostDeckCodexPlatformTuiResumeError
-} from "./index.js";
+} from "./tui-resume-platform.js";
 
 const threadId = "thr_native_resume_contract_001";
 const credential = "N".repeat(64);

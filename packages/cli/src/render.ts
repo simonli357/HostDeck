@@ -13,12 +13,6 @@ import {
   type ModelSelectionRequest,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
-  type NativeSessionAdoptResponse,
-  type NativeSessionDiscoveryResponse,
-  type NativeSessionUnmanageResponse,
-  nativeSessionAdoptResponseSchema,
-  nativeSessionDiscoveryResponseSchema,
-  nativeSessionUnmanageResponseSchema,
   type PendingApprovalListResponse,
   type PendingApprovalResponse,
   type PlanControlSnapshot,
@@ -52,6 +46,8 @@ import {
   selectedSessionListResponseSchema,
   selectedSessionStartResponseSchema,
   sessionIdParamsSchema,
+  sharedCodexEndpointSchema,
+  sharedSessionTargetIdMatches,
   skillsSnapshotSchema,
   type UsageRateLimitWindow,
   type UsageSnapshot,
@@ -59,6 +55,7 @@ import {
   usageSnapshotSchema,
 } from "@hostdeck/contracts";
 import QRCode from "qrcode";
+import type { HostDeckBrokerControlResult } from "./broker-control.js";
 import type { CliFailure } from "./errors.js";
 import { internalFailure } from "./errors.js";
 import type { LegacySessionResetResult, LegacySessionSummary } from "./legacy-session-admin.js";
@@ -76,27 +73,25 @@ export function renderHelp(): string {
     "  codexdeck serve",
     "  codexdeck status [--json]",
     "  codexdeck list [--limit N] [--cursor CURSOR] [--json]",
-    "  codexdeck discover [--limit N] [--json]",
-    "  codexdeck adopt THREAD_ID --name NAME --confirm-handoff [--json]",
+    "  codexdeck broker start|status|stop [--json]",
     "  codexdeck start --name NAME --cwd PATH [--json]",
-    "  codexdeck unmanage SESSION_ID --confirm [--json]",
-    "  codexdeck archive SESSION_ID [--json]",
-    "  codexdeck send SESSION_ID TEXT... [--json]",
-    "  codexdeck resume SESSION_ID",
-    "  codexdeck model SESSION_ID [--json]",
-    "  codexdeck model SESSION_ID MODEL_ID [--effort EFFORT] [--expected-revision REVISION] [--json]",
-    "  codexdeck goal SESSION_ID [--json]",
-    "  codexdeck goal SESSION_ID set --objective OBJECTIVE [--expected-revision REVISION] [--json]",
-    "  codexdeck goal SESSION_ID pause|resume|complete|clear --expected-revision REVISION [--json]",
-    "  codexdeck plan SESSION_ID [--json]",
-    "  codexdeck plan SESSION_ID enter|exit [--expected-revision REVISION] [--json]",
-    "  codexdeck usage SESSION_ID [--json]",
-    "  codexdeck compact SESSION_ID [--json]",
-    "  codexdeck compact SESSION_ID --confirm [--json]",
-    "  codexdeck skills SESSION_ID [--json]",
-    "  codexdeck approvals SESSION_ID [--json]",
-    "  codexdeck approvals SESSION_ID REQUEST_ID approve|deny --confirm [--json]",
-    "  codexdeck interrupt SESSION_ID TURN_ID --confirm [--json]",
+    "  codexdeck archive SESSION [--json]",
+    "  codexdeck send SESSION TEXT... [--json]",
+    "  codexdeck resume SESSION",
+    "  codexdeck model SESSION [--json]",
+    "  codexdeck model SESSION MODEL_ID [--effort EFFORT] [--expected-revision REVISION] [--json]",
+    "  codexdeck goal SESSION [--json]",
+    "  codexdeck goal SESSION set --objective OBJECTIVE [--expected-revision REVISION] [--json]",
+    "  codexdeck goal SESSION pause|resume|complete|clear --expected-revision REVISION [--json]",
+    "  codexdeck plan SESSION [--json]",
+    "  codexdeck plan SESSION enter|exit [--expected-revision REVISION] [--json]",
+    "  codexdeck usage SESSION [--json]",
+    "  codexdeck compact SESSION [--json]",
+    "  codexdeck compact SESSION --confirm [--json]",
+    "  codexdeck skills SESSION [--json]",
+    "  codexdeck approvals SESSION [--json]",
+    "  codexdeck approvals SESSION REQUEST_ID approve|deny --confirm [--json]",
+    "  codexdeck interrupt SESSION TURN_ID --confirm [--json]",
     "  codexdeck legacy status [--json]",
     "  codexdeck legacy reset --confirm [--json]",
     "  codexdeck pair [--label LABEL] [--read-only | --write]",
@@ -116,6 +111,7 @@ export function renderHelp(): string {
     "  --database PATH    SQLite database path for administrative commands.",
     "  --config PATH      JSON config file with api_url, port, or state paths.",
     "  --json             Print machine-readable output for supported commands.",
+    "  SESSION            Native Codex UUID or internal sess_ compatibility id.",
     "",
     "Global connection and state options must appear before the command.",
     ""
@@ -137,7 +133,8 @@ export function renderStartSession(
 
   return [
     `Started session: ${escapeTerminalText(response.session.name)}`,
-    `ID: ${escapeTerminalText(response.session.id)}`,
+    `Codex UUID: ${escapeTerminalText(response.session.codex_thread_id)}`,
+    `Internal ID: ${escapeTerminalText(response.session.id)}`,
     `State: ${response.session.session_state}`,
     `CWD: ${escapeTerminalText(response.session.cwd)}`,
     `Runtime: ${response.session.runtime_source} ${escapeTerminalText(response.session.runtime_version)}`,
@@ -145,80 +142,33 @@ export function renderStartSession(
   ].join("\n");
 }
 
-export function renderNativeSessionDiscovery(
-  candidate: NativeSessionDiscoveryResponse,
+export function renderBrokerControl(
+  result: HostDeckBrokerControlResult,
   json: boolean
 ): string {
-  const parsed = nativeSessionDiscoveryResponseSchema.safeParse(candidate);
-  if (!parsed.success) {
-    throw internalFailure("Native-session discovery rendering input is invalid.");
+  if (
+    result === null ||
+    typeof result !== "object" ||
+    !["start", "status", "stop"].includes(result.action)
+  ) {
+    throw internalFailure("Broker rendering input is invalid.");
   }
-  const response = parsed.data;
-  const lines = [`Eligible native Codex sessions: ${response.threads.length}`];
-  if (response.threads.length === 0) {
-    lines.push("", "No eligible native Codex sessions found.");
-  } else {
-    for (const thread of response.threads) {
-      lines.push(
-        "",
-        `Thread: ${escapeTerminalText(thread.thread_id)}`,
-        `CWD: ${escapeTerminalText(thread.cwd)}`,
-        `Updated: ${thread.updated_at}`,
-        `Runtime: ${escapeTerminalText(thread.runtime_version)}`,
-        `State: ${thread.status}`
-      );
-    }
+  const endpoint = sharedCodexEndpointSchema.safeParse(result.endpoint);
+  if (!endpoint.success) {
+    throw internalFailure("Broker rendering input is invalid.");
   }
-  lines.push("", `Results truncated: ${response.truncated ? "yes" : "no"}`, "");
-  const output = json
-    ? `${JSON.stringify(response, null, 2)}\n`
-    : lines.join("\n");
-  requireBoundedRender(output, "Native-session discovery");
-  return output;
-}
-
-export function renderNativeSessionAdoption(
-  candidate: NativeSessionAdoptResponse,
-  json: boolean
-): string {
-  const parsed = nativeSessionAdoptResponseSchema.safeParse(candidate);
-  if (!parsed.success) {
-    throw internalFailure("Native-session adoption rendering input is invalid.");
-  }
-  const response = parsed.data;
-  const output = json
-    ? `${JSON.stringify(response, null, 2)}\n`
-    : [
-        `Adopted session: ${escapeTerminalText(response.session.name)}`,
-        `ID: ${escapeTerminalText(response.session.id)}`,
-        `Thread: ${escapeTerminalText(response.session.codex_thread_id)}`,
-        `State: ${response.session.session_state}`,
-        `CWD: ${escapeTerminalText(response.session.cwd)}`,
-        ""
-      ].join("\n");
-  requireBoundedRender(output, "Native-session adoption");
-  return output;
-}
-
-export function renderNativeSessionUnmanage(
-  candidate: NativeSessionUnmanageResponse,
-  json: boolean
-): string {
-  const parsed = nativeSessionUnmanageResponseSchema.safeParse(candidate);
-  if (!parsed.success) {
-    throw internalFailure("Native-session unmanage rendering input is invalid.");
-  }
-  const response = parsed.data;
-  const output = json
-    ? `${JSON.stringify(response, null, 2)}\n`
-    : [
-        `Unmanaged session: ${escapeTerminalText(response.session_id)}`,
-        `Thread: ${escapeTerminalText(response.codex_thread_id)}`,
-        `Unmanaged: ${response.unmanaged_at}`,
-        ""
-      ].join("\n");
-  requireBoundedRender(output, "Native-session unmanage");
-  return output;
+  const rendered = Object.freeze({
+    action: result.action,
+    endpoint: endpoint.data
+  });
+  if (json) return `${JSON.stringify(rendered, null, 2)}\n`;
+  return [
+    `Broker: ${endpoint.data.state}`,
+    `Ownership: ${endpoint.data.ownership}`,
+    `Generation: ${endpoint.data.generation}`,
+    `Codex: ${endpoint.data.observed_version ?? "not running"}`,
+    ""
+  ].join("\n");
 }
 
 export function renderArchiveSession(
@@ -361,7 +311,12 @@ export function renderCompactProgress(
   if (
     !response.success ||
     !params.success ||
-    (response.data.progress !== null && response.data.progress.target.session_id !== params.data.session_id)
+    (response.data.progress !== null &&
+      !sharedSessionTargetIdMatches(
+        params.data.session_id,
+        response.data.progress.target.session_id,
+        response.data.progress.target.codex_thread_id
+      ))
   ) {
     throw internalFailure("Compact rendering input is invalid.");
   }
@@ -861,7 +816,8 @@ function renderSessionListText(response: SelectedSessionListResponse): string {
       lines.push(
         "",
         `[${session.attention}] ${escapeTerminalText(session.name)}`,
-        `ID: ${escapeTerminalText(session.id)}`,
+        `Codex UUID: ${escapeTerminalText(session.codex_thread_id)}`,
+        `Internal ID: ${escapeTerminalText(session.id)}`,
         `Session: ${session.session_state}`,
         `Turn: ${session.turn_state}`,
         `Freshness: ${session.freshness}`,

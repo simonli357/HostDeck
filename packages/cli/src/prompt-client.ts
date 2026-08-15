@@ -4,7 +4,8 @@ import {
   type PromptSessionRequest,
   promptDispatchResponseSchema,
   promptSessionRequestSchema,
-  sessionIdSchema
+  sharedSessionTargetIdMatches,
+  sharedSessionTargetIdSchema
 } from "@hostdeck/contracts";
 import type { HttpFetch } from "./api-client.js";
 import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
@@ -16,7 +17,7 @@ import {
 } from "./loopback-http.js";
 
 const promptClientRequestSchema = promptSessionRequestSchema.extend({
-  session_id: sessionIdSchema
+  session_id: sharedSessionTargetIdSchema
 });
 
 export interface HostDeckPromptClientRequest extends PromptSessionRequest {
@@ -118,7 +119,11 @@ async function requestPrompt(
     parsed.data.state !== "accepted" ||
     parsed.data.kind !== "prompt" ||
     parsed.data.operation_id !== request.operation_id ||
-    parsed.data.target.session_id !== request.session_id
+    !sharedSessionTargetIdMatches(
+      request.session_id,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
   ) {
     throw invalidResponse();
   }

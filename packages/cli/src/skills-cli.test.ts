@@ -59,7 +59,7 @@ describe("managed-session skills CLI command", () => {
   it("includes only the selected skills surface in help", async () => {
     const help = await runCli(["help"]);
     expect(help).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
-    expect(help.stdout).toContain("codexdeck skills SESSION_ID [--json]");
+    expect(help.stdout).toContain("codexdeck skills SESSION [--json]");
     expect(help.stdout).not.toContain("codexdeck skill ");
     expect(help.stdout).not.toContain("codexdeck /skills");
     expect(help.stdout).not.toMatch(
@@ -239,7 +239,7 @@ describe("managed-session skills CLI command", () => {
         exitCode: cliExitCodes.usage,
         stdout: ""
       });
-      expect(result.stderr).toContain("valid managed session id");
+      expect(result.stderr).toContain("valid session target");
       expect(result.stderr).not.toContain("private-sentinel");
     }
     expect(clientAccesses).toBe(0);

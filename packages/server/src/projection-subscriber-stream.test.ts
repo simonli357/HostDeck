@@ -26,7 +26,9 @@ import {
   type ProjectionReplayLiveHandoff
 } from "./projection-replay-live-handoff.js";
 import {
+  assertProjectionSubscriberStreamService,
   createProjectionSubscriberStreamService,
+  createProjectionSubscriberStreamTargetView,
   HostDeckProjectionSubscriberError,
   type ProjectionSubscriberErrorCode,
   type ProjectionSubscriberFailure,
@@ -37,9 +39,45 @@ import {
 const sessionA = "sess_subscriber_a";
 const sessionB = "sess_subscriber_b";
 const sessionC = "sess_subscriber_c";
+const nativeThreadA = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const createdAt = "2026-07-16T12:00:00.000Z";
 
 describe("bounded projection subscriber streams", () => {
+  it("maps native thread targets through an authenticated subscriber view", () => {
+    const harness = createHarness();
+    harness.state.add(sessionA, []);
+    const targets: string[] = [];
+    const view = createProjectionSubscriberStreamTargetView({
+      resolve_session_id(targetId) {
+        targets.push(targetId);
+        if (targetId !== nativeThreadA) throw new Error("Unexpected target.");
+        return sessionA;
+      },
+      service: harness.service
+    });
+
+    expect(Object.isFrozen(view)).toBe(true);
+    expect(() => assertProjectionSubscriberStreamService(view)).not.toThrow();
+    const stream = view.open(
+      openInput(nativeThreadA, "subscriber-native-target")
+    );
+    expect(stream.session_id).toBe(sessionA);
+    expect(view.snapshot()).toEqual(harness.service.snapshot());
+    expect(view.archive_session(nativeThreadA)).toBe(1);
+    expect(stream).toMatchObject({
+      failure: { code: "session_archived", cursor: null },
+      state: "failed"
+    });
+    expect(targets).toEqual([nativeThreadA, nativeThreadA]);
+
+    expectSubscriberError(
+      () => view.open(openInput("invalid-target", "subscriber-invalid-target")),
+      "invalid_input"
+    );
+    expect(targets).toEqual([nativeThreadA, nativeThreadA]);
+    expect(view.close()).toBe(0);
+  });
+
   it("rejects malformed config and exact open input before handoff work", () => {
     let openCalls = 0;
     const handoff = {

@@ -44,7 +44,7 @@ const timestamp = "2026-07-15T21:00:00.000Z";
 const eventTimestamp = "2026-07-15T21:00:01.000Z";
 const runtimeVersion = "0.147.0";
 const sessionId = "sess_prompt_vertical_001";
-const threadId = "thread-prompt-vertical-001";
+const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const secondSessionId = "sess_prompt_vertical_002";
 const secondThreadId = "thread-prompt-vertical-002";
 const operationId = "op_prompt_vertical_001";
@@ -128,7 +128,7 @@ describe("managed-session prompt selected vertical", () => {
         snapshot: promptService.snapshot
       },
       runtime: { read: () => runtime() },
-      sessions: { read: (candidate) => states.require(candidate) }
+      sessions: { read: (candidate) => states.requireByTargetId(candidate) }
     });
     const port = await availableLoopbackPort();
     const app = createHostDeckFastifyApp({
@@ -160,7 +160,7 @@ describe("managed-session prompt selected vertical", () => {
         "--api-url",
         `http://127.0.0.1:${address.port}`,
         "send",
-        sessionId,
+        threadId,
         privatePrompt,
         "--json"
       ] as const;

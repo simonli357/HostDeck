@@ -78,9 +78,9 @@ describe("managed-session model CLI command", () => {
   it("advertises only the selected public model forms", async () => {
     const result = await runCli(["help"]);
     expect(result).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
-    expect(result.stdout).toContain("codexdeck model SESSION_ID [--json]");
+    expect(result.stdout).toContain("codexdeck model SESSION [--json]");
     expect(result.stdout).toContain(
-      "codexdeck model SESSION_ID MODEL_ID [--effort EFFORT] [--expected-revision REVISION] [--json]"
+      "codexdeck model SESSION MODEL_ID [--effort EFFORT] [--expected-revision REVISION] [--json]"
     );
     expect(result.stdout).not.toMatch(/runtime-model|operation-id|target|\/model/iu);
   });

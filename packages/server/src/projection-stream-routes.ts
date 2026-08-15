@@ -1,5 +1,4 @@
-import { sessionIdParamsSchema } from "@hostdeck/contracts";
-import type { SessionId } from "@hostdeck/core";
+import { sessionIdParamsSchema, sessionIdSchema } from "@hostdeck/contracts";
 import { HostDeckHttpError } from "./fastify-error-policy.js";
 import {
   requireHostDeckRequestAuthentication
@@ -77,14 +76,14 @@ export function createHostDeckProjectionStreamRouteRegistration(
           });
         }
         try {
-          return subscribers.open({
+          return Reflect.apply(subscribers.open, subscribers, [{
             after: sourceInput.after,
             authorization: authentication,
             device_id: deviceId,
             session_id: params.data.session_id,
             signal: sourceInput.signal,
             subscriber_id: `stream:${sourceInput.request.id}`
-          });
+          }]) as ReturnType<ProjectionSubscriberStreamService["open"]>;
         } catch (error) {
           throw mapStreamOpenFailure(error, params.data.session_id);
         }
@@ -129,7 +128,11 @@ function requireProjectionStreamManifestEntry(): SelectedApiRouteManifestEntry {
   return entry;
 }
 
-function mapStreamOpenFailure(error: unknown, sessionId: SessionId): Error {
+function mapStreamOpenFailure(error: unknown, sessionId: string): Error {
+  const internalSessionId = sessionIdSchema.safeParse(sessionId);
+  const target = internalSessionId.success
+    ? { sessionId: internalSessionId.data }
+    : {};
   if (error instanceof HostDeckHttpError) return error;
   if (error instanceof HostDeckProjectionSubscriberError) {
     switch (error.code) {
@@ -172,7 +175,7 @@ function mapStreamOpenFailure(error: unknown, sessionId: SessionId): Error {
           code: "session_not_found",
           message: "Session was not found.",
           retryable: false,
-          sessionId,
+          ...target,
           status: 404
         });
       case "future_cursor":
@@ -181,7 +184,7 @@ function mapStreamOpenFailure(error: unknown, sessionId: SessionId): Error {
           field: "after",
           message: "Event cursor is ahead of the committed session state.",
           retryable: false,
-          sessionId,
+          ...target,
           status: 409
         });
       case "session_archived":
@@ -220,12 +223,13 @@ function mapStreamOpenFailure(error: unknown, sessionId: SessionId): Error {
   return internalStreamFailure();
 }
 
-function staleSession(sessionId: SessionId, message: string): HostDeckHttpError {
+function staleSession(sessionId: string, message: string): HostDeckHttpError {
+  const internalSessionId = sessionIdSchema.safeParse(sessionId);
   return new HostDeckHttpError({
     code: "stale_session",
     message,
     retryable: false,
-    sessionId,
+    ...(internalSessionId.success ? { sessionId: internalSessionId.data } : {}),
     status: 409
   });
 }

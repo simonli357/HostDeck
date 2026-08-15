@@ -1,18 +1,20 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import {
-  buildCodexPlatformTuiResumeCommand,
   type CodexAuthenticatedLoopbackWebSocketEndpoint,
+  codexRemoteAuthEnvironmentVariable,
+  createCodexUnixSocketEndpoint
+} from "./transport-endpoint.js";
+import {
+  buildCodexPlatformTuiResumeCommand,
   type CodexPlatformTuiResumeChildProcess,
   type CodexPlatformTuiResumeCommand,
   type CodexPlatformTuiResumeExecutor,
   type CodexPlatformTuiResumeSpawn,
   type CodexPlatformTuiResumeSpawnOptions,
-  codexRemoteAuthEnvironmentVariable,
   createCodexPlatformTuiResumeExecutor,
-  createCodexUnixSocketEndpoint,
   HostDeckCodexPlatformTuiResumeError
-} from "./index.js";
+} from "./tui-resume-platform.js";
 
 const threadId = "thr_hostdeck_resume_001";
 const currentCredential = "C".repeat(64);

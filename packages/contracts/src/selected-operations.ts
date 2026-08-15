@@ -27,6 +27,7 @@ import {
   managedSessionProjectionSchema,
   runtimeRequestIdSchema
 } from "./selected-runtime.js";
+import { sharedSessionTargetIdSchema } from "./shared-codex-runtime.js";
 
 export const promptTextMaxLength = 20_000;
 export const goalObjectiveMaxLength = 512;
@@ -61,7 +62,7 @@ export const approvalOperationTargetSchema = z
 
 export const sessionApprovalParamsSchema = z
   .object({
-    session_id: sessionIdSchema,
+    session_id: sharedSessionTargetIdSchema,
     request_id: runtimeRequestIdSchema
   })
   .strict();
@@ -77,7 +78,7 @@ export const turnOperationTargetSchema = z
 
 export const sessionTurnParamsSchema = z
   .object({
-    session_id: sessionIdSchema,
+    session_id: sharedSessionTargetIdSchema,
     turn_id: codexTurnIdSchema
   })
   .strict();

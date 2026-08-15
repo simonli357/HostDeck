@@ -104,15 +104,6 @@ export {
   createCodexModelClient
 } from "./model-client.js";
 export {
-  type CodexNativeSessionClient,
-  type CodexNativeSessionClientOptions,
-  type CodexNativeSessionErrorCode,
-  type CodexNativeSessionRequestPort,
-  type CodexNativeSessionResumeResult,
-  createCodexNativeSessionClient,
-  HostDeckCodexNativeSessionError
-} from "./native-session-client.js";
-export {
   type CodexPlanCatalog,
   type CodexPlanClient,
   type CodexPlanClientOptions,
@@ -242,24 +233,6 @@ export {
   type CodexTuiResumeCommand,
   type CodexTuiResumeCommandInput
 } from "./tui-resume.js";
-export {
-  type BuildCodexPlatformTuiResumeCommandInput,
-  buildCodexPlatformTuiResumeCommand,
-  type CodexLinuxTuiResumeCommand,
-  type CodexPlatformTuiResumeChildProcess,
-  type CodexPlatformTuiResumeCommand,
-  type CodexPlatformTuiResumeErrorCode,
-  type CodexPlatformTuiResumeExecutor,
-  type CodexPlatformTuiResumeSpawn,
-  type CodexPlatformTuiResumeSpawnOptions,
-  type CodexPlatformTuiResumeStage,
-  type CodexWindowsTuiResumeCommand,
-  type CreateCodexPlatformTuiResumeExecutorInput,
-  codexPlatformTuiResumeErrorCodes,
-  createCodexPlatformTuiResumeExecutor,
-  type ExecuteCodexPlatformTuiResumeInput,
-  HostDeckCodexPlatformTuiResumeError
-} from "./tui-resume-platform.js";
 export {
   type CodexTurnAccepted,
   type CodexTurnClient,

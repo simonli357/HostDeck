@@ -5,7 +5,8 @@ import {
   compactProgressResponseSchema,
   compactStartRequestSchema,
   sessionIdParamsSchema,
-  sessionIdSchema
+  sharedSessionTargetIdMatches,
+  sharedSessionTargetIdSchema
 } from "@hostdeck/contracts";
 import type { HttpFetch, HttpRequestInit } from "./api-client.js";
 import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
@@ -17,7 +18,7 @@ import {
 } from "./loopback-http.js";
 
 const compactClientStartRequestSchema = compactStartRequestSchema.extend({
-  session_id: sessionIdSchema
+  session_id: sharedSessionTargetIdSchema
 });
 
 export interface HostDeckCompactClientStartRequest extends CompactStartRequest {
@@ -119,7 +120,14 @@ async function requestCompact(
   }
   if (!parsed.success) throw invalidResponse();
   const progress = parsed.data.progress;
-  if (progress !== null && progress.target.session_id !== sessionId) throw invalidResponse();
+  if (
+    progress !== null &&
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      progress.target.session_id,
+      progress.target.codex_thread_id
+    )
+  ) throw invalidResponse();
   if (request !== null) assertStartCorrelation(parsed.data, request);
   if (progress === null || progress.error === null) return deepFreeze(parsed.data);
   return deepFreeze(

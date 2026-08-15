@@ -12,7 +12,8 @@ import {
   selectedResumeMetadataResponseSchema,
   selectedResumeParamsSchema,
   selectedSessionMappingRecordSchema,
-  selectedSessionProjectionRecordSchema
+  selectedSessionProjectionRecordSchema,
+  sharedSessionTargetIdMatches
 } from "@hostdeck/contracts";
 import { HostDeckSelectedStateRepositoryError } from "@hostdeck/storage";
 
@@ -46,7 +47,6 @@ export interface HostDeckResumeRuntimePort {
 export interface CreateHostDeckResumeMetadataReaderInput {
   readonly codexBin: string;
   readonly runtime: HostDeckResumeRuntimePort;
-  readonly socketPath: string;
   readonly state: HostDeckResumeStatePort;
 }
 
@@ -61,7 +61,6 @@ interface ParsedReaderInput {
   readonly codexBin: string;
   readonly readRuntime: ReadRuntimeFunction;
   readonly requireState: RequireStateFunction;
-  readonly socketPath: string;
 }
 
 interface ResumeStateSnapshot {
@@ -74,13 +73,13 @@ interface ResumeStateSnapshot {
   readonly sessionState: SelectedSessionProjectionRecord["session"]["session_state"];
 }
 
-const inputKeys = ["codexBin", "runtime", "socketPath", "state"] as const;
+const inputKeys = ["codexBin", "runtime", "state"] as const;
 const runtimePortKeys = ["read"] as const;
 const statePortKeys = ["require"] as const;
 const stateKeys = ["mapping", "projection"] as const;
 const maximumConsistencyAttempts = 3;
 const configurationProbeSessionId = "sess_resume_config_check";
-const configurationProbeThreadId = "thread-resume-config-check";
+const configurationProbeThreadId = "019f489a-1f9d-7402-ae00-eac6ea322f64";
 
 export function createHostDeckResumeMetadataReader(
   input: CreateHostDeckResumeMetadataReaderInput
@@ -134,7 +133,6 @@ function parseReaderInput(input: unknown): ParsedReaderInput {
   );
   if (
     typeof values.codexBin !== "string" ||
-    typeof values.socketPath !== "string" ||
     typeof runtime.read !== "function" ||
     typeof state.require !== "function"
   ) {
@@ -143,11 +141,11 @@ function parseReaderInput(input: unknown): ParsedReaderInput {
   try {
     const launch = parseLaunch(buildCodexTuiResumeCommand({
       codex_bin: values.codexBin,
-      socket_path: values.socketPath,
       thread_id: configurationProbeThreadId
     }));
     selectedResumeMetadataResponseSchema.parse({
       session_id: configurationProbeSessionId,
+      codex_thread_id: configurationProbeThreadId,
       local_only: true,
       available: true,
       command: formatSelectedResumeLaunchCommand(launch),
@@ -160,8 +158,7 @@ function parseReaderInput(input: unknown): ParsedReaderInput {
   return Object.freeze({
     codexBin: values.codexBin,
     readRuntime: runtime.read as ReadRuntimeFunction,
-    requireState: state.require as RequireStateFunction,
-    socketPath: values.socketPath
+    requireState: state.require as RequireStateFunction
   });
 }
 
@@ -203,8 +200,7 @@ function readState(
     );
     const session = projection.session;
     if (
-      mapping.id !== sessionId ||
-      session.id !== sessionId ||
+      !sharedSessionTargetIdMatches(sessionId, mapping.id, mapping.codex_thread_id) ||
       mapping.id !== session.id ||
       mapping.name !== session.name ||
       mapping.codex_thread_id !== session.codex_thread_id ||
@@ -278,19 +274,21 @@ function readRuntime(
 }
 
 function materializeResponse(
-  options: Pick<ParsedReaderInput, "codexBin" | "socketPath">,
+  options: Pick<ParsedReaderInput, "codexBin">,
   state: ResumeStateSnapshot,
   runtime: RuntimeCompatibility | null
 ): SelectedResumeMetadataResponse {
   if (!isSessionReady(state)) {
     return unavailable(
       state.sessionId,
+      state.codexThreadId,
       "The managed session is not ready for laptop resume."
     );
   }
   if (!isRuntimeReady(runtime, state.runtimeVersion)) {
     return unavailable(
       state.sessionId,
+      state.codexThreadId,
       "The selected Codex runtime is not available for laptop resume."
     );
   }
@@ -300,7 +298,6 @@ function materializeResponse(
     launch = parseLaunch(
       buildCodexTuiResumeCommand({
         codex_bin: options.codexBin,
-        socket_path: options.socketPath,
         thread_id: state.codexThreadId
       })
     );
@@ -314,6 +311,7 @@ function materializeResponse(
   }
   return parseResponse({
     session_id: state.sessionId,
+    codex_thread_id: state.codexThreadId,
     local_only: true,
     available: true,
     command: formatSelectedResumeLaunchCommand(launch),
@@ -324,10 +322,12 @@ function materializeResponse(
 
 function unavailable(
   sessionId: string,
+  codexThreadId: string,
   reason: string
 ): SelectedResumeMetadataResponse {
   return parseResponse({
     session_id: sessionId,
+    codex_thread_id: codexThreadId,
     local_only: true,
     available: false,
     command: null,

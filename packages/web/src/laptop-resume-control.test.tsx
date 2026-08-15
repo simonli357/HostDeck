@@ -21,7 +21,7 @@ import type {
 } from "./laptop-resume-control-state.js";
 
 const command =
-  "codex resume --remote 'unix:///run/user/1000/hostdeck/private-app-server.sock' 'thread-laptop-resume-ui-private'";
+  "codex resume 019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 
 afterEach(() => {
   cleanup();

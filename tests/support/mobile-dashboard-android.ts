@@ -33,7 +33,7 @@ import {
 } from "../../packages/storage/src/index.js";
 
 const sessionId = "sess_physical_pairing_ui";
-const threadId = "thread-physical-pairing-ui";
+const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const approvalRequestId = "request-physical-approval-001";
 const timestamp = "2026-07-29T12:00:00.000Z";
 const changedTimestamp = "2026-07-29T12:01:00.000Z";
@@ -406,15 +406,11 @@ export function createPhysicalDashboardControls(input: Readonly<{
       }
       const launch = Object.freeze({
         executable: "codex",
-        args: Object.freeze([
-          "resume",
-          "--remote",
-          "unix:///hostdeck-physical.sock",
-          threadId
-        ])
+        args: Object.freeze(["resume", threadId])
       });
       return selectedResumeMetadataResponseSchema.parse({
         session_id: sessionId,
+        codex_thread_id: threadId,
         local_only: true,
         available: true,
         command: formatSelectedResumeLaunchCommand(launch),

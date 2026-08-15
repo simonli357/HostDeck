@@ -388,7 +388,6 @@ describe.skipIf(!requireSmoke)(
           ).toBe(false);
 
           const tuiACommand = buildCodexTuiResumeCommand({
-            socket_path: socketPath,
             thread_id: managedThreadId,
             codex_bin: codexBin
           });
@@ -642,7 +641,6 @@ describe.skipIf(!requireSmoke)(
           expect(publicationCount).toBe(retained.length);
 
           const tuiBCommand = buildCodexTuiResumeCommand({
-            socket_path: socketPath,
             thread_id: managedThreadId,
             codex_bin: codexBin
           });

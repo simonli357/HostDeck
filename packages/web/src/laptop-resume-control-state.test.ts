@@ -21,12 +21,12 @@ import {
 } from "./laptop-resume-control-state.js";
 
 const sessionId = "sess_laptop_resume_component_001" as SessionId;
-const threadId = "thread-laptop-resume-component-private";
+const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
+const foreignThreadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a5";
 const timestamp = "2026-07-27T22:00:00.000Z";
-const socketPath = "/run/user/1000/hostdeck/private-app-server.sock";
 const command = formatSelectedResumeLaunchCommand({
   executable: "codex",
-  args: ["resume", "--remote", `unix://${socketPath}`, threadId]
+  args: ["resume", threadId]
 });
 
 describe("laptop-resume control state", () => {
@@ -195,15 +195,16 @@ describe("laptop-resume control state", () => {
   it("rejects malformed, extra, cross-session, wrong-thread, and contradictory responses", async () => {
     const launch = {
       executable: "codex",
-      args: ["resume", "--remote", `unix://${socketPath}`, threadId]
+      args: ["resume", threadId]
     } as const;
     const responses = [
       availableResponse({ session: "sess_laptop_resume_foreign_001" }),
-      availableResponse({ thread: "thread-laptop-resume-foreign-private" }),
+      availableResponse({ thread: foreignThreadId }),
       { ...availableResponse(), extra: true },
       { ...availableResponse(), command: "codex resume contradictory" },
       {
         session_id: sessionId,
+        codex_thread_id: threadId,
         local_only: true,
         available: true,
         command,
@@ -212,6 +213,7 @@ describe("laptop-resume control state", () => {
       },
       {
         session_id: sessionId,
+        codex_thread_id: threadId,
         local_only: false,
         available: true,
         command,
@@ -524,10 +526,11 @@ function availableResponse(input: Readonly<{
   const targetThread = input.thread ?? threadId;
   const launch = {
     executable: "codex",
-    args: ["resume", "--remote", `unix://${socketPath}`, targetThread]
+    args: ["resume", targetThread]
   } as const;
   return selectedResumeMetadataResponseSchema.parse({
     session_id: input.session ?? sessionId,
+    codex_thread_id: targetThread,
     local_only: true,
     available: true,
     command: formatSelectedResumeLaunchCommand(launch),
@@ -539,6 +542,7 @@ function availableResponse(input: Readonly<{
 function unavailableResponse(reason: string) {
   return selectedResumeMetadataResponseSchema.parse({
     session_id: sessionId,
+    codex_thread_id: threadId,
     local_only: true,
     available: false,
     command: null,

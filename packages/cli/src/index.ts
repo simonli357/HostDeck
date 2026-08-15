@@ -1,6 +1,7 @@
 export * from "./api-client.js";
 export * from "./approval-client.js";
 export * from "./archive-client.js";
+export * from "./broker-control.js";
 export * from "./compact-client.js";
 export * from "./config.js";
 export * from "./device-revoke-client.js";
@@ -13,7 +14,6 @@ export * from "./interrupt-client.js";
 export * from "./legacy-session-admin.js";
 export * from "./local-device-list.js";
 export * from "./model-client.js";
-export * from "./native-session-client.js";
 export * from "./pairing-link-client.js";
 export * from "./parser.js";
 export * from "./plan-client.js";

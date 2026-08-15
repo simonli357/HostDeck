@@ -270,6 +270,7 @@ const historicalExceptionImports = new Map([
 ]);
 
 export const directHostApiOwnerPaths = Object.freeze([
+  "packages/cli/src/broker-control.ts",
   "packages/cli/src/config.ts",
   "packages/cli/src/legacy-session-admin.ts",
   "packages/cli/src/loopback-http.ts",

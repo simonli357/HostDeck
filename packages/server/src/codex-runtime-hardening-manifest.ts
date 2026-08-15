@@ -19,7 +19,6 @@ export const runtimeHardeningDeterministicTests = Object.freeze([
   "packages/codex-adapter/src/goal-client.test.ts",
   "packages/codex-adapter/src/loaded-thread-client.test.ts",
   "packages/codex-adapter/src/model-client.test.ts",
-  "packages/codex-adapter/src/native-session-client.test.ts",
   "packages/codex-adapter/src/plan-client.test.ts",
   "packages/codex-adapter/src/protocol.test.ts",
   "packages/codex-adapter/src/reconciliation-client.test.ts",

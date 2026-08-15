@@ -245,6 +245,7 @@ fs.appendFileSync(${JSON.stringify(startLog)}, "started\\n", { mode: 0o600 });
 if (${JSON.stringify(behavior)} === "exit") {
   setTimeout(() => process.exit(23), 75);
 } else {
+  process.umask(0o177);
   const server = net.createServer((socket) => socket.end());
   server.listen(socketPath, () => {
     fs.chmodSync(socketPath, 0o600);

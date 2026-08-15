@@ -2,27 +2,38 @@ import {
   chmodSync,
   existsSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
+  rmSync
 } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { defaultResourceBudget } from "../packages/contracts/src/index.js";
-import type { HostDeckForegroundResources } from "../packages/server/src/index.js";
-import { startHostDeckForegroundResources } from "../packages/server/src/index.js";
+import {
+  defaultResourceBudget,
+  sharedCodexEndpointSchema,
+  sharedCodexRuntimeVersion
+} from "../packages/contracts/src/index.js";
+import {
+  type HostDeckForegroundResources,
+  type SharedCodexBrokerAttachment,
+  type StartSharedCodexBrokerInput,
+  startHostDeckForegroundResources
+} from "../packages/server/src/index.js";
 import { acquireHostDeckDaemonLease } from "../packages/storage/src/index.js";
 
 const roots: string[] = [];
 const activeResources: HostDeckForegroundResources[] = [];
+const activeBrokers: SharedBrokerFixture[] = [];
 
 afterEach(async () => {
   for (const resources of activeResources.splice(0).reverse()) {
     await resources.close().catch(() => undefined);
+  }
+  for (const broker of activeBrokers.splice(0).reverse()) {
+    await broker.stop().catch(() => undefined);
   }
   for (const root of roots.splice(0).reverse()) {
     rmSync(root, { force: true, recursive: true });
@@ -30,40 +41,54 @@ afterEach(async () => {
 });
 
 describe("foreground resource bootstrap Linux boundary", () => {
-  it("owns one real foreground process/socket and restarts after reverse cleanup", async () => {
+  it("attaches to one shared standard socket and leaves it alive across HostDeck restarts", async () => {
     const port = await reserveUnusedPort();
     const layout = fixtureLayout(port);
-    const first = await startHostDeckForegroundResources(layout.input);
+    const dependencies = {
+      codexVersionProbe: async () => sharedCodexRuntimeVersion,
+      startSharedBroker: layout.broker.start
+    };
+    const first = await startHostDeckForegroundResources(
+      layout.input,
+      dependencies
+    );
     activeResources.push(first);
 
-    expect(JSON.parse(readFileSync(layout.argvPath, "utf8"))).toEqual([
-      "app-server",
-      "--listen",
-      `unix://${layout.socketPath}`
+    expect(layout.broker.inputs).toEqual([
+      {
+        codex_bin: process.execPath,
+        location: {
+          kind: "standard_unix",
+          codex_home: layout.codexHome,
+          socket_path: layout.socketPath
+        },
+        mode: "attach_or_start",
+        observed_version: sharedCodexRuntimeVersion,
+        startup_timeout_ms:
+          defaultResourceBudget.lifecycle_startup_timeout_ms
+      }
     ]);
     expect(first.bind).toEqual({
       host: "127.0.0.1",
       port,
       transport: "http"
     });
-    expect(first.runtime).toMatchObject({
-      mode: "foreground_child",
-      ownership: "foreground_child",
+    expect(first.runtime).toEqual({
       preparation: "ready",
-      socket_path: layout.socketPath,
-      socket_mode_repaired: true
+      endpoint: layout.broker.endpoint,
+      location: layout.broker.inputs[0]?.location,
+      socket_path: layout.socketPath
     });
     expect(first.snapshot()).toMatchObject({
       phase: "ready",
-      codex_version: "0.147.0",
+      codex_version: sharedCodexRuntimeVersion,
       database_open: true,
       lease_held: true,
       runtime_preparation: "ready",
       runtime: {
-        phase: "ready",
-        process_state: "running",
-        socket_ready: true,
-        spawn_attempts: 1
+        state: "ready",
+        ownership: "owned",
+        generation: 1
       }
     });
     expect(lstatSync(layout.configDir).mode & 0o7777).toBe(0o700);
@@ -75,57 +100,63 @@ describe("foreground resource bootstrap Linux boundary", () => {
     expect(lstatSync(layout.socketPath).mode & 0o7777).toBe(0o600);
     expect(first.database.pragma("foreign_keys", { simple: true })).toBe(1);
 
-    await expect(startHostDeckForegroundResources(layout.input)).rejects.toMatchObject(
-      {
-        name: "HostDeckForegroundResourceError",
-        code: "lease_held",
-        stage: "lease"
-      }
-    );
+    await expect(
+      startHostDeckForegroundResources(layout.input, dependencies)
+    ).rejects.toMatchObject({
+      name: "HostDeckForegroundResourceError",
+      code: "lease_held",
+      stage: "lease"
+    });
     await provePortIsUnused(port);
 
     const firstClose = first.close();
     expect(first.close()).toBe(firstClose);
     await firstClose;
-    await expect(first.runtime.process_exit).resolves.toMatchObject({
-      kind: "exited",
-      expected: true,
-      code: 0,
-      signal: null
-    });
     expect(first.database.open).toBe(false);
-    expect(existsSync(layout.socketPath)).toBe(false);
     expect(first.snapshot()).toMatchObject({
       phase: "closed",
       database_open: false,
       lease_held: false,
       runtime: {
-        phase: "closed",
-        process_state: "exited",
-        term_signals: 1,
-        kill_signals: 0,
-        cleanup_failures: 0
+        state: "ready",
+        ownership: "owned",
+        generation: 1
       }
     });
+    expect(layout.broker.attachmentCloseCalls).toBe(1);
+    expect(existsSync(layout.socketPath)).toBe(true);
 
-    const second = await startHostDeckForegroundResources(layout.input);
+    const second = await startHostDeckForegroundResources(
+      layout.input,
+      dependencies
+    );
     activeResources.push(second);
     expect(second.migration.applied).toEqual([]);
     expect(second.snapshot()).toMatchObject({
       phase: "ready",
       database_open: true,
-      lease_held: true
+      lease_held: true,
+      runtime: { state: "ready", generation: 1 }
     });
     await second.close();
-    await expect(second.runtime.process_exit).resolves.toMatchObject({
-      expected: true,
-      code: 0
-    });
-    expect(existsSync(layout.socketPath)).toBe(false);
+    expect(layout.broker.inputs).toHaveLength(2);
+    expect(layout.broker.attachmentCloseCalls).toBe(2);
+    expect(existsSync(layout.socketPath)).toBe(true);
     acquireAndRelease(layout.leasePath);
     await provePortIsUnused(port);
+
+    await layout.broker.stop();
+    expect(existsSync(layout.socketPath)).toBe(false);
   });
 });
+
+interface SharedBrokerFixture {
+  readonly endpoint: ReturnType<typeof sharedCodexEndpointSchema.parse>;
+  readonly inputs: StartSharedCodexBrokerInput[];
+  readonly attachmentCloseCalls: number;
+  readonly start: typeof import("../packages/server/src/shared-codex-broker-lifecycle.js").startSharedCodexBroker;
+  readonly stop: () => Promise<void>;
+}
 
 function fixtureLayout(port: number): {
   readonly configDir: string;
@@ -133,8 +164,9 @@ function fixtureLayout(port: number): {
   readonly runtimeDir: string;
   readonly databasePath: string;
   readonly leasePath: string;
+  readonly codexHome: string;
   readonly socketPath: string;
-  readonly argvPath: string;
+  readonly broker: SharedBrokerFixture;
   readonly input: Parameters<typeof startHostDeckForegroundResources>[0];
 } {
   const root = mkdtempSync(join(tmpdir(), "hostdeck-bootstrap-integration-"));
@@ -143,56 +175,97 @@ function fixtureLayout(port: number): {
   const configDir = join(root, "config");
   const stateDir = join(root, "state");
   const runtimeDir = join(root, "runtime");
+  const codexHome = join(root, "codex-home");
   const databasePath = join(stateDir, "hostdeck.sqlite");
   const leasePath = join(stateDir, "hostdeck.lock");
-  const socketPath = join(runtimeDir, "app-server.sock");
-  const argvPath = `${socketPath}.argv`;
-  const executable = join(root, "codex-fixture.mjs");
-  writeFileSync(executable, fixtureSource(), { mode: 0o700 });
-  chmodSync(executable, 0o700);
+  const socketPath = join(
+    codexHome,
+    "app-server-control",
+    "app-server-control.sock"
+  );
+  mkdirSync(codexHome, { mode: 0o700 });
+  const broker = createSharedBrokerFixture(socketPath);
+  activeBrokers.push(broker);
   return {
     configDir,
     stateDir,
     runtimeDir,
     databasePath,
     leasePath,
+    codexHome,
     socketPath,
-    argvPath,
+    broker,
     input: Object.freeze({
       config_dir: configDir,
       state_dir: stateDir,
       runtime_dir: runtimeDir,
       database_path: databasePath,
-      codex_bin: executable,
+      codex_bin: process.execPath,
+      codex_home: codexHome,
       loopback_port: port,
       resource_budget: defaultResourceBudget
     })
   };
 }
 
-function fixtureSource(): string {
-  return `#!/usr/bin/env node
-import { chmodSync, writeFileSync } from "node:fs";
-import { createServer } from "node:net";
-
-const args = process.argv.slice(2);
-if (args.length === 1 && args[0] === "--version") {
-  process.stdout.write("codex-cli 0.147.0\\n");
-  process.exit(0);
-}
-if (args.length !== 3 || args[0] !== "app-server" || args[1] !== "--listen" || !args[2].startsWith("unix://")) process.exit(64);
-const socketPath = args[2].slice("unix://".length);
-writeFileSync(socketPath + ".argv", JSON.stringify(args), { mode: 0o600 });
-const server = createServer((socket) => socket.destroy());
-server.on("error", () => process.exit(70));
-server.listen(socketPath, () => chmodSync(socketPath, 0o666));
-process.on("SIGTERM", () => server.close(() => process.exit(0)));
-`;
+function createSharedBrokerFixture(socketPath: string): SharedBrokerFixture {
+  const server = createServer((socket) => socket.destroy());
+  const endpoint = sharedCodexEndpointSchema.parse({
+    kind: "standard_unix",
+    state: "ready",
+    ownership: "owned",
+    generation: 1,
+    observed_version: sharedCodexRuntimeVersion,
+    reason: null
+  });
+  const inputs: StartSharedCodexBrokerInput[] = [];
+  let listening = false;
+  let attachmentCloseCalls = 0;
+  const fixture: SharedBrokerFixture = {
+    endpoint,
+    inputs,
+    get attachmentCloseCalls() {
+      return attachmentCloseCalls;
+    },
+    start: (async (input: StartSharedCodexBrokerInput) => {
+      inputs.push(input);
+      if (input.location.socket_path !== socketPath) {
+        throw new Error("Shared broker fixture received the wrong socket.");
+      }
+      if (!listening) {
+        mkdirSync(dirname(socketPath), { recursive: true, mode: 0o700 });
+        await listenUnix(server, socketPath);
+        chmodSync(socketPath, 0o600);
+        listening = true;
+      }
+      let closed = false;
+      const attachment: SharedCodexBrokerAttachment = Object.freeze({
+        endpoint,
+        location: input.location,
+        get closed() {
+          return closed;
+        },
+        async close() {
+          if (closed) return;
+          closed = true;
+          attachmentCloseCalls += 1;
+        }
+      });
+      return attachment;
+    }) as SharedBrokerFixture["start"],
+    async stop() {
+      if (!listening) return;
+      await closeServer(server);
+      listening = false;
+      rmSync(socketPath, { force: true });
+    }
+  };
+  return fixture;
 }
 
 async function reserveUnusedPort(): Promise<number> {
   const server = createServer();
-  await listen(server, 0);
+  await listenTcp(server, 0);
   const address = server.address() as AddressInfo;
   await closeServer(server);
   return address.port;
@@ -200,14 +273,30 @@ async function reserveUnusedPort(): Promise<number> {
 
 async function provePortIsUnused(port: number): Promise<void> {
   const server = createServer();
-  await listen(server, port);
+  await listenTcp(server, port);
   await closeServer(server);
 }
 
-async function listen(server: ReturnType<typeof createServer>, port: number) {
+async function listenTcp(
+  server: ReturnType<typeof createServer>,
+  port: number
+): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+}
+
+async function listenUnix(
+  server: ReturnType<typeof createServer>,
+  socketPath: string
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, () => {
       server.off("error", reject);
       resolve();
     });

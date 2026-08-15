@@ -5,14 +5,17 @@ import {
   lstatSync,
   realpathSync
 } from "node:fs";
+import { homedir } from "node:os";
 import { isAbsolute, normalize } from "node:path";
-import {
-  codexBindingDescriptor
-} from "@hostdeck/codex-adapter";
+import { codexBindingDescriptor } from "@hostdeck/codex-adapter";
 import {
   assertResolvedResourceBudget,
   codexVersionSchema,
-  type ResourceBudget
+  type ResourceBudget,
+  type SharedCodexEndpoint,
+  type SharedCodexEndpointLocation,
+  sharedCodexEndpointLocationSchema,
+  sharedCodexEndpointSchema
 } from "@hostdeck/contracts";
 import {
   createOperationDeadline,
@@ -32,17 +35,16 @@ import {
   resolveHostDeckLocalPaths
 } from "@hostdeck/storage";
 import {
-  type CodexRuntimeSupervisorSnapshot,
-  createCodexRuntimeSupervisor,
-  type HostDeckCodexRuntimeSupervisor,
-  HostDeckCodexRuntimeSupervisorError,
-  type StartedCodexRuntime
-} from "./codex-runtime-supervisor.js";
-import {
   type CodexVersionProbe,
   codexVersionProbeLimits,
   probeCodexVersion
 } from "./codex-version-probe.js";
+import {
+  HostDeckSharedCodexBrokerError,
+  resolveSharedCodexEndpointLocation,
+  type SharedCodexBrokerAttachment,
+  startSharedCodexBroker
+} from "./shared-codex-broker-lifecycle.js";
 
 export const hostDeckForegroundResourceErrorCodes = [
   "invalid_config",
@@ -84,8 +86,11 @@ export const hostDeckRuntimePreparationStates = Object.freeze([
 export type HostDeckRuntimePreparationState =
   (typeof hostDeckRuntimePreparationStates)[number];
 
-export interface HostDeckPreparedCodexRuntime extends StartedCodexRuntime {
+export interface HostDeckPreparedCodexRuntime {
   readonly preparation: HostDeckRuntimePreparationState;
+  readonly endpoint: SharedCodexEndpoint;
+  readonly location: SharedCodexEndpointLocation;
+  readonly socket_path: string;
 }
 
 export interface StartHostDeckForegroundResourcesInput {
@@ -94,6 +99,7 @@ export interface StartHostDeckForegroundResourcesInput {
   readonly runtime_dir: string;
   readonly database_path: string;
   readonly codex_bin: string;
+  readonly codex_home?: string;
   readonly loopback_port: number;
   readonly resource_budget: ResourceBudget;
   readonly signal?: AbortSignal;
@@ -103,7 +109,7 @@ export interface HostDeckForegroundResourceDependencies {
   readonly codexVersionProbe?: CodexVersionProbe;
   readonly now?: () => Date;
   readonly pid?: number;
-  readonly runtimeSupervisorFactory?: typeof createCodexRuntimeSupervisor;
+  readonly startSharedBroker?: typeof startSharedCodexBroker;
 }
 
 export interface HostDeckForegroundBind {
@@ -118,7 +124,7 @@ export interface HostDeckForegroundResourceSnapshot {
   readonly database_open: boolean;
   readonly lease_held: boolean;
   readonly runtime_preparation: HostDeckRuntimePreparationState;
-  readonly runtime: CodexRuntimeSupervisorSnapshot;
+  readonly runtime: SharedCodexEndpoint;
 }
 
 export interface HostDeckForegroundResourceShutdownPorts {
@@ -170,6 +176,7 @@ export class HostDeckForegroundResourceError extends Error {
 interface ParsedStartInput {
   readonly paths: ResolvedHostDeckLocalPaths;
   readonly codexBin: string;
+  readonly codexLocation: SharedCodexEndpointLocation;
   readonly loopbackPort: number;
   readonly resourceBudget: ResourceBudget;
   readonly signal: AbortSignal | undefined;
@@ -179,7 +186,7 @@ interface ParsedDependencies {
   readonly codexVersionProbe: CodexVersionProbe;
   readonly now: () => Date;
   readonly pid: number | undefined;
-  readonly runtimeSupervisorFactory: typeof createCodexRuntimeSupervisor;
+  readonly startSharedBroker: typeof startSharedCodexBroker;
 }
 
 interface OpenedGuardedDatabase {
@@ -189,6 +196,7 @@ interface OpenedGuardedDatabase {
 
 const startInputKeys = [
   "codex_bin",
+  "codex_home",
   "config_dir",
   "database_path",
   "loopback_port",
@@ -198,17 +206,19 @@ const startInputKeys = [
   "state_dir"
 ] as const;
 const requiredStartInputKeys = startInputKeys.filter(
-  (key) => key !== "signal"
+  (key) => key !== "signal" && key !== "codex_home"
 );
 const dependencyKeys = [
   "codexVersionProbe",
   "now",
   "pid",
-  "runtimeSupervisorFactory"
+  "startSharedBroker"
 ] as const;
 const maxExecutablePathBytes = 4_096;
 const defaultNow = () => new Date();
 const acceptedProductionResources = new WeakSet<object>();
+const acceptedForegroundResources = new WeakSet<object>();
+const acceptedServiceResources = new WeakSet<object>();
 
 type HostDeckRuntimeOwnership = "foreground_child" | "service_owned";
 
@@ -237,24 +247,10 @@ async function startHostDeckProductionResources(
 ): Promise<HostDeckProductionResources> {
   let parsed: ParsedStartInput;
   let ports: ParsedDependencies;
-  let supervisor: HostDeckCodexRuntimeSupervisor;
   try {
     parsed = parseStartInput(input);
     ports = parseDependencies(dependencies);
     inspectExecutable(parsed.codexBin);
-    supervisor = ports.runtimeSupervisorFactory(
-      ownership === "foreground_child"
-        ? {
-            mode: "foreground_child",
-            codex_bin: parsed.codexBin,
-            socket_path: parsed.paths.app_server_socket_path
-          }
-        : {
-            mode: "service_owned",
-            socket_path: parsed.paths.app_server_socket_path
-          }
-    );
-    assertRuntimeSupervisor(supervisor);
     assertNotAborted(parsed.signal, "configuration");
   } catch (cause) {
     if (isForegroundResourceError(cause)) throw cause;
@@ -269,7 +265,7 @@ async function startHostDeckProductionResources(
   let stage: HostDeckForegroundResourceStage = "lease";
   let lease: HostDeckDaemonLease | null = null;
   let opened: OpenedGuardedDatabase | null = null;
-  let runtimeStartAttempted = false;
+  let brokerAttachment: SharedCodexBrokerAttachment | null = null;
   const repairs: HostDeckPathSecurityRepair[] = [];
 
   try {
@@ -314,21 +310,23 @@ async function startHostDeckProductionResources(
     );
     let runtime: HostDeckPreparedCodexRuntime;
     if (codexVersion === codexBindingDescriptor.codex_version) {
-      runtimeStartAttempted = true;
-      const started = parseStartedRuntime(
-        await startRuntimeSupervisor(
-          supervisor,
-          parsed.resourceBudget,
-          parsed.signal
-        ),
-        parsed.paths.app_server_socket_path,
-        ownership
-      );
-      runtime = Object.freeze({ ...started, preparation: "ready" });
+      brokerAttachment = await ports.startSharedBroker({
+        codex_bin: parsed.codexBin,
+        location: parsed.codexLocation,
+        mode:
+          ownership === "foreground_child"
+            ? "attach_or_start"
+            : "attach_only",
+        observed_version: codexVersion,
+        ...(parsed.signal === undefined ? {} : { signal: parsed.signal }),
+        startup_timeout_ms:
+          parsed.resourceBudget.lifecycle_startup_timeout_ms
+      });
+      runtime = parsePreparedRuntime(brokerAttachment, parsed.codexLocation);
     } else {
       runtime = createVersionIncompatibleRuntime(
-        parsed.paths.app_server_socket_path,
-        ownership
+        parsed.codexLocation,
+        codexVersion
       );
     }
     assertNotAborted(parsed.signal, stage);
@@ -340,16 +338,15 @@ async function startHostDeckProductionResources(
       parsed,
       repairs,
       runtime,
-      supervisor
+      brokerAttachment,
+      ownership
     });
   } catch (cause) {
     const primary = mapStartupFailure(cause, stage, parsed.signal);
     const cleanupErrors = await rollbackStartup({
       lease,
       opened,
-      resourceBudget: parsed.resourceBudget,
-      runtimeStartAttempted,
-      supervisor
+      brokerAttachment
     });
     if (cleanupErrors.length === 0) throw primary;
     throw foregroundError(
@@ -368,9 +365,9 @@ export function assertHostDeckForegroundResources(
   candidate: unknown
 ): asserts candidate is HostDeckForegroundResources {
   assertHostDeckProductionResources(candidate);
-  if (candidate.runtime.mode !== "foreground_child") {
+  if (!acceptedForegroundResources.has(candidate)) {
     throw new TypeError(
-      "HostDeck foreground resources must own a foreground runtime child."
+      "HostDeck foreground resources must be created by the foreground bootstrap."
     );
   }
 }
@@ -379,9 +376,9 @@ export function assertHostDeckServiceResources(
   candidate: unknown
 ): asserts candidate is HostDeckServiceResources {
   assertHostDeckProductionResources(candidate);
-  if (candidate.runtime.mode !== "service_owned") {
+  if (!acceptedServiceResources.has(candidate)) {
     throw new TypeError(
-      "HostDeck service resources must observe a service-owned runtime."
+      "HostDeck service resources must be created by the service bootstrap."
     );
   }
 }
@@ -402,13 +399,14 @@ export function assertHostDeckProductionResources(
 }
 
 function createResourceHandle(input: {
+  readonly brokerAttachment: SharedCodexBrokerAttachment | null;
   readonly codexVersion: string;
   readonly lease: HostDeckDaemonLease;
   readonly opened: OpenedGuardedDatabase;
   readonly parsed: ParsedStartInput;
   readonly repairs: readonly HostDeckPathSecurityRepair[];
   readonly runtime: HostDeckPreparedCodexRuntime;
-  readonly supervisor: HostDeckCodexRuntimeSupervisor;
+  readonly ownership: HostDeckRuntimeOwnership;
 }): HostDeckForegroundResources {
   let phase: HostDeckForegroundResourcePhase = "ready";
   let closePromise: Promise<void> | null = null;
@@ -439,15 +437,15 @@ function createResourceHandle(input: {
       database_open: input.opened.database.db.open,
       lease_held: !input.lease.released,
       runtime_preparation: input.runtime.preparation,
-      runtime: input.supervisor.snapshot()
+      runtime: input.runtime.endpoint
     });
 
   const closeSupervisor = (deadline: OperationDeadline): Promise<void> => {
     if (supervisorPromise !== null) return supervisorPromise;
     assertOperationDeadline(deadline);
     phase = "closing";
-    supervisorPromise = input.supervisor
-      .close({ deadline })
+    supervisorPromise = Promise.resolve()
+      .then(() => input.brokerAttachment?.close())
       .catch((cause: unknown) => {
         supervisorFailed = true;
         throw cause;
@@ -547,6 +545,11 @@ function createResourceHandle(input: {
     close
   });
   acceptedProductionResources.add(resources);
+  if (input.ownership === "foreground_child") {
+    acceptedForegroundResources.add(resources);
+  } else {
+    acceptedServiceResources.add(resources);
+  }
   return resources;
 }
 
@@ -596,17 +599,17 @@ async function runOwnedCleanupStage(
 }
 
 async function rollbackStartup(input: {
+  readonly brokerAttachment: SharedCodexBrokerAttachment | null;
   readonly lease: HostDeckDaemonLease | null;
   readonly opened: OpenedGuardedDatabase | null;
-  readonly resourceBudget: ResourceBudget;
-  readonly runtimeStartAttempted: boolean;
-  readonly supervisor: HostDeckCodexRuntimeSupervisor;
 }): Promise<unknown[]> {
   const errors: unknown[] = [];
-  if (input.runtimeStartAttempted) {
-    errors.push(
-      ...(await closeRuntimeSupervisor(input.supervisor, input.resourceBudget))
-    );
+  if (input.brokerAttachment !== null) {
+    try {
+      await input.brokerAttachment.close();
+    } catch (error) {
+      errors.push(error);
+    }
   }
   if (input.opened !== null) closeDatabase(input.opened.database, errors);
   if (input.lease !== null) releaseLease(input.lease, errors);
@@ -660,45 +663,6 @@ function openGuardedMigratedDatabase(
   }
 }
 
-async function startRuntimeSupervisor(
-  supervisor: HostDeckCodexRuntimeSupervisor,
-  resourceBudget: ResourceBudget,
-  signal: AbortSignal | undefined
-): Promise<StartedCodexRuntime> {
-  const deadline = createOperationDeadline({
-    timeoutMs: resourceBudget.lifecycle_startup_timeout_ms,
-    ...(signal === undefined ? {} : { parentSignal: signal })
-  });
-  try {
-    return await supervisor.start({ deadline, resourceBudget });
-  } finally {
-    deadline.dispose();
-  }
-}
-
-async function closeRuntimeSupervisor(
-  supervisor: HostDeckCodexRuntimeSupervisor,
-  resourceBudget: ResourceBudget
-): Promise<unknown[]> {
-  const errors: unknown[] = [];
-  let deadline: ReturnType<typeof createOperationDeadline> | null = null;
-  try {
-    deadline = createOperationDeadline({
-      timeoutMs: resourceBudget.lifecycle_cleanup_step_timeout_ms
-    });
-    await supervisor.close({ deadline });
-  } catch (error) {
-    errors.push(error);
-  } finally {
-    try {
-      deadline?.dispose();
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-  return errors;
-}
-
 function closeDatabase(
   database: ReturnType<typeof openMigratedDatabase>,
   errors: unknown[]
@@ -746,9 +710,16 @@ function parseStartInput(candidate: unknown): ParsedStartInput {
     runtime_dir: requireString(values.runtime_dir),
     database_path: requireString(values.database_path)
   });
+  const codexLocation = resolveSharedCodexEndpointLocation({
+    home_directory: homedir(),
+    ...(values.codex_home === undefined
+      ? {}
+      : { codex_home: requireString(values.codex_home) })
+  });
   return Object.freeze({
     paths,
     codexBin: parseExecutablePath(values.codex_bin),
+    codexLocation,
     loopbackPort,
     resourceBudget,
     signal
@@ -765,15 +736,15 @@ function parseDependencies(candidate: unknown): ParsedDependencies {
   const now = values.now;
   const pid = values.pid;
   const codexVersionProbe = values.codexVersionProbe;
-  const runtimeSupervisorFactory = values.runtimeSupervisorFactory;
+  const sharedBrokerStarter = values.startSharedBroker;
   if (
     (codexVersionProbe !== undefined &&
       typeof codexVersionProbe !== "function") ||
     (now !== undefined && typeof now !== "function") ||
     (pid !== undefined &&
       (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid < 1)) ||
-    (runtimeSupervisorFactory !== undefined &&
-      typeof runtimeSupervisorFactory !== "function")
+    (sharedBrokerStarter !== undefined &&
+      typeof sharedBrokerStarter !== "function")
   ) {
     throw new TypeError(
       "HostDeck foreground resource dependencies are invalid."
@@ -786,10 +757,10 @@ function parseDependencies(candidate: unknown): ParsedDependencies {
         : (codexVersionProbe as CodexVersionProbe),
     now: now === undefined ? defaultNow : (now as () => Date),
     pid,
-    runtimeSupervisorFactory:
-      runtimeSupervisorFactory === undefined
-        ? createCodexRuntimeSupervisor
-        : (runtimeSupervisorFactory as typeof createCodexRuntimeSupervisor)
+    startSharedBroker:
+      sharedBrokerStarter === undefined
+        ? startSharedCodexBroker
+        : (sharedBrokerStarter as typeof startSharedCodexBroker)
   });
 }
 
@@ -880,89 +851,56 @@ function parseExecutablePath(candidate: unknown): string {
   return candidate;
 }
 
-function assertRuntimeSupervisor(
-  candidate: unknown
-): asserts candidate is HostDeckCodexRuntimeSupervisor {
-  try {
-    if (
-      candidate === null ||
-      typeof candidate !== "object" ||
-      !hasCallableDataProperty(candidate, "start") ||
-      !hasCallableDataProperty(candidate, "close") ||
-      !hasCallableDataProperty(candidate, "snapshot")
-    ) {
-      throw new TypeError();
-    }
-  } catch {
-    throw new TypeError(
-      "Codex runtime supervisor factory returned an invalid owner."
-    );
-  }
-}
-
-function parseStartedRuntime(
+function parsePreparedRuntime(
   candidate: unknown,
-  expectedSocketPath: string,
-  expectedOwnership: HostDeckRuntimeOwnership
-): StartedCodexRuntime {
-  const values = readExactDataObject(
-    candidate,
-    [
-      "mode",
-      "ownership",
-      "process_exit",
-      "socket_mode_repaired",
-      "socket_path",
-      "stale_socket_removed"
-    ],
-    [
-      "mode",
-      "ownership",
-      "process_exit",
-      "socket_mode_repaired",
-      "socket_path",
-      "stale_socket_removed"
-    ],
-    "Codex runtime supervisor returned invalid startup state."
-  );
+  expectedLocation: SharedCodexEndpointLocation
+): HostDeckPreparedCodexRuntime {
   if (
-    values.mode !== expectedOwnership ||
-    values.ownership !== expectedOwnership ||
-    values.socket_path !== expectedSocketPath ||
-    typeof values.socket_mode_repaired !== "boolean" ||
-    typeof values.stale_socket_removed !== "boolean" ||
-    (expectedOwnership === "foreground_child"
-      ? !(values.process_exit instanceof Promise)
-      : values.process_exit !== null ||
-        values.stale_socket_removed !== false ||
-        values.socket_mode_repaired !== false)
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !hasCallableDataProperty(candidate, "close")
   ) {
-    throw new TypeError(
-      "Codex runtime supervisor returned invalid startup state."
-    );
+    throw new TypeError("Shared Codex broker returned invalid attachment state.");
+  }
+  const attachment = candidate as Partial<SharedCodexBrokerAttachment>;
+  const location = sharedCodexEndpointLocationSchema.safeParse(
+    attachment.location
+  );
+  const endpoint = sharedCodexEndpointSchema.safeParse(attachment.endpoint);
+  if (
+    !location.success ||
+    !endpoint.success ||
+    location.data.codex_home !== expectedLocation.codex_home ||
+    location.data.socket_path !== expectedLocation.socket_path ||
+    endpoint.data.state !== "ready" ||
+    endpoint.data.observed_version !== codexBindingDescriptor.codex_version
+  ) {
+    throw new TypeError("Shared Codex broker returned invalid attachment state.");
   }
   return Object.freeze({
-    mode: expectedOwnership,
-    ownership: expectedOwnership,
-    socket_path: expectedSocketPath,
-    socket_mode_repaired: values.socket_mode_repaired,
-    stale_socket_removed: values.stale_socket_removed,
-    process_exit: values.process_exit as StartedCodexRuntime["process_exit"]
+    preparation: "ready" as const,
+    endpoint: endpoint.data,
+    location: location.data,
+    socket_path: location.data.socket_path
   });
 }
 
 function createVersionIncompatibleRuntime(
-  socketPath: string,
-  ownership: HostDeckRuntimeOwnership
+  location: SharedCodexEndpointLocation,
+  observedVersion: string
 ): HostDeckPreparedCodexRuntime {
   return Object.freeze({
-    mode: ownership,
-    ownership,
-    socket_path: socketPath,
-    socket_mode_repaired: false,
-    stale_socket_removed: false,
-    process_exit: null,
-    preparation: "version_incompatible"
+    preparation: "version_incompatible" as const,
+    endpoint: sharedCodexEndpointSchema.parse({
+      kind: "standard_unix",
+      state: "failed",
+      ownership: "none",
+      generation: 0,
+      observed_version: observedVersion,
+      reason: "Installed Codex version is incompatible."
+    }),
+    location,
+    socket_path: location.socket_path
   });
 }
 
@@ -1027,16 +965,16 @@ function mapStartupFailure(
   }
   if (
     stage === "runtime" &&
-    isErrorInstance(cause, HostDeckCodexRuntimeSupervisorError)
+    isErrorInstance(cause, HostDeckSharedCodexBrokerError)
   ) {
     return foregroundError(
-      cause.code === "startup_aborted"
+      cause.code === "aborted"
         ? "startup_aborted"
         : "runtime_failed",
       "runtime",
-      cause.code === "startup_aborted"
+      cause.code === "aborted"
         ? "HostDeck foreground resource startup was aborted."
-        : "Codex foreground runtime startup failed.",
+        : "Shared Codex broker startup failed.",
       cause
     );
   }
@@ -1052,11 +990,11 @@ function mapStartupFailure(
     codeByStage[stage] ?? "invalid_config",
     stage,
     stage === "paths"
-      ? "HostDeck foreground path preparation failed."
-      : stage === "database"
-        ? "HostDeck foreground database startup failed."
-        : stage === "runtime"
-          ? "Codex foreground runtime startup failed."
+        ? "HostDeck foreground path preparation failed."
+        : stage === "database"
+          ? "HostDeck foreground database startup failed."
+          : stage === "runtime"
+          ? "Shared Codex broker startup failed."
           : "HostDeck foreground lease setup failed.",
     cause
   );

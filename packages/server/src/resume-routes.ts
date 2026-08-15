@@ -2,7 +2,9 @@ import {
   type SelectedResumeMetadataResponse,
   type SelectedResumeParams,
   selectedResumeMetadataResponseSchema,
-  selectedResumeParamsSchema
+  selectedResumeParamsSchema,
+  sessionIdSchema,
+  sharedSessionTargetIdMatches
 } from "@hostdeck/contracts";
 import { z } from "zod";
 import {
@@ -145,7 +147,14 @@ function invokeResumeReader(
   }
 
   const parsed = selectedResumeMetadataResponseSchema.safeParse(candidate);
-  if (!parsed.success || parsed.data.session_id !== sessionId) {
+  if (
+    !parsed.success ||
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      parsed.data.session_id,
+      parsed.data.codex_thread_id
+    )
+  ) {
     throw new HostDeckResumeRouteContractError();
   }
   return deepFreeze(parsed.data);
@@ -155,13 +164,17 @@ function mapResumeFailure(
   error: HostDeckResumeMetadataError,
   sessionId: SelectedResumeParams["session_id"]
 ): HostDeckHttpError {
+  const internalSessionId = sessionIdSchema.safeParse(sessionId);
+  const target = internalSessionId.success
+    ? { sessionId: internalSessionId.data }
+    : {};
   switch (error.code) {
     case "session_not_found":
       return new HostDeckHttpError({
         code: "session_not_found",
         message: "Managed session was not found.",
         retryable: false,
-        sessionId,
+        ...target,
         status: 404
       });
     case "stale_session":
@@ -169,7 +182,7 @@ function mapResumeFailure(
         code: "stale_session",
         message: "Managed session is not eligible for laptop resume.",
         retryable: false,
-        sessionId,
+        ...target,
         status: 409
       });
     case "runtime_unavailable":
@@ -177,7 +190,7 @@ function mapResumeFailure(
         code: "runtime_unavailable",
         message: "Laptop resume metadata is unavailable.",
         retryable: error.retryable,
-        sessionId,
+        ...target,
         status: 503
       });
     case "state_unavailable":
@@ -185,7 +198,7 @@ function mapResumeFailure(
         code: "storage_error",
         message: "Managed session state is unavailable.",
         retryable: false,
-        sessionId,
+        ...target,
         status: 500
       });
     case "unstable_state":
@@ -193,7 +206,7 @@ function mapResumeFailure(
         code: "runtime_unavailable",
         message: "Laptop resume metadata changed during the read.",
         retryable: true,
-        sessionId,
+        ...target,
         status: 503
       });
   }

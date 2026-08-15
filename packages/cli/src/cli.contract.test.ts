@@ -221,7 +221,9 @@ describe("selected CLI shell contract", () => {
       }
     });
     expect(help.exitCode).toBe(cliExitCodes.ok);
-    expect(help.stdout).toContain("codexdeck resume SESSION_ID");
+    expect(help.stdout).toContain("codexdeck resume SESSION");
+    expect(help.stdout).toContain("SESSION            Native Codex UUID or internal sess_ compatibility id.");
+    expect(help.stdout).toContain("codexdeck broker start|status|stop [--json]");
     expect(help.stdout).toContain("codexdeck legacy reset --confirm [--json]");
     expect(help.stdout).toContain("codexdeck serve");
     expect(help.stdout).toContain("codexdeck status [--json]");
@@ -233,7 +235,14 @@ describe("selected CLI shell contract", () => {
     );
     const helpCommands = help.stdout.split("\n").map((line) => line.trim());
 
-    for (const command of ["attach", "stop", "lan"]) {
+    for (const command of [
+      "adopt",
+      "attach",
+      "discover",
+      "stop",
+      "lan",
+      "unmanage"
+    ]) {
       expect(helpCommands.some((line) => line === `codexdeck ${command}` || line.startsWith(`codexdeck ${command} `))).toBe(false);
       let configReads = 0;
       const result = await runCli([command], {

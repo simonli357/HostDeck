@@ -35,8 +35,7 @@ import { createTailscaleServeProxyTrustPolicy } from "./tailscale-serve-proxy-tr
 
 const apps: HostDeckFastifyInstance[] = [];
 const sessionId = "sess_resume_route_001";
-const threadId = "thread-resume-route-001";
-const socketPath = "/run/user/1000/hostdeck/app-server.sock";
+const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const createdAt = "2026-07-15T12:00:00.000Z";
 const readToken = "R".repeat(43);
 const writeToken = "W".repeat(43);
@@ -163,7 +162,6 @@ describe("selected managed-thread resume route", () => {
     expect(response.json()).toEqual(availableResponse());
     expect(requested).toEqual([sessionId]);
     for (const forbidden of [
-      "codex_thread_id",
       '"cwd"',
       "binding_id",
       "runtime_version",
@@ -474,7 +472,10 @@ describe("selected managed-thread resume route", () => {
     const candidates: Array<() => unknown> = [
       () => ({ ...availableResponse(), session_id: "sess_resume_route_other" }),
       () => ({ ...availableResponse(), command: "codex resume arbitrary" }),
-      () => ({ ...availableResponse(), codex_thread_id: threadId }),
+      () => ({
+        ...availableResponse(),
+        codex_thread_id: "019fc8bd-25ef-74c3-a3bf-c6e59e4122a5"
+      }),
       () => {
         throw new Error("unexpected-reader-private-sentinel");
       }
@@ -492,7 +493,7 @@ describe("selected managed-thread resume route", () => {
       });
       expectStableError(response, 500, "internal_error");
       expect(response.body).not.toMatch(
-        /arbitrary|codex_thread_id|private-sentinel|thread-resume/iu
+        /arbitrary|private-sentinel|thread-resume/iu
       );
     }
     expect(observations).toHaveLength(candidates.length);
@@ -502,10 +503,12 @@ describe("selected managed-thread resume route", () => {
     const port = await getAvailablePort();
     const origin = `http://127.0.0.1:${port}`;
     let readCalls = 0;
+    const requestedTargets: string[] = [];
     const app = createResumeApp(
       {
-        read() {
+        read(target) {
           readCalls += 1;
+          requestedTargets.push(target);
           return availableResponse();
         }
       },
@@ -523,15 +526,15 @@ describe("selected managed-thread resume route", () => {
 
     const response = await rawExchange(
       port,
-      `GET /api/v1/sessions/${sessionId}/resume HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`
+      `GET /api/v1/sessions/${threadId}/resume HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`
     );
     expect(statusCode(response)).toBe(200);
     expect(response).toMatch(/cache-control: no-store/iu);
     expect(response).toContain(`"session_id":"${sessionId}"`);
+    expect(response).toContain(`"codex_thread_id":"${threadId}"`);
     expect(response).toContain('"local_only":true');
     expect(response).toContain(`"executable":"codex"`);
     for (const forbidden of [
-      "codex_thread_id",
       '"cwd"',
       "runtime_version",
       "binding_id",
@@ -542,10 +545,11 @@ describe("selected managed-thread resume route", () => {
       expect(response).not.toContain(forbidden);
     }
     expect(readCalls).toBe(1);
+    expect(requestedTargets).toEqual([threadId]);
 
     const head = await rawExchange(
       port,
-      `HEAD /api/v1/sessions/${sessionId}/resume HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`
+      `HEAD /api/v1/sessions/${threadId}/resume HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`
     );
     expect(statusCode(head)).toBe(405);
     expect(head).not.toContain('"launch"');
@@ -602,12 +606,13 @@ function createResumeAppFromRegistration(
 function availableResponse() {
   return selectedResumeMetadataResponseSchema.parse({
     session_id: sessionId,
+    codex_thread_id: threadId,
     local_only: true,
     available: true,
-    command: `codex resume --remote unix://${socketPath} ${threadId}`,
+    command: `codex resume ${threadId}`,
     launch: {
       executable: "codex",
-      args: ["resume", "--remote", `unix://${socketPath}`, threadId]
+      args: ["resume", threadId]
     },
     unavailable_reason: null
   });
@@ -616,6 +621,7 @@ function availableResponse() {
 function unavailableResponse() {
   return selectedResumeMetadataResponseSchema.parse({
     session_id: sessionId,
+    codex_thread_id: threadId,
     local_only: true,
     available: false,
     command: null,

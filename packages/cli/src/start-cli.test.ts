@@ -92,7 +92,10 @@ describe("managed-session start CLI command", () => {
     );
     expect(result).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
     expect(result.stdout).toContain(`Started session: ${name}`);
-    expect(result.stdout).toContain("ID: sess_start_cli_001");
+    expect(result.stdout).toContain(
+      "Codex UUID: 019fc8bd-25ef-74c3-a3bf-c6e59e4122a4"
+    );
+    expect(result.stdout).toContain("Internal ID: sess_start_cli_001");
     expect(result.stdout).toContain("State: active");
     expect(result.stdout).toContain(`CWD: ${cwd}`);
     expect(result.stdout).toContain("Runtime: codex_app_server 0.147.0");
@@ -265,7 +268,7 @@ function response(
     session: {
       id: "sess_start_cli_001",
       name,
-      codex_thread_id: "thread-start-cli-001",
+      codex_thread_id: "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4",
       cwd,
       runtime_source: "codex_app_server" as const,
       runtime_version: "0.147.0",

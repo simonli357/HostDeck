@@ -1,8 +1,8 @@
 import type { Page, Request } from "@playwright/test";
 import {
   formatSelectedResumeLaunchCommand,
+  selectedResumeCommandMaxLength,
   selectedResumeMetadataResponseSchema,
-  selectedResumeRemoteMaxLength
 } from "../../packages/contracts/src/index.js";
 import { sessionDetailBrowserSessionId } from "./session-detail-fixture.js";
 
@@ -31,13 +31,10 @@ export interface LaptopResumeApiController {
   readonly setOutcome: (outcome: LaptopResumeApiOutcome) => void;
 }
 
-const threadId = "thread-private-browser-detail";
-const socketPath = "/run/user/1000/hostdeck/private-app-server.sock";
-const longSocketPrefix = `/run/user/1000/hostdeck/${"long-private-segment-".repeat(21)}`;
-const longSocketSuffix = "app-server.sock";
-const longSocketPath = `${longSocketPrefix}${"x".repeat(
-  selectedResumeRemoteMaxLength - "unix://".length - longSocketPrefix.length - longSocketSuffix.length
-)}${longSocketSuffix}`;
+const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
+const longExecutable = `/${"x".repeat(
+  selectedResumeCommandMaxLength - threadId.length - " resume ".length - 1
+)}`;
 const unavailableReason = "The selected Codex runtime cannot provide a local laptop command.";
 const longUnavailableReason = "Laptop resume is unavailable. ".padEnd(
   240,
@@ -45,9 +42,8 @@ const longUnavailableReason = "Laptop resume is unavailable. ".padEnd(
 );
 
 export const laptopResumeBrowserCommand = availableResponse().command;
-export const laptopResumeBrowserLongRemote = `unix://${longSocketPath}`;
 export const laptopResumeBrowserLongCommand = availableResponse({
-  socket: longSocketPath
+  executable: longExecutable
 }).command;
 export const laptopResumeBrowserUnavailableReason = unavailableReason;
 export const laptopResumeBrowserLongUnavailableReason = longUnavailableReason;
@@ -120,6 +116,7 @@ async function fulfillOutcome(
       route,
       selectedResumeMetadataResponseSchema.parse({
         session_id: sessionDetailBrowserSessionId,
+        codex_thread_id: threadId,
         local_only: true,
         available: false,
         command: null,
@@ -140,34 +137,30 @@ async function fulfillOutcome(
   if (outcome === "wrong_thread") {
     await fulfillJson(
       route,
-      availableResponse({ thread: "thread-private-browser-resume-foreign" })
+      availableResponse({ thread: "019fc8bd-25ef-74c3-a3bf-c6e59e4122a5" })
     );
     return;
   }
   await fulfillJson(
     route,
     availableResponse({
-      socket: outcome === "long_command" ? longSocketPath : socketPath
+      executable: outcome === "long_command" ? longExecutable : "codex"
     })
   );
 }
 
 function availableResponse(input: Readonly<{
+  executable?: string;
   session?: string;
-  socket?: string;
   thread?: string;
 }> = {}) {
   const launch = {
-    executable: "codex",
-    args: [
-      "resume",
-      "--remote",
-      `unix://${input.socket ?? socketPath}`,
-      input.thread ?? threadId
-    ]
+    executable: input.executable ?? "codex",
+    args: ["resume", input.thread ?? threadId]
   } as const;
   const parsed = selectedResumeMetadataResponseSchema.parse({
     session_id: input.session ?? sessionDetailBrowserSessionId,
+    codex_thread_id: input.thread ?? threadId,
     local_only: true,
     available: true,
     command: formatSelectedResumeLaunchCommand(launch),

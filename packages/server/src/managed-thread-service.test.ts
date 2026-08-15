@@ -569,8 +569,8 @@ describe("managed Codex archive and reconciliation", () => {
     let reads = 0;
     const racingStates: SelectedStateRepository = {
       ...base.states,
-      require(sessionId) {
-        const state = base.states.require(sessionId);
+      requireByTargetId(sessionId) {
+        const state = base.states.requireByTargetId(sessionId);
         reads += 1;
         if (reads !== 2) return state;
         return {

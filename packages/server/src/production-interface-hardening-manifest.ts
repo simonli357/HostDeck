@@ -355,17 +355,13 @@ export function createIfcV1091ProductionInterfaceHardeningLedger(): Readonly<Rec
     criteria: productionInterfaceHardeningCriteria,
     dimensions: productionInterfaceHardeningDimensions,
     evidence: productionInterfaceHardeningEvidence,
-    registrations: hostDeckSelectedApiRouteCompositionDescriptor
-      .filter((entry) => entry.registrationId !== "selected-native-session-administration")
-      .map((entry) => ({
+    registrations: hostDeckSelectedApiRouteCompositionDescriptor.map((entry) => ({
         id: entry.registrationId,
         surface: entry.surface,
         route_ids: entry.manifestIds
       })),
     requirements: productionInterfaceHardeningRequirementIds,
-    routes: selectedApiRouteManifest
-      .filter((entry) => entry.owner_task !== "IFC-V1-110")
-      .map((entry) => ({
+    routes: selectedApiRouteManifest.map((entry) => ({
         id: entry.id,
         family: entry.family,
         method: entry.method,

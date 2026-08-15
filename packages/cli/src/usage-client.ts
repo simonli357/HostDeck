@@ -1,6 +1,7 @@
 import {
   type ApiErrorEnvelope,
   sessionIdParamsSchema,
+  sharedSessionTargetIdMatches,
   type UsageSnapshot,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
@@ -102,7 +103,11 @@ async function requestUsage(
   }
   if (
     !parsed.success ||
-    parsed.data.target.session_id !== sessionId
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
   ) {
     throw internalFailure(
       "HostDeck daemon returned invalid managed-session usage data."

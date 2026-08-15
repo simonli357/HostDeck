@@ -611,7 +611,6 @@ describe.skipIf(!requireSmoke)("installed Codex exact operation semantics smoke"
           deadlineAt
         );
         const tuiCommand = buildCodexTuiResumeCommand({
-          socket_path: socketPath,
           thread_id: startedA.thread.id,
           codex_bin: codexBin
         });

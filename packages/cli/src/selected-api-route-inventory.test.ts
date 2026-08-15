@@ -1,7 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import {
   clientOperationIdSchema,
-  nativeSessionAdoptRequestSchema,
   selectedStartSessionRequestSchema
 } from "@hostdeck/contracts";
 import { selectedApiRouteManifest } from "@hostdeck/server";
@@ -37,10 +36,6 @@ import {
   createHostDeckModelClient,
   type HostDeckModelClientSelectionRequest
 } from "./model-client.js";
-import {
-  createHostDeckNativeSessionClient,
-  type HostDeckNativeSessionUnmanageRequest
-} from "./native-session-client.js";
 import { createHostDeckPairingLinkClient } from "./pairing-link-client.js";
 import {
   createHostDeckPlanClient,
@@ -80,9 +75,6 @@ const expectedManifestIds = [
   "host_unlock",
   "model_read",
   "model_select",
-  "native_session_adopt",
-  "native_session_discovery",
-  "native_session_unmanage",
   "pair_request",
   "plan_read",
   "plan_select",
@@ -155,12 +147,6 @@ const selectedClientContracts = [
     operations: ["read", "select"]
   },
   {
-    factory: "createHostDeckNativeSessionClient",
-    file: "native-session-client.ts",
-    interface: "HostDeckNativeSessionClient",
-    operations: ["adopt", "discover", "unmanage"]
-  },
-  {
     factory: "createHostDeckPairingLinkClient",
     file: "pairing-link-client.ts",
     interface: "HostDeckPairingLinkClient",
@@ -226,7 +212,6 @@ const expectedStatusSourceByFile = Object.freeze({
   "host-status-client.ts": "expectedStatus: 200",
   "interrupt-client.ts": "expectedStatus: 200",
   "model-client.ts": "expectedStatus: 200",
-  "native-session-client.ts": "expectedStatus: input.expectedStatus",
   "pairing-link-client.ts": "expectedStatus: 200",
   "plan-client.ts": "expectedStatus: 200",
   "prompt-client.ts": "expectedStatus: 202",
@@ -247,13 +232,13 @@ describe("CLI selected-route inventory", () => {
     expect(actualClientFiles).toEqual(
       selectedClientContracts.map((entry) => entry.file).sort()
     );
-    expect(selectedClientContracts).toHaveLength(19);
+    expect(selectedClientContracts).toHaveLength(18);
     expect(
       selectedClientContracts.reduce(
         (count, entry) => count + entry.operations.length,
         0
       )
-    ).toBe(29);
+    ).toBe(26);
 
     for (const entry of selectedClientContracts) {
       const source = await readFile(new URL(entry.file, sourceDirectory), "utf8");
@@ -343,23 +328,6 @@ describe("CLI selected-route inventory", () => {
       } satisfies HostDeckModelClientSelectionRequest)
     );
 
-    const native = createHostDeckNativeSessionClient(options);
-    await observe(() => native.discover({ limit: null }));
-    await observe(() =>
-      native.adopt(nativeSessionAdoptRequestSchema.parse({
-        operation_id: operationId,
-        thread_id: "019c6ef5-3ad7-7b20-b0a7-6c138cd2a63e",
-        name: "cli-inventory-native",
-        confirm_handoff: true
-      }))
-    );
-    await observe(() =>
-      native.unmanage({
-        session_id: sessionId,
-        operation_id: operationId,
-        confirm: true
-      } satisfies HostDeckNativeSessionUnmanageRequest)
-    );
 
     const goal = createHostDeckGoalClient(options);
     await observe(() => goal.read(sessionId));
@@ -484,9 +452,9 @@ describe("CLI selected-route inventory", () => {
     const matchedIds = new Set(observedManifestIds);
     expect([...matchedIds].sort()).toEqual([...expectedManifestIds].sort());
     expect(matchedIds.size).toBe(expectedManifestIds.length);
-    expect(observed).toHaveLength(31);
-    expect(observed.filter((request) => request.method === "GET")).toHaveLength(14);
-    expect(observed.filter((request) => request.method === "POST")).toHaveLength(17);
+    expect(observed).toHaveLength(28);
+    expect(observed.filter((request) => request.method === "GET")).toHaveLength(13);
+    expect(observed.filter((request) => request.method === "POST")).toHaveLength(15);
     expect(
       observed.every(
         (request) =>
@@ -509,15 +477,15 @@ describe("CLI selected-route inventory", () => {
         observed
           .filter((request) => request.method === "GET")
           .map((request) => requireManifestMatch(request))
-      ).size
-    ).toBe(12);
+    ).size
+    ).toBe(11);
     expect(
       new Set(
         observed
           .filter((request) => request.method === "POST")
           .map((request) => requireManifestMatch(request))
-      ).size
-    ).toBe(17);
+    ).size
+    ).toBe(15);
     expect(
       observedManifestIds.filter((manifestId) => manifestId === "remote_status")
     ).toHaveLength(3);

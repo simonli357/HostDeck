@@ -104,12 +104,12 @@ describe("managed-session goal CLI command", () => {
   it("advertises only the selected public goal forms", async () => {
     const result = await runCli(["help"]);
     expect(result).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
-    expect(result.stdout).toContain("codexdeck goal SESSION_ID [--json]");
+    expect(result.stdout).toContain("codexdeck goal SESSION [--json]");
     expect(result.stdout).toContain(
-      "codexdeck goal SESSION_ID set --objective OBJECTIVE [--expected-revision REVISION] [--json]"
+      "codexdeck goal SESSION set --objective OBJECTIVE [--expected-revision REVISION] [--json]"
     );
     expect(result.stdout).toContain(
-      "codexdeck goal SESSION_ID pause|resume|complete|clear --expected-revision REVISION [--json]"
+      "codexdeck goal SESSION pause|resume|complete|clear --expected-revision REVISION [--json]"
     );
     expect(result.stdout).not.toMatch(/token-budget|operation-id|target|\/goal/iu);
   });

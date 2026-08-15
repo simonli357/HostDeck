@@ -110,6 +110,19 @@ export const sharedSessionTargetSchema = z.discriminatedUnion("type", [
 
 export const sharedSessionTargetIdSchema = z.union([nativeCodexThreadIdSchema, sessionIdSchema]);
 
+export function sharedSessionTargetIdMatches(
+  candidate: unknown,
+  internalSessionId: unknown,
+  nativeThreadId: unknown
+): boolean {
+  const target = sharedSessionTargetIdSchema.safeParse(candidate);
+  const internal = sessionIdSchema.safeParse(internalSessionId);
+  if (!target.success || !internal.success) return false;
+  if (target.data === internal.data) return true;
+  const native = nativeCodexThreadIdSchema.safeParse(nativeThreadId);
+  return native.success && target.data === native.data;
+}
+
 export const sharedSessionEnrollmentOrigins = sessionEnrollmentOrigins;
 
 export const trackedSessionSchema = z

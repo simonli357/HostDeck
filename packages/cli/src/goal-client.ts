@@ -5,7 +5,7 @@ import {
   goalControlSnapshotSchema,
   goalMutationRequestSchema,
   sessionIdParamsSchema,
-  sessionIdSchema
+  sharedSessionTargetIdSchema
 } from "@hostdeck/contracts";
 import type { HttpFetch, HttpRequestInit } from "./api-client.js";
 import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
@@ -17,7 +17,7 @@ import {
 } from "./loopback-http.js";
 
 const goalClientMutationRequestSchema = goalMutationRequestSchema.extend({
-  session_id: sessionIdSchema
+  session_id: sharedSessionTargetIdSchema
 });
 
 export interface HostDeckGoalClientMutationRequest extends GoalMutationRequest {

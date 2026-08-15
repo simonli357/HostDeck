@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { sessionIdSchema } from "./scalars.js";
 import { codexThreadIdSchema } from "./selected-runtime.js";
+import {
+  nativeCodexThreadIdSchema,
+  sharedSessionTargetIdSchema
+} from "./shared-codex-runtime.js";
 
 export const selectedResumeCommandMaxLength = 1_000;
 export const selectedResumeExecutableMaxLength = 4_096;
-export const selectedResumeRemoteMaxLength = 512;
 export const selectedResumeUnavailableReasonMaxLength = 240;
 
 const bareExecutablePattern = /^[A-Za-z0-9._+-]+$/u;
@@ -26,46 +29,23 @@ const selectedResumeExecutableSchema = z
     }
   });
 
-const selectedResumeRemoteSchema = z
-  .string()
-  .min("unix:///x".length)
-  .max(selectedResumeRemoteMaxLength)
-  .superRefine((value, context) => {
-    const path = value.slice("unix://".length);
-    if (
-      !value.startsWith("unix:///") ||
-      path.length < 2 ||
-      containsControlCharacter(value) ||
-      [":", "?", "#", "%"].some((character) => path.includes(character))
-    ) {
-      context.addIssue({
-        code: "custom",
-        message: "Selected resume remote must name one absolute private Unix socket without URL delimiters or controls."
-      });
-    }
-  });
-
 export const selectedResumeLaunchSchema = z
   .object({
     executable: selectedResumeExecutableSchema,
-    args: z.tuple([
-      z.literal("resume"),
-      z.literal("--remote"),
-      selectedResumeRemoteSchema,
-      codexThreadIdSchema
-    ])
+    args: z.tuple([z.literal("resume"), nativeCodexThreadIdSchema])
   })
   .strict();
 
 export const selectedResumeParamsSchema = z
   .object({
-    session_id: sessionIdSchema
+    session_id: sharedSessionTargetIdSchema
   })
   .strict();
 
 export const selectedResumeMetadataResponseSchema = z
   .object({
     session_id: sessionIdSchema,
+    codex_thread_id: codexThreadIdSchema,
     local_only: z.literal(true),
     available: z.boolean(),
     command: z
@@ -102,6 +82,13 @@ export const selectedResumeMetadataResponseSchema = z
           code: "custom",
           message: "Selected resume display command must exactly match its launch descriptor.",
           path: ["command"]
+        });
+      }
+      if (String(value.launch.args[1]) !== String(value.codex_thread_id)) {
+        context.addIssue({
+          code: "custom",
+          message: "Selected resume launch must target the response Codex thread.",
+          path: ["launch", "args", 1]
         });
       }
       return;

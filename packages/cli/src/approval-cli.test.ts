@@ -292,8 +292,8 @@ describe("approval CLI command", () => {
     expect(calls).toBe(1);
 
     const help = renderHelp();
-    expect(help).toContain("codexdeck approvals SESSION_ID [--json]");
-    expect(help).toContain("codexdeck approvals SESSION_ID REQUEST_ID approve|deny --confirm [--json]");
+    expect(help).toContain("codexdeck approvals SESSION [--json]");
+    expect(help).toContain("codexdeck approvals SESSION REQUEST_ID approve|deny --confirm [--json]");
     expect(help).not.toMatch(/approvals.*--force|approvals.*--retry|approvals.*--thread|approvals.*--operation/iu);
   });
 

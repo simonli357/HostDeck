@@ -254,9 +254,9 @@ describe("managed-session prompt CLI command", () => {
   it("advertises only the selected prompt syntax", async () => {
     const result = await runCli(["help"]);
     expect(result.stdout).toContain(
-      "codexdeck send SESSION_ID TEXT... [--json]"
+      "codexdeck send SESSION TEXT... [--json]"
     );
-    expect(result.stdout).not.toContain("codexdeck send SESSION TEXT...");
+    expect(result.stdout).not.toContain("codexdeck send SESSION_ID TEXT...");
   });
 });
 

@@ -74,9 +74,9 @@ describe("managed-session Plan CLI command", () => {
   it("advertises only the selected public Plan forms", async () => {
     const result = await runCli(["help"]);
     expect(result).toMatchObject({ exitCode: cliExitCodes.ok, stderr: "" });
-    expect(result.stdout).toContain("codexdeck plan SESSION_ID [--json]");
+    expect(result.stdout).toContain("codexdeck plan SESSION [--json]");
     expect(result.stdout).toContain(
-      "codexdeck plan SESSION_ID enter|exit [--expected-revision REVISION] [--json]"
+      "codexdeck plan SESSION enter|exit [--expected-revision REVISION] [--json]"
     );
     const planHelp = result.stdout
       .split("\n")

@@ -6,7 +6,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defaultResourceBudget } from "@hostdeck/contracts";
+import {
+  defaultResourceBudget,
+  sharedCodexEndpointSchema,
+  sharedCodexRuntimeVersion
+} from "@hostdeck/contracts";
 import { createOperationDeadline, type OperationDeadline } from "@hostdeck/core";
 import {
   createRuntimeCompatibilityRepository,
@@ -14,14 +18,6 @@ import {
   createSettingsRepository
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
-import type {
-  CodexRuntimeProcessExitObservation,
-  CodexRuntimeSupervisorSnapshot,
-  CreateCodexRuntimeSupervisorInput,
-  createCodexRuntimeSupervisor,
-  HostDeckCodexRuntimeSupervisor,
-  StartedCodexRuntime
-} from "./codex-runtime-supervisor.js";
 import {
   createHostDeckFastifyApp,
   type HostDeckFastifyInstance,
@@ -87,7 +83,7 @@ describe("IFC-V1-082 production application composition", () => {
     ).toThrow(TypeError);
     expect(application.resource_budget).toBe(defaultResourceBudget);
     expect(application.bind).toBe(fixture.resources.bind);
-    expect(application.route_registrations).toHaveLength(24);
+    expect(application.route_registrations).toHaveLength(23);
     expect(Object.isFrozen(application.route_registrations)).toBe(true);
     expect(
       application.route_registrations.map(({ id, surface }) => ({ id, surface }))
@@ -106,8 +102,8 @@ describe("IFC-V1-082 production application composition", () => {
 
     expect(application.snapshot()).toMatchObject({
       phase: "assembled",
-      route_registration_count: 24,
-      api_registration_count: 22,
+      route_registration_count: 23,
+      api_registration_count: 21,
       sse_registration_count: 1,
       static_registration_count: 1,
       reported_issue_count: 0,
@@ -146,7 +142,7 @@ describe("IFC-V1-082 production application composition", () => {
         .map((entry) => `${entry.method} ${entry.path}`)
         .sort()
     );
-    expect(selectedInventory).toHaveLength(38);
+    expect(selectedInventory).toHaveLength(35);
     expect(
       hostDeckFastifyRouteInventory(app).some((entry) =>
         /\/(?:acceptance|certificates?|lan|network|raw|tmux)(?:\/|$)/u.test(
@@ -419,10 +415,12 @@ describe("IFC-V1-082 production application composition", () => {
       codex_version: "0.145.0",
       runtime_preparation: "version_incompatible",
       runtime: {
-        phase: "idle",
-        process_state: "not_started",
-        claim_held: false,
-        socket_ready: false
+        generation: 0,
+        kind: "standard_unix",
+        observed_version: "0.145.0",
+        ownership: "none",
+        reason: "Installed Codex version is incompatible.",
+        state: "failed"
       }
     });
     expect(application.snapshot()).toMatchObject({
@@ -564,41 +562,12 @@ describe("IFC-V1-082 production application composition", () => {
     expect(fixture.runtime.startCalls).toBe(0);
   });
 
-  it("turns a rejected runtime-exit observation into bounded terminal diagnostics", async () => {
-    const fixture = await createFixture("exit-observation");
-    const issues: unknown[] = [];
-    const application = compose(fixture, (issue) => issues.push(issue));
-
-    fixture.runtime.rejectExit();
-    await new Promise<void>((resolve) => setImmediate(resolve));
-
-    expect(application.snapshot()).toMatchObject({
-      phase: "failed",
-      reported_issue_count: 1,
-      observer_failure_count: 0,
-      last_issue: {
-        source: "process",
-        code: "runtime_exit_observation_failed"
-      }
-    });
-    expect(issues).toEqual([
-      { source: "process", code: "runtime_exit_observation_failed" }
-    ]);
-    expect(JSON.stringify(application.snapshot())).not.toContain(
-      "private-runtime-exit-rejection"
-    );
-    expect(application.health.localSnapshot()).toMatchObject({
-      readiness: "not_ready",
-      mutation_admission: "closed"
-    });
-  });
 });
 
 interface FakeRuntimeHarness {
-  factory: typeof createCodexRuntimeSupervisor;
+  start: typeof import("./shared-codex-broker-lifecycle.js").startSharedCodexBroker;
   closeCalls: number;
   startCalls: number;
-  readonly rejectExit: () => void;
 }
 
 interface CompositionFixture {
@@ -619,6 +588,7 @@ async function createFixture(
   const configDir = join(root, "config");
   const stateDir = join(root, "state");
   const runtimeDir = join(root, "runtime");
+  const codexHome = join(root, "codex-home");
   const executable = join(root, "codex-fixture");
   const buildRoot = join(root, "build");
   writeFileSync(
@@ -637,10 +607,11 @@ async function createFixture(
       runtime_dir: runtimeDir,
       database_path: join(stateDir, "hostdeck.sqlite"),
       codex_bin: executable,
+      codex_home: codexHome,
       loopback_port: 46_217,
       resource_budget: defaultResourceBudget
     },
-    { runtimeSupervisorFactory: runtime.factory }
+    { startSharedBroker: runtime.start }
   );
   const fixture: CompositionFixture = {
     root,
@@ -687,87 +658,37 @@ function createLocalApp(
 }
 
 function fakeRuntime(): FakeRuntimeHarness {
-  let phase: CodexRuntimeSupervisorSnapshot["phase"] = "idle";
-  let settled = false;
-  let resolveExit: ((observation: CodexRuntimeProcessExitObservation) => void) | null =
-    null;
-  let rejectExit: ((reason: unknown) => void) | null = null;
-  const processExit = new Promise<CodexRuntimeProcessExitObservation>(
-    (resolve, reject) => {
-      resolveExit = resolve;
-      rejectExit = reject;
-    }
-  );
   const harness: FakeRuntimeHarness = {
     closeCalls: 0,
     startCalls: 0,
-    rejectExit() {
-      if (settled) return;
-      settled = true;
-      rejectExit?.(new Error("private-runtime-exit-rejection"));
-      rejectExit = null;
-      resolveExit = null;
-    },
-    factory: (() => {
+    start: (() => {
       throw new Error("Uninitialized production-composition runtime fixture.");
-    }) as typeof createCodexRuntimeSupervisor
+    }) as typeof import("./shared-codex-broker-lifecycle.js").startSharedCodexBroker
   };
-  harness.factory = ((input: CreateCodexRuntimeSupervisorInput) => {
-    const started: StartedCodexRuntime = Object.freeze({
-      mode: "foreground_child",
-      ownership: "foreground_child",
-      process_exit: processExit,
-      socket_mode_repaired: true,
-      socket_path: input.socket_path,
-      stale_socket_removed: false
-    });
-    const supervisor: HostDeckCodexRuntimeSupervisor = Object.freeze({
-      async start() {
-        harness.startCalls += 1;
-        phase = "ready";
-        return started;
+  harness.start = (async (input) => {
+    harness.startCalls += 1;
+    let closed = false;
+    return Object.freeze({
+      endpoint: sharedCodexEndpointSchema.parse({
+        kind: "standard_unix",
+        state: "ready",
+        ownership: "owned",
+        generation: 1,
+        observed_version: sharedCodexRuntimeVersion,
+        reason: null
+      }),
+      location: input.location,
+      get closed() {
+        return closed;
       },
       async close() {
+        if (closed) return;
+        closed = true;
         harness.closeCalls += 1;
-        phase = "closed";
-        if (!settled) {
-          settled = true;
-          resolveExit?.({
-            kind: "exited",
-            expected: true,
-            code: 0,
-            signal: null
-          });
-        }
-        resolveExit = null;
-        rejectExit = null;
-      },
-      snapshot: () => runtimeSnapshot(phase)
+      }
     });
-    return supervisor;
-  }) as typeof createCodexRuntimeSupervisor;
+  }) as typeof import("./shared-codex-broker-lifecycle.js").startSharedCodexBroker;
   return harness;
-}
-
-function runtimeSnapshot(
-  phase: CodexRuntimeSupervisorSnapshot["phase"]
-): CodexRuntimeSupervisorSnapshot {
-  return Object.freeze({
-    mode: "foreground_child",
-    phase,
-    ownership: "foreground_child",
-    claim_held: phase === "ready",
-    socket_ready: phase === "ready",
-    socket_mode_repaired: phase === "ready",
-    stale_socket_removed: false,
-    process_state: phase === "ready" ? "running" : "not_started",
-    process_exit: null,
-    spawn_attempts: phase === "idle" ? 0 : 1,
-    startup_retries: 0,
-    term_signals: 0,
-    kill_signals: 0,
-    cleanup_failures: 0
-  });
 }
 
 function diagnosticRuntimeSession(): Readonly<Record<string, unknown>> {

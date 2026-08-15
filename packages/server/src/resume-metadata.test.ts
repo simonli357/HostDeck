@@ -27,11 +27,10 @@ import {
 
 const roots: string[] = [];
 const sessionId = "sess_resume_reader_001";
-const threadId = "thread-resume-reader-001";
+const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const runtimeVersion = "0.147.0";
 const createdAt = "2026-07-15T12:00:00.000Z";
 const updatedAt = "2026-07-15T12:01:00.000Z";
-const socketPath = "/run/user/1000/hostdeck/app-server.sock";
 
 afterEach(() => {
   for (const root of roots.splice(0).reverse()) {
@@ -59,7 +58,6 @@ describe("managed-thread resume metadata reader", () => {
     const reader = createHostDeckResumeMetadataReader({
       codexBin: "codex",
       runtime,
-      socketPath,
       state
     });
 
@@ -75,9 +73,10 @@ describe("managed-thread resume metadata reader", () => {
       session_id: sessionId,
       local_only: true,
       available: true,
+      codex_thread_id: threadId,
       launch: {
         executable: "codex",
-        args: ["resume", "--remote", `unix://${socketPath}`, threadId]
+        args: ["resume", threadId]
       }
     });
     expect(stateThis).toBeUndefined();
@@ -97,7 +96,6 @@ describe("managed-thread resume metadata reader", () => {
     const nullInput = Object.assign(Object.create(null) as Record<string, unknown>, {
       codexBin: "codex",
       runtime: nullRuntime,
-      socketPath,
       state: nullState
     });
     expect(() =>
@@ -108,8 +106,7 @@ describe("managed-thread resume metadata reader", () => {
     const inputAccessor = Object.defineProperty(
       {
         codexBin: "codex",
-        runtime: { read: () => runtimeCandidate() },
-        socketPath
+        runtime: { read: () => runtimeCandidate() }
       },
       "state",
       {
@@ -130,7 +127,6 @@ describe("managed-thread resume metadata reader", () => {
     const validInput = {
       codexBin: "codex",
       runtime: { read: () => runtimeCandidate() },
-      socketPath,
       state: { require: () => stateCandidate() }
     };
     const hostileProxy = new Proxy(validInput, {
@@ -169,12 +165,11 @@ describe("managed-thread resume metadata reader", () => {
       state: { require: () => stateCandidate() }
     };
     for (const candidate of [
-      { ...base, codexBin: "codex --shell", socketPath },
-      { ...base, codexBin: "./codex", socketPath },
-      { ...base, codexBin: "codex\nprivate", socketPath },
-      { ...base, codexBin: "codex", socketPath: "relative.sock" },
-      { ...base, codexBin: "codex", socketPath: "/tmp/app%2fsock" },
-      { ...base, codexBin: `/${"x".repeat(980)}`, socketPath }
+      { ...base, codexBin: "codex --shell" },
+      { ...base, codexBin: "./codex" },
+      { ...base, codexBin: "codex\nprivate" },
+      { ...base, codexBin: `/${"x".repeat(4_096)}` },
+      { ...base, codexBin: "codex", socketPath: "/tmp/private.sock" }
     ]) {
       expect(() => createHostDeckResumeMetadataReader(candidate)).toThrow(
         TypeError
@@ -183,33 +178,25 @@ describe("managed-thread resume metadata reader", () => {
   });
 
   it("derives one exact escaped command from the durable managed thread", () => {
-    const escapedSocketPath = "/tmp/host deck/app's.sock";
     const reader = createReader({
-      codexBin: "/opt/Codex Tools/cod'ex",
-      socketPath: escapedSocketPath
+      codexBin: "/opt/Codex Tools/cod'ex"
     });
     const response = reader.read(sessionId);
 
     expect(response).toEqual({
       session_id: sessionId,
+      codex_thread_id: threadId,
       local_only: true,
       available: true,
       command:
-        "'/opt/Codex Tools/cod'\"'\"'ex' resume --remote " +
-        "'unix:///tmp/host deck/app'\"'\"'s.sock' thread-resume-reader-001",
+        "'/opt/Codex Tools/cod'\"'\"'ex' resume 019fc8bd-25ef-74c3-a3bf-c6e59e4122a4",
       launch: {
         executable: "/opt/Codex Tools/cod'ex",
-        args: [
-          "resume",
-          "--remote",
-          "unix:///tmp/host deck/app's.sock",
-          threadId
-        ]
+        args: ["resume", threadId]
       },
       unavailable_reason: null
     });
     expect(JSON.stringify(response)).not.toContain("/workspace/private");
-    expect(response).not.toHaveProperty("codex_thread_id");
     expect(response).not.toHaveProperty("cwd");
     expect(response).not.toHaveProperty("binding_id");
   });
@@ -260,6 +247,7 @@ describe("managed-thread resume metadata reader", () => {
       }).read(sessionId);
       expect(response, testCase.name).toEqual({
         session_id: sessionId,
+        codex_thread_id: threadId,
         local_only: true,
         available: false,
         command: null,
@@ -290,10 +278,16 @@ describe("managed-thread resume metadata reader", () => {
         }
       }
     });
-    for (const candidate of ["", "bad target", threadId, `${sessionId}/other`]) {
+    for (const candidate of ["", "bad target", `${sessionId}/other`]) {
       expect(() => reader.read(candidate)).toThrow(TypeError);
     }
     expect(stateCalls).toBe(0);
+    expect(reader.read(threadId)).toMatchObject({
+      session_id: sessionId,
+      codex_thread_id: threadId,
+      available: true
+    });
+    expect(stateCalls).toBe(2);
 
     expectResumeError(
       () =>
@@ -379,7 +373,6 @@ describe("managed-thread resume metadata reader", () => {
     let runtimeCalls = 0;
     const reader = createHostDeckResumeMetadataReader({
       codexBin: "codex",
-      socketPath,
       state: {
         require() {
           stateCalls += 1;
@@ -406,7 +399,6 @@ describe("managed-thread resume metadata reader", () => {
     let runtimeCalls = 0;
     const reader = createHostDeckResumeMetadataReader({
       codexBin: "codex",
-      socketPath,
       state: {
         require() {
           stateCalls += 1;
@@ -456,7 +448,6 @@ describe("managed-thread resume metadata reader", () => {
 
       const reader = createHostDeckResumeMetadataReader({
         codexBin: "codex",
-        socketPath,
         state: { require: states.require },
         runtime: {
           read: () => compatibility.get()?.compatibility ?? null
@@ -464,12 +455,13 @@ describe("managed-thread resume metadata reader", () => {
       });
       expect(reader.read(sessionId)).toEqual({
         session_id: sessionId,
+        codex_thread_id: threadId,
         local_only: true,
         available: true,
-        command: `codex resume --remote unix://${socketPath} ${threadId}`,
+        command: `codex resume ${threadId}`,
         launch: {
           executable: "codex",
-          args: ["resume", "--remote", `unix://${socketPath}`, threadId]
+          args: ["resume", threadId]
         },
         unavailable_reason: null
       });
@@ -495,7 +487,6 @@ function createReader(
     readonly codexBin?: string;
     readonly runtime?: RuntimeCompatibility | null;
     readonly runtimePort?: HostDeckResumeRuntimePort;
-    readonly socketPath?: string;
     readonly state?: SelectedSessionState | unknown;
     readonly statePort?: HostDeckResumeStatePort;
   } = {}
@@ -504,7 +495,6 @@ function createReader(
   const runtime = input.runtime === undefined ? runtimeCandidate() : input.runtime;
   return createHostDeckResumeMetadataReader({
     codexBin: input.codexBin ?? "codex",
-    socketPath: input.socketPath ?? socketPath,
     state: input.statePort ?? { require: () => state },
     runtime: input.runtimePort ?? { read: () => runtime }
   });

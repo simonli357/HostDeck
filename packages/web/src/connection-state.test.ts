@@ -58,6 +58,7 @@ const loopbackOrigin = "http://127.0.0.1:3777";
 const remoteOrigin = "https://hostdeck-connection.fixture-tailnet.ts.net";
 const otherRemoteOrigin = "https://hostdeck-other.fixture-tailnet.ts.net";
 const timestamp = "2026-07-22T18:00:00.000Z";
+const resumeThreadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
 const compatibilityTimestamp = isoTimestampSchema.parse(timestamp);
 const laterTimestamp = "2026-07-22T18:01:00.000Z";
 const rawCsrfToken = "C".repeat(43);
@@ -2179,12 +2180,7 @@ describe("browser shell connection-state coordinator", () => {
         local_only: true,
         available: true,
         launch: {
-          args: [
-            "resume",
-            "--remote",
-            expect.stringMatching(/^unix:\/\//u),
-            `thread-${firstSessionId}`
-          ]
+          args: ["resume", resumeThreadId]
         }
       }
     });
@@ -3013,15 +3009,11 @@ function modelSnapshot() {
 function resumeMetadata() {
   const launch = {
     executable: "codex",
-    args: [
-      "resume",
-      "--remote",
-      "unix:///run/user/1000/hostdeck/connection-state-private.sock",
-      `thread-${firstSessionId}`
-    ]
+    args: ["resume", resumeThreadId]
   } as const;
   return selectedResumeMetadataResponseSchema.parse({
     session_id: firstSessionId,
+    codex_thread_id: resumeThreadId,
     local_only: true,
     available: true,
     command: formatSelectedResumeLaunchCommand(launch),

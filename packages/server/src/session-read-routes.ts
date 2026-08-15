@@ -16,7 +16,9 @@ import {
   selectedSessionListSortKey,
   selectedSessionReadAccessSchema,
   selectedSessionReadItemSchema,
-  sessionIdParamsSchema
+  sessionIdParamsSchema,
+  sessionIdSchema,
+  sharedSessionTargetIdMatches
 } from "@hostdeck/contracts";
 import {
   HostDeckSelectedSessionReadRepositoryError,
@@ -252,7 +254,7 @@ function readListPage(
 
 function readDetail(
   get: SessionGetFunction,
-  sessionId: SelectedSessionReadItem["session"]["id"]
+  sessionId: string
 ): SelectedSessionReadItem | null {
   let candidate: unknown;
   try {
@@ -264,7 +266,14 @@ function readDetail(
   try {
     assertDeepFrozenDataTree(candidate);
     const parsed = selectedSessionReadItemSchema.safeParse(candidate);
-    if (!parsed.success || parsed.data.session.id !== sessionId) throw new TypeError();
+    if (
+      !parsed.success ||
+      !sharedSessionTargetIdMatches(
+        sessionId,
+        parsed.data.session.id,
+        parsed.data.session.codex_thread_id
+      )
+    ) throw new TypeError();
     return parsed.data;
   } catch {
     throw contractFailure();
@@ -371,7 +380,7 @@ function rejectReadBody(request: FastifyRequest): void {
 
 function mapRepositoryFailure(
   error: unknown,
-  sessionId?: SelectedSessionReadItem["session"]["id"]
+  sessionId?: string
 ): HostDeckHttpError {
   if (error instanceof HostDeckSelectedSessionReadRepositoryError) {
     switch (error.code) {
@@ -405,13 +414,14 @@ function mapRepositoryFailure(
 }
 
 function sessionNotFound(
-  sessionId: SelectedSessionReadItem["session"]["id"]
+  sessionId: string
 ): HostDeckHttpError {
+  const internalSessionId = sessionIdSchema.safeParse(sessionId);
   return new HostDeckHttpError({
     code: "session_not_found",
     message: "Session was not found.",
     retryable: false,
-    sessionId,
+    ...(internalSessionId.success ? { sessionId: internalSessionId.data } : {}),
     status: 404
   });
 }
@@ -427,13 +437,14 @@ function routeNotFound(): HostDeckHttpError {
 
 function unavailableSession(
   message: string,
-  sessionId?: SelectedSessionReadItem["session"]["id"]
+  sessionId?: string
 ): HostDeckHttpError {
+  const internalSessionId = sessionIdSchema.safeParse(sessionId);
   return new HostDeckHttpError({
     code: "stale_session",
     message,
     retryable: false,
-    ...(sessionId === undefined ? {} : { sessionId }),
+    ...(internalSessionId.success ? { sessionId: internalSessionId.data } : {}),
     status: 409
   });
 }

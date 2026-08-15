@@ -2,6 +2,7 @@ import {
   type ApiErrorEnvelope,
   type SkillsSnapshot,
   sessionIdParamsSchema,
+  sharedSessionTargetIdMatches,
   skillsSnapshotSchema
 } from "@hostdeck/contracts";
 import type { HttpFetch } from "./api-client.js";
@@ -100,7 +101,14 @@ async function requestSkills(
       "HostDeck daemon returned invalid managed-session skills data."
     );
   }
-  if (!parsed.success || parsed.data.target.session_id !== sessionId) {
+  if (
+    !parsed.success ||
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
+  ) {
     throw internalFailure(
       "HostDeck daemon returned invalid managed-session skills data."
     );

@@ -4,7 +4,8 @@ import {
   archiveSessionRequestSchema,
   type SelectedOperationDispatch,
   selectedOperationDispatchSchema,
-  sessionIdSchema
+  sharedSessionTargetIdMatches,
+  sharedSessionTargetIdSchema
 } from "@hostdeck/contracts";
 import type { HttpFetch } from "./api-client.js";
 import { type CliFailure, internalFailure, usageFailure } from "./errors.js";
@@ -16,7 +17,7 @@ import {
 } from "./loopback-http.js";
 
 const archiveClientRequestSchema = archiveSessionRequestSchema.extend({
-  session_id: sessionIdSchema
+  session_id: sharedSessionTargetIdSchema
 });
 
 export interface HostDeckArchiveClientRequest extends ArchiveSessionRequest {
@@ -119,7 +120,11 @@ async function requestArchive(
     parsed.data.kind !== "archive" ||
     parsed.data.operation_id !== request.operation_id ||
     parsed.data.target.type !== "managed_session" ||
-    parsed.data.target.session_id !== request.session_id
+    !sharedSessionTargetIdMatches(
+      request.session_id,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
   ) {
     throw invalidResponse();
   }

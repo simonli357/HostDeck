@@ -1,6 +1,5 @@
 import { defaultResourceBudget } from "@hostdeck/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CodexRuntimeProcessExitObservation } from "./codex-runtime-supervisor.js";
 import type {
   HostDeckFastifyLifecycle,
   HostDeckFastifyLifecycleSnapshot,
@@ -123,7 +122,7 @@ describe("IFC-V1-083 production foreground serve owner", () => {
     expect(harness.signalUnsubscribeCalls).toBe(1);
   });
 
-  it("keeps a mutation-closed diagnostic listener alive without child ownership", async () => {
+  it("keeps a mutation-closed diagnostic listener alive without broker ownership", async () => {
     const harness = createHarness({ diagnosticReady: true });
     const service = await harness.start();
 
@@ -134,13 +133,6 @@ describe("IFC-V1-083 production foreground serve owner", () => {
       remote_phase: "running",
       termination_trigger: null
     });
-    harness.resolveProcessExit({
-      kind: "exited",
-      expected: false,
-      code: 17,
-      signal: null
-    });
-    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(service.snapshot()).toMatchObject({
       phase: "ready",
       termination_trigger: null,
@@ -173,73 +165,6 @@ describe("IFC-V1-083 production foreground serve owner", () => {
       termination_trigger: "caller_abort"
     });
     expect(callerHarness.listenerCloseCalls).toBe(1);
-  });
-
-  it("marks unexpected child exit failure, fails listener health, and removes residue", async () => {
-    const harness = createHarness();
-    const issues: unknown[] = [];
-    const service = await harness.start({
-      observe_issue: (issue) => issues.push(issue)
-    });
-    harness.resolveProcessExit({
-      kind: "exited",
-      expected: false,
-      code: 17,
-      signal: null
-    });
-
-    await expect(service.terminated).resolves.toMatchObject({
-      phase: "failed",
-      termination_trigger: "runtime_exit",
-      listener_health: "failed",
-      reported_issue_count: 1,
-      last_issue: { source: "serve", code: "runtime_exit" }
-    });
-    expect(issues).toEqual([{ source: "serve", code: "runtime_exit" }]);
-    expect(harness.resourceCloseCalls).toBe(1);
-    expect(harness.signalUnsubscribeCalls).toBe(1);
-  });
-
-  it("cancels startup on child exit and fails closed on rejected exit observation", async () => {
-    const duringStartup = createHarness({ holdStartup: true });
-    const pending = duringStartup.start();
-    await eventually(() => {
-      expect(duringStartup.events).toContain("listener:start");
-    });
-    duringStartup.resolveProcessExit({
-      kind: "exited",
-      expected: false,
-      code: 19,
-      signal: null
-    });
-    const startupError = await expectServeFailure(pending);
-    expect(startupError).toMatchObject({
-      code: "startup_aborted",
-      stage: "listener"
-    });
-    expect(duringStartup.events).toContain("listener:health-failed");
-    expect(duringStartup.resourceCloseCalls).toBe(1);
-    expect(duringStartup.signalUnsubscribeCalls).toBe(1);
-
-    const rejected = createHarness();
-    const service = await rejected.start({
-      observe_issue: async () => undefined
-    });
-    rejected.rejectProcessExit(new Error("private exit observation"));
-    await expect(service.terminated).resolves.toMatchObject({
-      phase: "failed",
-      termination_trigger: "runtime_exit_observation_failed",
-      listener_health: "failed",
-      reported_issue_count: 1,
-      observer_failure_count: 1,
-      last_issue: {
-        source: "serve",
-        code: "runtime_exit_observation_failed"
-      }
-    });
-    expect(rejected.listenerCloseCalls).toBe(1);
-    expect(rejected.resourceCloseCalls).toBe(1);
-    expect(rejected.signalUnsubscribeCalls).toBe(1);
   });
 
   it("classifies every outer startup stage and reverse-cleans acquired owners", async () => {
@@ -374,7 +299,7 @@ describe("IFC-V1-083 production foreground serve owner", () => {
 });
 
 describe("IFC-V1-086 production service serve owner", () => {
-  it("stays alive across sibling exit observation and closes only HostDeck owners", async () => {
+  it("stays alive until termination and closes only HostDeck owners", async () => {
     const harness = createHarness({ ownership: "service_owned" });
     const service = await harness.start();
 
@@ -388,13 +313,6 @@ describe("IFC-V1-086 production service serve owner", () => {
       listener_health: "ready"
     });
 
-    harness.resolveProcessExit({
-      kind: "exited",
-      expected: false,
-      code: 17,
-      signal: null
-    });
-    await Promise.resolve();
     expect(service.snapshot()).toMatchObject({
       phase: "ready",
       termination_trigger: null,
@@ -437,10 +355,6 @@ interface FakeServeHarness {
   readonly port: number;
   readonly emitSignal: (signal: HostDeckProcessTerminationSignal) => void;
   readonly releaseClose: () => void;
-  readonly rejectProcessExit: (cause: unknown) => void;
-  readonly resolveProcessExit: (
-    observation: CodexRuntimeProcessExitObservation
-  ) => void;
   readonly start: (
     overrides?: Partial<StartHostDeckProductionForegroundServeInput>
   ) => Promise<ReturnTypeOwner>;
@@ -460,7 +374,6 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
   const diagnosticReady = options.diagnosticReady === true;
   const events: string[] = [];
   const port = 46_321 + openHarnesses.length;
-  const processExit = deferred<CodexRuntimeProcessExitObservation>();
   const closeRelease = deferred<void>();
   const state = {
     applicationPhase: (diagnosticReady
@@ -486,6 +399,31 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
   let startupSignal: AbortSignal | null = null;
   let service: ReturnTypeOwner | null = null;
 
+  const runtimeLocation = Object.freeze({
+    kind: "standard_unix" as const,
+    codex_home: "/tmp/hostdeck-production-serve-codex-home",
+    socket_path:
+      "/tmp/hostdeck-production-serve-codex-home/app-server-control/app-server-control.sock"
+  });
+  const runtimeEndpoint = Object.freeze(
+    diagnosticReady
+      ? {
+          kind: "standard_unix" as const,
+          state: "failed" as const,
+          ownership: "none" as const,
+          generation: 0,
+          observed_version: "0.145.0",
+          reason: "Installed Codex version is incompatible."
+        }
+      : {
+          kind: "standard_unix" as const,
+          state: "ready" as const,
+          ownership: "attached" as const,
+          generation: 1,
+          observed_version: "0.147.0",
+          reason: null
+        }
+  );
   const resources = {
     bind: Object.freeze({
       host: "127.0.0.1" as const,
@@ -495,16 +433,10 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
     codex_version: diagnosticReady ? "0.145.0" : "0.147.0",
     resource_budget: defaultResourceBudget,
     runtime: Object.freeze({
-      mode: ownership,
-      ownership,
       preparation: diagnosticReady ? "version_incompatible" : "ready",
-      process_exit:
-        ownership === "foreground_child" && !diagnosticReady
-          ? processExit.promise
-          : null,
-      socket_mode_repaired: !diagnosticReady,
-      socket_path: "/tmp/hostdeck-production-serve-runtime/codex.sock",
-      stale_socket_removed: false
+      endpoint: runtimeEndpoint,
+      location: runtimeLocation,
+      socket_path: runtimeLocation.socket_path
     }),
     snapshot: () =>
       Object.freeze({
@@ -513,12 +445,7 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
         database_open: state.resourcePhase === "ready",
         lease_held: state.resourcePhase === "ready",
         runtime_preparation: diagnosticReady ? "version_incompatible" : "ready",
-        runtime: Object.freeze({
-          phase: diagnosticReady ? "idle" : state.resourcePhase,
-          process_state: diagnosticReady ? "not_started" : "running",
-          claim_held: !diagnosticReady && state.resourcePhase === "ready",
-          socket_ready: !diagnosticReady && state.resourcePhase === "ready"
-        })
+        runtime: runtimeEndpoint
       }),
     async close() {
       resourceCloseCalls += 1;
@@ -606,8 +533,8 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
     snapshot: () =>
       Object.freeze({
         phase: state.applicationPhase,
-        route_registration_count: 24,
-        api_registration_count: 22,
+        route_registration_count: 23,
+        api_registration_count: 21,
         sse_registration_count: 1,
         static_registration_count: 1,
         reported_issue_count: 0,
@@ -729,8 +656,6 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
       signalListener?.(signal);
     },
     releaseClose: () => closeRelease.resolve(),
-    rejectProcessExit: (cause) => processExit.reject(cause),
-    resolveProcessExit: (observation) => processExit.resolve(observation),
     async start(overrides = {}) {
       service =
         ownership === "foreground_child"

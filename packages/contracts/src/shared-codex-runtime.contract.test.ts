@@ -16,6 +16,7 @@ import {
   sharedSessionCatalogEntrySchema,
   sharedSessionEnrollmentSchema,
   sharedSessionMembershipRecordSchema,
+  sharedSessionTargetIdMatches,
   sharedSessionTargetIdSchema,
   sharedSessionTargetSchema,
   trackedSessionSchema
@@ -46,6 +47,16 @@ describe("shared Codex identity contracts", () => {
         internal_session_id: "sess_shared_001"
       }).success
     ).toBe(false);
+  });
+
+  it("matches either public target id against one canonical session mapping", () => {
+    expect(sharedSessionTargetIdMatches("sess_shared_001", "sess_shared_001", nativeThreadId)).toBe(true);
+    expect(sharedSessionTargetIdMatches("sess_shared_001", "sess_shared_001", "thread_legacy_001")).toBe(true);
+    expect(sharedSessionTargetIdMatches(nativeThreadId, "sess_shared_001", nativeThreadId)).toBe(true);
+    expect(sharedSessionTargetIdMatches(secondNativeThreadId, "sess_shared_001", nativeThreadId)).toBe(false);
+    expect(sharedSessionTargetIdMatches("invalid", "sess_shared_001", nativeThreadId)).toBe(false);
+    expect(sharedSessionTargetIdMatches(nativeThreadId, "invalid", nativeThreadId)).toBe(false);
+    expect(sharedSessionTargetIdMatches(nativeThreadId, "sess_shared_001", "invalid")).toBe(false);
   });
 
   it("keeps tracked identity immutable, chronological, and archive-consistent", () => {

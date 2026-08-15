@@ -621,7 +621,7 @@ function parseCapture(
   const response = parsedResponse.data;
   if (
     response.session_id !== target.sessionId ||
-    (response.available && response.launch?.args[3] !== target.threadId)
+    (response.available && response.launch?.args[1] !== target.threadId)
   ) {
     throw new TypeError("HostDeck laptop-resume response target is invalid.");
   }

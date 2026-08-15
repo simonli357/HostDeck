@@ -12,7 +12,7 @@ import {
 describe("FE-V1-019 browser HTTP route contracts", () => {
   it("binds exactly the 34 browser JSON routes and excludes local administration and SSE", () => {
     const selectedJson = selectedApiRouteManifest.filter(
-      (route) => route.transport === "json" && route.owner_task !== "IFC-V1-110"
+      (route) => route.transport === "json"
     );
     const browser = Object.values(browserHttpRouteContracts);
 

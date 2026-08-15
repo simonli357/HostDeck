@@ -10,6 +10,7 @@ import {
   selectedSessionMappingRecordSchema,
   selectedSessionProjectionRecordSchema,
   sessionTurnParamsSchema,
+  sharedSessionTargetIdMatches,
   type TurnOperationTarget,
   turnOperationTargetSchema
 } from "@hostdeck/contracts";
@@ -421,8 +422,7 @@ function resolveManagedTarget(
     const projection = selectedSessionProjectionRecordSchema.parse(state.projection);
     const session = projection.session;
     if (
-      mapping.id !== sessionId ||
-      session.id !== sessionId ||
+      !sharedSessionTargetIdMatches(sessionId, mapping.id, mapping.codex_thread_id) ||
       mapping.id !== session.id ||
       mapping.name !== session.name ||
       mapping.codex_thread_id !== session.codex_thread_id ||

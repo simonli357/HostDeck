@@ -2,7 +2,8 @@ import {
   type ApiErrorEnvelope,
   type SelectedResumeMetadataResponse,
   selectedResumeMetadataResponseSchema,
-  selectedResumeParamsSchema
+  selectedResumeParamsSchema,
+  sharedSessionTargetIdMatches
 } from "@hostdeck/contracts";
 import type { HttpFetch } from "./api-client.js";
 import { internalFailure, usageFailure } from "./errors.js";
@@ -97,7 +98,14 @@ async function requestResumeMetadata(
   }
 
   const parsed = selectedResumeMetadataResponseSchema.safeParse(payload);
-  if (!parsed.success || parsed.data.session_id !== sessionId) {
+  if (
+    !parsed.success ||
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      parsed.data.session_id,
+      parsed.data.codex_thread_id
+    )
+  ) {
     throw internalFailure(
       "HostDeck daemon returned invalid managed-thread resume metadata."
     );

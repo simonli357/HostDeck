@@ -5,7 +5,8 @@ import {
   type SelectedProjectionEvent,
   selectedDeviceIdSchema,
   selectedProjectionEventSchema,
-  sessionIdSchema
+  sessionIdSchema,
+  sharedSessionTargetIdSchema
 } from "@hostdeck/contracts";
 import type { OutputCursor } from "@hostdeck/core";
 import {
@@ -83,6 +84,11 @@ export interface CreateProjectionSubscriberStreamServiceInput {
   readonly handoff: ProjectionReplayLiveHandoffService;
   readonly observe_failure: ProjectionSubscriberFailureObserver;
   readonly resource_budget: ResourceBudget;
+}
+
+export interface CreateProjectionSubscriberStreamTargetViewInput {
+  readonly resolve_session_id: (targetId: string) => string;
+  readonly service: ProjectionSubscriberStreamService;
 }
 
 export interface ProjectionSubscriberStreamSnapshot {
@@ -308,6 +314,67 @@ export function createProjectionSubscriberStreamService(
   return service;
 }
 
+export function createProjectionSubscriberStreamTargetView(
+  input: CreateProjectionSubscriberStreamTargetViewInput
+): ProjectionSubscriberStreamService {
+  const value = readExactDataObject(
+    input,
+    ["resolve_session_id", "service"],
+    "invalid_config"
+  );
+  if (typeof value.resolve_session_id !== "function") {
+    throw new HostDeckProjectionSubscriberError("invalid_config");
+  }
+  assertProjectionSubscriberStreamService(value.service);
+  const base = value.service;
+  const resolveSessionId = value.resolve_session_id as (
+    targetId: string
+  ) => string;
+  const service = Object.freeze({
+    archive_session(targetId: unknown) {
+      return Reflect.apply(base.archive_session, undefined, [
+        resolveTargetSessionId(targetId, resolveSessionId)
+      ]);
+    },
+    close() {
+      return Reflect.apply(base.close, undefined, []);
+    },
+    open(candidate: unknown) {
+      const value = readExactDataObject(
+        candidate,
+        [
+          "after",
+          "authorization",
+          "device_id",
+          "session_id",
+          "signal",
+          "subscriber_id"
+        ],
+        "invalid_input"
+      );
+      const sessionId = resolveTargetSessionId(
+        value.session_id,
+        resolveSessionId
+      );
+      return Reflect.apply(base.open, undefined, [
+        {
+          after: value.after,
+          authorization: value.authorization,
+          device_id: value.device_id,
+          session_id: sessionId,
+          signal: value.signal,
+          subscriber_id: value.subscriber_id
+        }
+      ]);
+    },
+    snapshot() {
+      return Reflect.apply(base.snapshot, undefined, []);
+    }
+  });
+  acceptedServices.add(service);
+  return service;
+}
+
 export function assertProjectionSubscriberStreamService(
   candidate: unknown
 ): asserts candidate is ProjectionSubscriberStreamService {
@@ -318,9 +385,27 @@ export function assertProjectionSubscriberStreamService(
     !acceptedServices.has(candidate)
   ) {
     throw new TypeError(
-      "Projection subscriber stream service must be created by createProjectionSubscriberStreamService."
+      "Projection subscriber stream service must be created by an approved projection subscriber factory."
     );
   }
+}
+
+function resolveTargetSessionId(
+  candidate: unknown,
+  resolveSessionId: (targetId: string) => string
+): string {
+  const target = sharedSessionTargetIdSchema.safeParse(candidate);
+  if (!target.success) {
+    throw new HostDeckProjectionSubscriberError("invalid_input");
+  }
+  const resolved = Reflect.apply(resolveSessionId, undefined, [target.data]);
+  const sessionId = sessionIdSchema.safeParse(resolved);
+  if (!sessionId.success) {
+    throw new TypeError(
+      "Projection subscriber target resolver returned an invalid session id."
+    );
+  }
+  return sessionId.data;
 }
 
 function openStream(

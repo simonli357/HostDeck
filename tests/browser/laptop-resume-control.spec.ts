@@ -2,13 +2,12 @@ import { Buffer } from "node:buffer";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, type Locator, type Page, type Request, test } from "@playwright/test";
-import { selectedResumeRemoteMaxLength } from "../../packages/contracts/src/index.js";
+import { selectedResumeCommandMaxLength } from "../../packages/contracts/src/index.js";
 import {
   installLaptopResumeApi,
   type LaptopResumeApiOutcome,
   laptopResumeBrowserCommand,
   laptopResumeBrowserLongCommand,
-  laptopResumeBrowserLongRemote,
   laptopResumeBrowserLongUnavailableReason,
   laptopResumeBrowserUnavailableReason
 } from "./laptop-resume-control-fixture.js";
@@ -347,7 +346,9 @@ test("contains maximum remote and reason content across mobile, short, desktop, 
   });
   await openResume(page);
   let dialog = actionsDialog(page, "Resume on laptop");
-  expect(laptopResumeBrowserLongRemote).toHaveLength(selectedResumeRemoteMaxLength);
+  expect(laptopResumeBrowserLongCommand).toHaveLength(
+    selectedResumeCommandMaxLength
+  );
   await expect(dialog.locator("code")).toHaveText(laptopResumeBrowserLongCommand);
   const measurements = [];
   const viewports = [

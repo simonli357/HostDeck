@@ -2,6 +2,7 @@
 
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -12,10 +13,6 @@ import type {
   InterruptResponse,
   ModelControlSnapshot,
   ModelSelectionRequest,
-  NativeSessionAdoptRequest,
-  NativeSessionAdoptResponse,
-  NativeSessionDiscoveryResponse,
-  NativeSessionUnmanageResponse,
   PendingApprovalListResponse,
   PendingApprovalResponse,
   PlanControlSnapshot,
@@ -50,12 +47,6 @@ import {
   interruptResponseSchema,
   modelControlSnapshotSchema,
   modelSelectionRequestSchema,
-  nativeSessionAdoptRequestSchema,
-  nativeSessionAdoptResponseSchema,
-  nativeSessionContractLimits,
-  nativeSessionDiscoveryResponseSchema,
-  nativeSessionUnmanageRequestSchema,
-  nativeSessionUnmanageResponseSchema,
   pendingApprovalListResponseSchema,
   pendingApprovalResponseSchema,
   planControlSnapshotSchema,
@@ -87,6 +78,7 @@ import {
   sessionApprovalParamsSchema,
   sessionIdParamsSchema,
   sessionTurnParamsSchema,
+  sharedSessionTargetIdMatches,
   skillsSnapshotSchema,
   usageSnapshotSchema
 } from "@hostdeck/contracts";
@@ -109,6 +101,10 @@ import {
   type HostDeckArchiveClient,
   type HostDeckArchiveClientRequest
 } from "./archive-client.js";
+import {
+  createHostDeckBrokerControl,
+  type HostDeckBrokerControl
+} from "./broker-control.js";
 import {
   createHostDeckCompactClient,
   type HostDeckCompactClient,
@@ -168,12 +164,6 @@ import {
   type HostDeckModelClientSelectionRequest
 } from "./model-client.js";
 import {
-  createHostDeckNativeSessionClient,
-  type HostDeckNativeSessionClient,
-  type HostDeckNativeSessionDiscoveryInput,
-  type HostDeckNativeSessionUnmanageRequest
-} from "./native-session-client.js";
-import {
   createHostDeckPairingLinkClient,
   type HostDeckPairingLinkClient
 } from "./pairing-link-client.js";
@@ -196,6 +186,7 @@ import {
   renderApprovalList,
   renderApprovalResponse,
   renderArchiveSession,
+  renderBrokerControl,
   renderCompactProgress,
   renderDeviceList,
   renderDeviceRevoke,
@@ -209,9 +200,6 @@ import {
   renderLegacySessionReset,
   renderLegacySessionStatus,
   renderModelSnapshot,
-  renderNativeSessionAdoption,
-  renderNativeSessionDiscovery,
-  renderNativeSessionUnmanage,
   renderPairingLink,
   renderPlanSnapshot,
   renderPromptDispatch,
@@ -278,7 +266,7 @@ export interface CliRunOptions {
   readonly approvalClient?: HostDeckApprovalClient;
   readonly interruptClient?: HostDeckInterruptClient;
   readonly modelClient?: HostDeckModelClient;
-  readonly nativeSessionClient?: HostDeckNativeSessionClient;
+  readonly brokerControl?: HostDeckBrokerControl;
   readonly planClient?: HostDeckPlanClient;
   readonly archiveClient?: HostDeckArchiveClient;
   readonly promptClient?: HostDeckPromptClient;
@@ -305,8 +293,6 @@ export interface CliRunOptions {
   readonly createInterruptOperationId?: () => string;
   readonly createGoalOperationId?: () => string;
   readonly createModelOperationId?: () => string;
-  readonly createNativeAdoptOperationId?: () => string;
-  readonly createNativeUnmanageOperationId?: () => string;
   readonly createPlanOperationId?: () => string;
   readonly createPromptOperationId?: () => string;
   readonly createStartOperationId?: () => string;
@@ -358,6 +344,20 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
     }
 
     const config = loadCliConfig(configOptions);
+    if (parsed.command.kind === "broker") {
+      const control = options.brokerControl ?? createHostDeckBrokerControl({
+        env: options.env ?? process.env,
+        ...(options.signal === undefined ? {} : { signal: options.signal })
+      });
+      return success(
+        renderBrokerControl(
+          await Reflect.apply(control.execute, undefined, [
+            parsed.command.action
+          ]),
+          parsed.command.json
+        )
+      );
+    }
     if (parsed.command.kind === "service") {
       const env = options.env ?? process.env;
       const serviceFetch =
@@ -445,50 +445,6 @@ export async function runCli(args: readonly string[], options: CliRunOptions = {
         request
       );
       return success(renderSessionList(response, parsed.command.json));
-    }
-
-    if (parsed.command.kind === "discover") {
-      const client =
-        options.nativeSessionClient ??
-        createHostDeckNativeSessionClient(selectedClientOptions);
-      const request = Object.freeze({
-        limit: parsed.command.limit
-      }) satisfies HostDeckNativeSessionDiscoveryInput;
-      const response = parseNativeSessionDiscoveryResponse(
-        await Reflect.apply(client.discover, undefined, [request]),
-        request
-      );
-      return success(renderNativeSessionDiscovery(response, parsed.command.json));
-    }
-
-    if (parsed.command.kind === "adopt") {
-      const client =
-        options.nativeSessionClient ??
-        createHostDeckNativeSessionClient(selectedClientOptions);
-      const request = createNativeSessionAdoptRequest(
-        parsed.command,
-        options.createNativeAdoptOperationId ?? createNativeAdoptOperationId
-      );
-      const response = parseNativeSessionAdoptResponse(
-        await Reflect.apply(client.adopt, undefined, [request]),
-        request
-      );
-      return success(renderNativeSessionAdoption(response, parsed.command.json));
-    }
-
-    if (parsed.command.kind === "unmanage") {
-      const client =
-        options.nativeSessionClient ??
-        createHostDeckNativeSessionClient(selectedClientOptions);
-      const request = createNativeSessionUnmanageRequest(
-        parsed.command,
-        options.createNativeUnmanageOperationId ?? createNativeUnmanageOperationId
-      );
-      const response = parseNativeSessionUnmanageResponse(
-        await Reflect.apply(client.unmanage, undefined, [request]),
-        request
-      );
-      return success(renderNativeSessionUnmanage(response, parsed.command.json));
     }
 
     if (parsed.command.kind === "revoke") {
@@ -1003,52 +959,6 @@ function parseDeviceRevokeResponse(
   return parsed.data;
 }
 
-function parseNativeSessionDiscoveryResponse(
-  candidate: unknown,
-  request: HostDeckNativeSessionDiscoveryInput
-): NativeSessionDiscoveryResponse {
-  const parsed = nativeSessionDiscoveryResponseSchema.safeParse(candidate);
-  if (
-    !parsed.success ||
-    parsed.data.limit !==
-      (request.limit ?? nativeSessionContractLimits.discoveryDefaultLimit)
-  ) {
-    throw internalFailure("Native-session client returned invalid discovery data.");
-  }
-  return parsed.data;
-}
-
-function parseNativeSessionAdoptResponse(
-  candidate: unknown,
-  request: NativeSessionAdoptRequest
-): NativeSessionAdoptResponse {
-  const parsed = nativeSessionAdoptResponseSchema.safeParse(candidate);
-  if (
-    !parsed.success ||
-    parsed.data.operation_id !== request.operation_id ||
-    parsed.data.session.codex_thread_id !== request.thread_id ||
-    parsed.data.session.name !== request.name
-  ) {
-    throw internalFailure("Native-session client returned invalid adoption data.");
-  }
-  return parsed.data;
-}
-
-function parseNativeSessionUnmanageResponse(
-  candidate: unknown,
-  request: HostDeckNativeSessionUnmanageRequest
-): NativeSessionUnmanageResponse {
-  const parsed = nativeSessionUnmanageResponseSchema.safeParse(candidate);
-  if (
-    !parsed.success ||
-    parsed.data.operation_id !== request.operation_id ||
-    parsed.data.session_id !== request.session_id
-  ) {
-    throw internalFailure("Native-session client returned invalid unmanage data.");
-  }
-  return parsed.data;
-}
-
 function createRemoteMutationRequest(
   action: "disable" | "enable",
   createOperationId: (action: "disable" | "enable") => string
@@ -1159,80 +1069,6 @@ function createDeviceRevokeRequest(
   });
 }
 
-function createNativeSessionAdoptRequest(
-  command: Extract<
-    ReturnType<typeof parseCliArgs>["command"],
-    { readonly kind: "adopt" }
-  >,
-  createOperationId: () => string
-): NativeSessionAdoptRequest {
-  const operationId = generateNativeSessionOperationId(
-    createOperationId,
-    "adoption"
-  );
-  const parsed = nativeSessionAdoptRequestSchema.safeParse({
-    operation_id: operationId,
-    thread_id: command.thread,
-    name: command.name,
-    confirm_handoff: command.confirmHandoff
-  });
-  if (!parsed.success) {
-    throw usageFailure(
-      "Adopt options do not satisfy the native-session contract.",
-      "adopt"
-    );
-  }
-  return parsed.data;
-}
-
-function createNativeSessionUnmanageRequest(
-  command: Extract<
-    ReturnType<typeof parseCliArgs>["command"],
-    { readonly kind: "unmanage" }
-  >,
-  createOperationId: () => string
-): HostDeckNativeSessionUnmanageRequest {
-  const operationId = generateNativeSessionOperationId(
-    createOperationId,
-    "unmanage"
-  );
-  const request = nativeSessionUnmanageRequestSchema.safeParse({
-    operation_id: operationId,
-    confirm: command.confirm
-  });
-  const params = sessionIdParamsSchema.safeParse({
-    session_id: command.session
-  });
-  if (!request.success || !params.success) {
-    throw usageFailure(
-      "Unmanage options do not satisfy the native-session contract.",
-      "unmanage"
-    );
-  }
-  return Object.freeze({ session_id: params.data.session_id, ...request.data });
-}
-
-function generateNativeSessionOperationId(
-  createOperationId: () => string,
-  operation: "adoption" | "unmanage"
-): string {
-  let operationId: unknown;
-  try {
-    operationId = Reflect.apply(createOperationId, undefined, []);
-  } catch (error) {
-    throw internalFailure(
-      `Native-session ${operation} operation id generation failed.`,
-      error
-    );
-  }
-  if (!clientOperationIdSchema.safeParse(operationId).success) {
-    throw internalFailure(
-      `Native-session ${operation} operation id generation failed.`
-    );
-  }
-  return operationId as string;
-}
-
 function createRemoteOperationId(action: "disable" | "enable"): string {
   return `op_remote_${action}_${randomUUID().replaceAll("-", "")}`;
 }
@@ -1247,14 +1083,6 @@ function createHostLockOperationId(action: "lock" | "unlock"): string {
 
 function createDeviceRevokeOperationId(): string {
   return `op_device_revoke_${randomUUID().replaceAll("-", "")}`;
-}
-
-function createNativeAdoptOperationId(): string {
-  return `op_native_adopt_${randomUUID().replaceAll("-", "")}`;
-}
-
-function createNativeUnmanageOperationId(): string {
-  return `op_native_unmanage_${randomUUID().replaceAll("-", "")}`;
 }
 
 function createStartOperationId(): string {
@@ -1362,7 +1190,7 @@ function createSessionArchiveRequest(
   });
   if (!target.success) {
     throw usageFailure(
-      "Archive requires one valid managed session id.",
+      "Archive requires one valid session target.",
       "session"
     );
   }
@@ -1383,7 +1211,11 @@ function parseSessionArchiveResponse(
     parsed.data.kind !== "archive" ||
     parsed.data.operation_id !== request.operation_id ||
     parsed.data.target.type !== "managed_session" ||
-    parsed.data.target.session_id !== request.session_id
+    !sharedSessionTargetIdMatches(
+      request.session_id,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
   ) {
     throw internalFailure(
       "HostDeck archive client returned invalid managed-session data."
@@ -1412,7 +1244,7 @@ function createPromptRequest(
     text: command.text
   });
   if (!target.success) {
-    throw usageFailure("Send requires one valid managed session id.", "session");
+    throw usageFailure("Send requires one valid session target.", "session");
   }
   if (!body.success) {
     if (!clientOperationIdSchema.safeParse(operationId).success) {
@@ -1431,7 +1263,11 @@ function parsePromptResponse(
   if (
     !parsed.success ||
     parsed.data.operation_id !== request.operation_id ||
-    parsed.data.target.session_id !== request.session_id
+    !sharedSessionTargetIdMatches(
+      request.session_id,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
   ) {
     throw internalFailure(
       "HostDeck prompt client returned invalid managed-session data."
@@ -1446,7 +1282,7 @@ function parseResumeTarget(candidate: string): string {
   });
   if (!parsed.success) {
     throw usageFailure(
-      "Laptop resume requires one valid managed session id.",
+      "Laptop resume requires one valid session target.",
       "session"
     );
   }
@@ -1458,7 +1294,14 @@ function parseResumeMetadata(
   sessionId: string
 ): SelectedResumeMetadataResponse {
   const parsed = selectedResumeMetadataResponseSchema.safeParse(candidate);
-  if (!parsed.success || parsed.data.session_id !== sessionId) {
+  if (
+    !parsed.success ||
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      parsed.data.session_id,
+      parsed.data.codex_thread_id
+    )
+  ) {
     throw internalFailure(
       "HostDeck resume client returned invalid managed-thread metadata."
     );
@@ -1468,7 +1311,7 @@ function parseResumeMetadata(
 
 function parseModelTarget(candidate: string): string {
   const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
-  if (!parsed.success) throw usageFailure("Model requires one valid managed session id.", "session");
+  if (!parsed.success) throw usageFailure("Model requires one valid session target.", "session");
   return parsed.data.session_id;
 }
 
@@ -1491,7 +1334,7 @@ function createModelSelectionRequest(
     reasoning_effort: command.effort,
     expected_pending_revision: command.expectedRevision
   });
-  if (!target.success) throw usageFailure("Model requires one valid managed session id.", "session");
+  if (!target.success) throw usageFailure("Model requires one valid session target.", "session");
   if (!body.success) {
     if (!clientOperationIdSchema.safeParse(operationId).success) {
       throw internalFailure("Model operation id generation failed.");
@@ -1557,7 +1400,7 @@ function assertModelSelectionCorrelation(snapshot: ModelControlSnapshot, request
 
 function parseGoalTarget(candidate: string): string {
   const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
-  if (!parsed.success) throw usageFailure("Goal requires one valid managed session id.", "session");
+  if (!parsed.success) throw usageFailure("Goal requires one valid session target.", "session");
   return parsed.data.session_id;
 }
 
@@ -1580,7 +1423,7 @@ function createGoalMutationRequest(
     objective: command.objective,
     expected_goal_revision: command.expectedRevision
   });
-  if (!target.success) throw usageFailure("Goal requires one valid managed session id.", "session");
+  if (!target.success) throw usageFailure("Goal requires one valid session target.", "session");
   if (!body.success) {
     if (!clientOperationIdSchema.safeParse(operationId).success) {
       throw internalFailure("Goal operation id generation failed.");
@@ -1635,7 +1478,7 @@ function assertGoalMutationCorrelation(snapshot: GoalControlSnapshot, request: G
 
 function parsePlanTarget(candidate: string): string {
   const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
-  if (!parsed.success) throw usageFailure("Plan requires one valid managed session id.", "session");
+  if (!parsed.success) throw usageFailure("Plan requires one valid session target.", "session");
   return parsed.data.session_id;
 }
 
@@ -1657,7 +1500,7 @@ function createPlanSelectionRequest(
     action: command.action,
     expected_pending_revision: command.expectedRevision
   });
-  if (!target.success) throw usageFailure("Plan requires one valid managed session id.", "session");
+  if (!target.success) throw usageFailure("Plan requires one valid session target.", "session");
   if (!body.success) {
     if (!clientOperationIdSchema.safeParse(operationId).success) {
       throw internalFailure("Plan operation id generation failed.");
@@ -1717,7 +1560,7 @@ function parseUsageTarget(candidate: string): string {
   const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
   if (!parsed.success) {
     throw usageFailure(
-      "Usage requires one valid managed session id.",
+      "Usage requires one valid session target.",
       "session"
     );
   }
@@ -1726,7 +1569,7 @@ function parseUsageTarget(candidate: string): string {
 
 function parseCompactTarget(candidate: string): string {
   const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
-  if (!parsed.success) throw usageFailure("Compact requires one valid managed session id.", "session");
+  if (!parsed.success) throw usageFailure("Compact requires one valid session target.", "session");
   return parsed.data.session_id;
 }
 
@@ -1747,7 +1590,7 @@ function createCompactStartRequest(
     kind: "compact",
     confirm: true
   });
-  if (!target.success) throw usageFailure("Compact requires one valid managed session id.", "session");
+  if (!target.success) throw usageFailure("Compact requires one valid session target.", "session");
   if (!body.success) throw internalFailure("Compact operation id generation failed.");
   return Object.freeze({ ...body.data, session_id: target.data.session_id });
 }
@@ -1765,7 +1608,14 @@ function parseCompactResponse(
   }
   if (!parsed.success) throw internalFailure("HostDeck compact client returned invalid managed-session data.");
   const progress = parsed.data.progress;
-  if (progress !== null && progress.target.session_id !== sessionId) {
+  if (
+    progress !== null &&
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      progress.target.session_id,
+      progress.target.codex_thread_id
+    )
+  ) {
     throw internalFailure("HostDeck compact client returned invalid managed-session data.");
   }
   if (
@@ -1793,7 +1643,7 @@ function parseCompactResponse(
 
 function parseApprovalTarget(candidate: string): string {
   const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
-  if (!parsed.success) throw usageFailure("Approvals requires one valid managed session id.", "session");
+  if (!parsed.success) throw usageFailure("Approvals requires one valid session target.", "session");
   return parsed.data.session_id;
 }
 
@@ -1832,7 +1682,14 @@ function parseApprovalList(candidate: unknown, sessionId: string): PendingApprov
   } catch {
     throw internalFailure("HostDeck approval client returned invalid managed-session data.");
   }
-  if (!parsed.success || parsed.data.target.session_id !== sessionId) {
+  if (
+    !parsed.success ||
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
+  ) {
     throw internalFailure("HostDeck approval client returned invalid managed-session data.");
   }
   return parsed.data;
@@ -1852,7 +1709,11 @@ function parseApprovalResponse(
     !parsed.success ||
     parsed.data.operation_id !== request.operation_id ||
     parsed.data.requested_decision !== request.decision ||
-    parsed.data.approval.target.session_id !== request.session_id ||
+    !sharedSessionTargetIdMatches(
+      request.session_id,
+      parsed.data.approval.target.session_id,
+      parsed.data.approval.target.codex_thread_id
+    ) ||
     parsed.data.approval.target.request_id !== request.request_id
   ) {
     throw internalFailure("HostDeck approval client returned contradictory response data.");
@@ -1895,7 +1756,11 @@ function parseInterruptResponse(
   if (
     !parsed.success ||
     parsed.data.operation_id !== request.operation_id ||
-    parsed.data.target.session_id !== request.session_id ||
+    !sharedSessionTargetIdMatches(
+      request.session_id,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    ) ||
     parsed.data.target.turn_id !== request.turn_id ||
     parsed.data.turn_id !== request.turn_id
   ) {
@@ -1918,7 +1783,11 @@ function parseUsageSnapshot(
   }
   if (
     !parsed.success ||
-    parsed.data.target.session_id !== sessionId
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
   ) {
     throw internalFailure(
       "HostDeck usage client returned invalid managed-session data."
@@ -1931,7 +1800,7 @@ function parseSkillsTarget(candidate: string): string {
   const parsed = sessionIdParamsSchema.safeParse({ session_id: candidate });
   if (!parsed.success) {
     throw usageFailure(
-      "Skills requires one valid managed session id.",
+      "Skills requires one valid session target.",
       "session"
     );
   }
@@ -1950,7 +1819,14 @@ function parseSkillsSnapshot(
       "HostDeck skills client returned invalid managed-session data."
     );
   }
-  if (!parsed.success || parsed.data.target.session_id !== sessionId) {
+  if (
+    !parsed.success ||
+    !sharedSessionTargetIdMatches(
+      sessionId,
+      parsed.data.target.session_id,
+      parsed.data.target.codex_thread_id
+    )
+  ) {
     throw internalFailure(
       "HostDeck skills client returned invalid managed-session data."
     );
@@ -1992,6 +1868,7 @@ async function runForegroundServeCommand(
   const input: StartHostDeckProductionForegroundServeInput = {
     browser_routes: hostDeckProductionBrowserRoutes,
     codex_bin: codexBin,
+    codex_home: env.CODEX_HOME ?? join(homedir(), ".codex"),
     config_dir: config.configDir,
     database_path: config.databasePath,
     loopback_port: loopbackPort,

@@ -23,9 +23,6 @@ const expectedRouteIds = [
   "host_status",
   "session_list",
   "session_start",
-  "native_session_discovery",
-  "native_session_adopt",
-  "native_session_unmanage",
   "session_detail",
   "session_events",
   "session_event_stream",
@@ -74,18 +71,16 @@ const expectedMutationActions = [
   "prompt",
   "remote_disable",
   "remote_enable",
-  "session_adopt",
   "session_start",
-  "session_unmanage",
   "unlock"
 ] as const;
 
 describe("selected API route manifest", () => {
-  it("freezes exactly the rebaselined 38-route V1 inventory", () => {
+  it("freezes exactly the shared-session 35-route V1 inventory", () => {
     expect(selectedApiRouteManifest.map((route) => route.id)).toEqual(expectedRouteIds);
-    expect(selectedApiRouteManifest).toHaveLength(38);
-    expect(new Set(selectedApiRouteManifest.map((route) => route.id)).size).toBe(38);
-    expect(new Set(selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`)).size).toBe(38);
+    expect(selectedApiRouteManifest).toHaveLength(35);
+    expect(new Set(selectedApiRouteManifest.map((route) => route.id)).size).toBe(35);
+    expect(new Set(selectedApiRouteManifest.map((route) => `${route.method} ${route.path}`)).size).toBe(35);
     expect(new Set(selectedApiRouteManifest.map((route) => route.family))).toEqual(
       new Set(selectedApiRouteFamilies)
     );
@@ -194,23 +189,13 @@ describe("selected API route manifest", () => {
 
     for (const route of selectedApiRouteManifest) {
       if (route.audit?.executor === "selected_write_gate") {
-        if (route.id === "native_session_adopt" || route.id === "native_session_unmanage") {
-          expect(route).toMatchObject({
-            auth: "local_admin",
-            authority: "local_admin",
-            csrf: "none",
-            lock: "requires_unlocked_host"
-          });
-          expect(["native_codex_thread", "managed_session"]).toContain(route.target);
-        } else {
-          expect(route).toMatchObject({
-            auth: "local_admin_or_device_cookie",
-            authority: "session_write",
-            csrf: "required_for_device",
-            lock: "requires_unlocked_host"
-          });
-          expect(["new_managed_session", "managed_session", "approval", "turn"]).toContain(route.target);
-        }
+        expect(route).toMatchObject({
+          auth: "local_admin_or_device_cookie",
+          authority: "session_write",
+          csrf: "required_for_device",
+          lock: "requires_unlocked_host"
+        });
+        expect(["new_managed_session", "managed_session", "approval", "turn"]).toContain(route.target);
       }
       if (route.audit?.executor === "security_executor") {
         expect(route.operation_kind).toBeNull();

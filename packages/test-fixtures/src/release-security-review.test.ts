@@ -142,8 +142,8 @@ describe("REL-V1-005 security and privacy release review ledger", () => {
     expect(routeManifest).not.toMatch(
       /(?:\/lan|\/terminal|\/shell|\/files|\/editor|\/git|app-server)/iu
     );
-    expect(routeManifest.match(/^ {2}route\(/gmu)).toHaveLength(38);
-    expect(routeManifest.match(/owner_task: "IFC-V1-110"/gu)).toHaveLength(3);
+    expect(routeManifest.match(/^ {2}route\(/gmu)).toHaveLength(35);
+    expect(routeManifest).not.toMatch(/owner_task: "IFC-V1-110"/gu);
   });
 
   it("keeps release-facing recovery guidance on the selected safe boundary", () => {

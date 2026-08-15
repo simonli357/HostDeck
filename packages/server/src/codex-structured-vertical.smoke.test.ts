@@ -25,9 +25,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import {
-  buildCodexPlatformTuiResumeCommand,
   type CodexConnectionNotification,
-  type CodexPlatformTuiResumeCommand,
   type CodexProtectedEnvironmentCredentialSource,
   type CodexProtocolIssue,
   type CodexRequestInput,
@@ -68,6 +66,10 @@ import {
   secureHostDeckRegularFile
 } from "@hostdeck/storage";
 import { describe, expect, it } from "vitest";
+import {
+  buildCodexPlatformTuiResumeCommand,
+  type CodexPlatformTuiResumeCommand
+} from "../../codex-adapter/src/tui-resume-platform.js";
 import {
   type CodexApprovalControlService,
   createCodexApprovalControlService

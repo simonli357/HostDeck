@@ -1,15 +1,17 @@
 import { randomBytes } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import {
+  type CodexLoadedThreadRequestPort,
   type CodexReconnectLifecyclePort,
+  type CodexReconnectReadPort,
   type CodexRuntimeReconnectController,
   codexBindingDescriptor,
   codexResourceOptionsFromBudget,
   createCodexApprovalClient,
   createCodexCompactClient,
   createCodexGoalClient,
+  createCodexLoadedThreadClient,
   createCodexModelClient,
-  createCodexNativeSessionClient,
   createCodexPlanClient,
   createCodexRuntimeReconnectController,
   createCodexSkillsClient,
@@ -53,6 +55,10 @@ import {
   createHostDeckSelectedWriteShutdownPort,
   type HostDeckApplicationShutdown
 } from "./application-shutdown.js";
+import {
+  type AutomaticSessionEnrollmentService,
+  createAutomaticSessionEnrollmentService
+} from "./automatic-session-enrollment-service.js";
 import {
   type CodexApprovalControlService,
   createCodexApprovalControlService
@@ -109,7 +115,6 @@ import {
   runHostDeckStartupMaintenance
 } from "./host-startup-maintenance.js";
 import { createManagedCodexThreadService } from "./managed-thread-service.js";
-import { createNativeSessionAdministrationService } from "./native-session-adoption-service.js";
 import { createHostDeckPairingPolicy } from "./pairing-routes.js";
 import { combinePendingTurnSettingsReaders } from "./pending-turn-settings.js";
 import {
@@ -119,6 +124,7 @@ import {
 import { createProjectionReplayLiveHandoffService } from "./projection-replay-live-handoff.js";
 import {
   createProjectionSubscriberStreamService,
+  createProjectionSubscriberStreamTargetView,
   type ProjectionSubscriberStreamService
 } from "./projection-subscriber-stream.js";
 import { createRemoteIngressControlService } from "./remote-ingress-control-service.js";
@@ -200,8 +206,8 @@ export interface HostDeckProductionListenerHealthPort {
 
 export interface HostDeckProductionApplicationSnapshot {
   readonly phase: HostDeckProductionApplicationPhase;
-  readonly route_registration_count: 24;
-  readonly api_registration_count: 22;
+  readonly route_registration_count: 23;
+  readonly api_registration_count: 21;
   readonly sse_registration_count: 1;
   readonly static_registration_count: 1;
   readonly reported_issue_count: number;
@@ -313,6 +319,11 @@ export function createHostDeckProductionApplication(
 
   const stateRepository = createSelectedStateRepository(db);
   const sessionReadRepository = createSelectedSessionReadRepository(db);
+  const targetState = createTargetStateView(stateRepository);
+  const targetSessionRead = createTargetSessionReadView(
+    stateRepository,
+    sessionReadRepository
+  );
   const auditRepository = createSelectedAuditRepository(db);
   const compatibilityRepository = createRuntimeCompatibilityRepository(db);
   const compatibilityStatus = createHostDeckRuntimeCompatibilityRecordReader({
@@ -440,10 +451,17 @@ export function createHostDeckProductionApplication(
     observe_failure: (failure) => report("subscriber", failure.code),
     resource_budget: budget
   });
+  const targetSubscribers = createProjectionSubscriberStreamTargetView({
+    resolve_session_id: (targetId) =>
+      stateRepository.requireByTargetId(targetId).mapping.id,
+    service: subscribers
+  });
 
   const lifecycleRelay = createLifecycleRelay();
   let eventPipeline: CodexEventPipeline | null = null;
   let approvalControl: CodexApprovalControlService | null = null;
+  let automaticEnrollment: AutomaticSessionEnrollmentService | null = null;
+  let enrollmentRuntime: CodexReconnectReadPort | null = null;
   let reconnect: CodexRuntimeReconnectController | null = null;
   const resourceOptions = codexResourceOptionsFromBudget(budget);
   const transport = createCodexUnixWebSocketTransport({
@@ -456,9 +474,12 @@ export function createHostDeckProductionApplication(
     resource_budget: budget,
     lifecycle: lifecycleRelay.lifecycle,
     on_notification: (notification) => {
-      const pipeline = requireBound(eventPipeline, "Codex event pipeline");
+      const enrollment = requireBound(
+        automaticEnrollment,
+        "Automatic session enrollment"
+      );
       const controller = requireBound(reconnect, "Codex reconnect controller");
-      void pipeline.consume(notification, controller.generation).catch((error: unknown) => {
+      void enrollment.observeNotification(notification, controller.generation).catch((error: unknown) => {
         attemptLocalHealthUpdate(
           "projector",
           "failed",
@@ -602,6 +623,45 @@ export function createHostDeckProductionApplication(
     }
   });
   const pipeline = eventPipeline;
+  const loadedRuntime: CodexLoadedThreadRequestPort = Object.freeze({
+    get compatibility() {
+      return (enrollmentRuntime ?? reconnectController).compatibility;
+    },
+    request(input: Parameters<CodexLoadedThreadRequestPort["request"]>[0]) {
+      if (input.kind !== "read") {
+        throw new TypeError(
+          "Automatic enrollment may issue only read-class Codex requests."
+        );
+      }
+      return (enrollmentRuntime ?? reconnectController).request(
+        input as Parameters<CodexReconnectReadPort["request"]>[0]
+      );
+    }
+  });
+  automaticEnrollment = createAutomaticSessionEnrollmentService({
+    loaded: createCodexLoadedThreadClient(loadedRuntime, {
+      max_loaded_reads: budget.protocol_thread_max_loaded_reads,
+      max_pages: budget.protocol_thread_max_pages,
+      page_size: budget.protocol_thread_page_size,
+      read_timeout_ms: budget.protocol_read_timeout_ms
+    }),
+    states: stateRepository,
+    audit: auditRepository,
+    events: pipeline,
+    resource_budget: budget,
+    now: readNow,
+    on_background_outcome(outcome) {
+      if (outcome.state !== "failed") return;
+      attemptLocalHealthUpdate(
+        "projector",
+        "failed",
+        ["projector_failed"],
+        "projection"
+      );
+      report("projection", `enrollment_${outcome.failure}`);
+    }
+  });
+  const enrollment = automaticEnrollment;
 
   const reconciliation = createCodexRuntimeReconciliationLifecycle({
     approvals: approvalControl,
@@ -639,14 +699,38 @@ export function createHostDeckProductionApplication(
     repository: stateRepository,
     resource_budget: budget
   });
-  lifecycleRelay.bind(
-    createHealthAwareReconciliationLifecycle({
-      compatibilityRepository,
-      health: localHealth,
-      reconciliation,
-      report
-    })
-  );
+  const healthAwareReconciliation = createHealthAwareReconciliationLifecycle({
+    compatibilityRepository,
+    health: localHealth,
+    reconciliation,
+    report
+  });
+  lifecycleRelay.bind(Object.freeze({
+    disconnected: healthAwareReconciliation.disconnected,
+    async reconcile(
+      input: Parameters<CodexReconnectLifecyclePort["reconcile"]>[0]
+    ) {
+      enrollmentRuntime = input.runtime;
+      try {
+        const result = await enrollment.reconcileLoaded(
+          input.previous_admitted_generation === null
+            ? "loaded_before"
+            : "reconciliation",
+          input.generation,
+          input.deadline.signal
+        );
+        const failed = result.outcomes.find((outcome) => outcome.state === "failed");
+        if (failed !== undefined) {
+          throw new TypeError(`Automatic enrollment failed with ${failed.failure}.`);
+        }
+        return await healthAwareReconciliation.reconcile(input);
+      } finally {
+        enrollmentRuntime = null;
+      }
+    },
+    ready: healthAwareReconciliation.ready,
+    resubscribe: healthAwareReconciliation.resubscribe
+  }));
 
   const managedSessions = createManagedCodexThreadService({
     threads: threadClient,
@@ -656,19 +740,10 @@ export function createHostDeckProductionApplication(
   const runtimeView = Object.freeze({
     read: () => reconnectController.compatibility
   });
-  const nativeSessions = createNativeSessionAdministrationService({
-    native: createCodexNativeSessionClient(reconnectController, {
-      read_timeout_ms: budget.protocol_read_timeout_ms
-    }),
-    states: stateRepository,
-    events: pipeline,
-    now: readNow
-  });
   const resume = createHostDeckResumeMetadataReader({
     codexBin: resources.codex_bin,
     runtime: runtimeView,
-    socketPath: resources.runtime.socket_path,
-    state: createHostDeckBoundFunctionView(stateRepository, ["require"])
+    state: Object.freeze({ require: targetState.require })
   });
 
   const remote = createHostDeckRemoteIngressLifecycle({
@@ -753,12 +828,11 @@ export function createHostDeckProductionApplication(
     securityAudit,
     sessions: Object.freeze({
       managed: createHostDeckBoundFunctionView(managedSessions, ["archive", "read", "start"]),
-      native: createHostDeckBoundFunctionView(nativeSessions, ["adopt", "discover", "unmanage"]),
-      read: sessionReadRepository,
+      read: targetSessionRead,
       resume,
-      subscribers
+      subscribers: targetSubscribers
     }),
-    state: createHostDeckBoundFunctionView(stateRepository, ["get", "listEvents", "require"])
+    state: targetState
   });
   const routeRegistrations = Object.freeze([
     ...selectedRoutes,
@@ -806,6 +880,7 @@ export function createHostDeckProductionApplication(
     reconnect: Object.freeze({
       async close(deadline: OperationDeadline) {
         deadline.throwIfAborted();
+        enrollment.close();
         await reconnectController.close();
       }
     }),
@@ -946,8 +1021,8 @@ export function createHostDeckProductionApplication(
   const snapshot = (): HostDeckProductionApplicationSnapshot =>
     Object.freeze({
       phase,
-      route_registration_count: 24 as const,
-      api_registration_count: 22 as const,
+      route_registration_count: 23 as const,
+      api_registration_count: 21 as const,
       sse_registration_count: 1 as const,
       static_registration_count: 1 as const,
       reported_issue_count: issues.count,
@@ -972,33 +1047,6 @@ export function createHostDeckProductionApplication(
     snapshot
   });
   acceptedApplications.add(application);
-
-  if (resources.runtime.process_exit !== null) {
-    const failRuntimeExit = (code: string): void => {
-      if (phase === "closed" || phase === "draining") return;
-      phase = "failed";
-      attemptLocalHealthUpdate(
-        "runtime",
-        "failed",
-        ["runtime_failed"],
-        "process"
-      );
-      report("process", code);
-    };
-    void resources.runtime.process_exit.then(
-      (observation) => {
-        if (
-          observation.expected ||
-          phase === "closed" ||
-          phase === "draining"
-        ) {
-          return;
-        }
-        failRuntimeExit("runtime_exited");
-      },
-      () => failRuntimeExit("runtime_exit_observation_failed")
-    );
-  }
 
   return application;
 }
@@ -1489,13 +1537,46 @@ function createListenerHealthPort(
   });
 }
 
+function createTargetStateView(
+  repository: ReturnType<typeof createSelectedStateRepository>
+) {
+  return Object.freeze({
+    get(targetId: string) {
+      return repository.getByTargetId(targetId);
+    },
+    listEvents(
+      targetId: string,
+      input: Parameters<typeof repository.listEvents>[1]
+    ) {
+      const state = repository.requireByTargetId(targetId);
+      return repository.listEvents(state.mapping.id, input);
+    },
+    require(targetId: string) {
+      return repository.requireByTargetId(targetId);
+    }
+  });
+}
+
+function createTargetSessionReadView(
+  state: ReturnType<typeof createSelectedStateRepository>,
+  sessions: ReturnType<typeof createSelectedSessionReadRepository>
+) {
+  return Object.freeze({
+    get(targetId: string) {
+      const selected = state.getByTargetId(targetId);
+      return selected === null ? null : sessions.get(selected.mapping.id);
+    },
+    list: sessions.list
+  });
+}
+
 function assertRouteInventory(
   registrations: readonly HostDeckRoutePluginRegistration[]
 ): void {
   const selectedCount = hostDeckSelectedApiRouteCompositionDescriptor.length;
   if (
-    registrations.length !== 24 ||
-    selectedCount !== 23 ||
+    registrations.length !== 23 ||
+    selectedCount !== 22 ||
     registrations.slice(0, selectedCount).some((registration, index) => {
       const expected = hostDeckSelectedApiRouteCompositionDescriptor[index];
       return (
@@ -1506,9 +1587,9 @@ function assertRouteInventory(
     }) ||
     registrations.at(-1)?.id !== hostDeckProductionStaticRegistrationId ||
     registrations.at(-1)?.surface !== "static" ||
-    new Set(registrations.map((registration) => registration.id)).size !== 24 ||
+    new Set(registrations.map((registration) => registration.id)).size !== 23 ||
     registrations.filter((registration) => registration.surface === "api")
-      .length !== 22 ||
+      .length !== 21 ||
     registrations.filter((registration) => registration.surface === "sse")
       .length !== 1 ||
     registrations.filter((registration) => registration.surface === "static")

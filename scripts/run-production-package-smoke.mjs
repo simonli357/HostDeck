@@ -70,11 +70,11 @@ async function importPackageRoots() {
 
 function assertSelectedDescriptor(server) {
   assert.ok(server !== undefined, "server package must import");
-  assert.equal(server.selectedApiRouteManifest.length, 38);
-  assert.equal(server.hostDeckSelectedApiRouteCompositionDescriptor.length, 23);
+  assert.equal(server.selectedApiRouteManifest.length, 35);
+  assert.equal(server.hostDeckSelectedApiRouteCompositionDescriptor.length, 22);
   const describedIds = server.hostDeckSelectedApiRouteCompositionDescriptor.flatMap((entry) => entry.manifestIds);
-  assert.equal(describedIds.length, 38);
-  assert.equal(new Set(describedIds).size, 38);
+  assert.equal(describedIds.length, 35);
+  assert.equal(new Set(describedIds).size, 35);
   assert.deepEqual(
     [...describedIds].sort(),
     server.selectedApiRouteManifest.map((entry) => entry.id).sort()
