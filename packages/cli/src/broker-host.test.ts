@@ -136,6 +136,9 @@ describe("IFC-V1-113 shared Codex broker service host", () => {
     const startBroker = vi
       .fn()
       .mockRejectedValueOnce(brokerError("broker_absent"))
+      .mockRejectedValueOnce(brokerError("ownership_ambiguous"))
+      .mockRejectedValueOnce(brokerError("socket_stale"))
+      .mockRejectedValueOnce(brokerError("socket_changed"))
       .mockResolvedValueOnce(attachment("attached", 2));
     const sleep = vi.fn(async () => undefined);
 
@@ -146,8 +149,8 @@ describe("IFC-V1-113 shared Codex broker service host", () => {
         startBroker
       })
     ).resolves.toBe("");
-    expect(startBroker).toHaveBeenCalledTimes(2);
-    expect(sleep).toHaveBeenCalledOnce();
+    expect(startBroker).toHaveBeenCalledTimes(5);
+    expect(sleep).toHaveBeenCalledTimes(4);
   });
 
   it("fails closed for version drift and invalid internal arguments", async () => {
@@ -225,7 +228,12 @@ function absentEndpoint(): SharedCodexEndpoint {
 }
 
 function brokerError(
-  code: "broker_absent" | "broker_not_owned" | "ownership_ambiguous"
+  code:
+    | "broker_absent"
+    | "broker_not_owned"
+    | "ownership_ambiguous"
+    | "socket_changed"
+    | "socket_stale"
 ): HostDeckSharedCodexBrokerError {
   return new HostDeckSharedCodexBrokerError(
     code,

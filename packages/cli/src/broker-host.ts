@@ -35,6 +35,14 @@ const defaultPollIntervalMs = 2_000;
 const minimumPollIntervalMs = 50;
 const maximumPollIntervalMs = 60_000;
 const maximumReadyOutputBytes = 256;
+const pendingBrokerReadinessCodes = new Set<
+  HostDeckSharedCodexBrokerError["code"]
+>([
+  "broker_absent",
+  "ownership_ambiguous",
+  "socket_changed",
+  "socket_stale"
+]);
 
 export async function runHostDeckBrokerHost(
   args: readonly string[],
@@ -215,7 +223,7 @@ async function waitForBrokerReady(
       );
       return;
     } catch (error) {
-      if (!isBrokerError(error, "broker_absent") || Date.now() >= deadline) {
+      if (!isBrokerReadinessPending(error) || Date.now() >= deadline) {
         throw error;
       }
     }
@@ -224,6 +232,13 @@ async function waitForBrokerReady(
       signal
     );
   }
+}
+
+function isBrokerReadinessPending(error: unknown): boolean {
+  return (
+    error instanceof HostDeckSharedCodexBrokerError &&
+    pendingBrokerReadinessCodes.has(error.code)
+  );
 }
 
 async function openBroker(
