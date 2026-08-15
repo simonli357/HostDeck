@@ -24,19 +24,19 @@ pnpm check:codex-bindings
 ## Packaged Service Lifecycle
 
 ```bash
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" dist/hostdeck/dist/shell.js service install --json
-dist/hostdeck/dist/shell.js service status --json
-dist/hostdeck/dist/shell.js service start --json
-dist/hostdeck/dist/shell.js service restart --json
-dist/hostdeck/dist/shell.js service stop --json
-/absolute/path/to/new/hostdeck/dist/shell.js service upgrade --json
-dist/hostdeck/dist/shell.js service uninstall --json
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" dist/hostdeck/bin/codexdeck service install --json
+dist/hostdeck/bin/codexdeck service status --json
+dist/hostdeck/bin/codexdeck service start --json
+dist/hostdeck/bin/codexdeck service restart --json
+dist/hostdeck/bin/codexdeck service stop --json
+/absolute/path/to/new/hostdeck/bin/codexdeck service upgrade --json
+dist/hostdeck/bin/codexdeck service uninstall --json
 ```
 
 ## Installed User Workflow
 
 ```bash
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" /absolute/path/to/hostdeck/dist/shell.js service install
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" /absolute/path/to/hostdeck/bin/codexdeck service install
 ~/.local/bin/codexdeck broker start
 ~/.local/bin/codexdeck broker status
 ~/.local/bin/codexdeck service start
@@ -108,8 +108,8 @@ pnpm test:browser:shell
 pnpm test:accessibility:zoom
 pnpm test:accessibility:orca
 pnpm build
-dist/hostdeck/dist/shell.js --help
-dist/hostdeck/dist/shell.js --version
+dist/hostdeck/bin/codexdeck --help
+dist/hostdeck/bin/codexdeck --version
 pnpm test:package
 pnpm test:supply-chain
 node dist/hostdeck/verify.mjs dist/hostdeck

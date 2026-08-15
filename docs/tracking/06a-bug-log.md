@@ -1123,3 +1123,21 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: adoption still requested Codex's full turn-item surface and fully validated private user-input metadata that HostDeck deliberately omits. Legacy `localImage.detail: null` failed the current live schema, while very large full histories could exceed the transport before projection.
 - Fix: request the bounded Codex summary surface, require that exact response mode, strictly validate retained user/agent text and recognized type envelopes, omit recognized private bodies without parsing or copying them, and continue rejecting unknown types, malformed retained text, duplicate ids, and identity races.
 - Current state: closed in `053edd8` and installed as `0.0.9`. Focused 16, unit 3,229/32 intentional skips, contract 287, integration 36, typecheck, lint, planning, runtime-boundary, deterministic package build, and independent verification pass. Live bounded reads pass for ScandyControl, MarketPilot, SideCue, and the 665 MB MicroForge history. ScandyControl was adopted unchanged as `sess_2582903113e11fd1a362`, appears exactly once as current/idle, and is excluded from discovery.
+
+### BUG-090 Optional Reconciliation Timeout Blocks Startup
+
+- Symptom: HostDeck could remain unavailable when an optional managed-thread detail read timed out during startup reconciliation even though the shared broker and durable session were recoverable.
+- Impact: Mission Control and phone control stayed unavailable instead of exposing the affected session as explicitly stale.
+- Route: critical completed-task bugfix owned by `INT-V1-114`; no public contract, UI, setup, or security change.
+- Root cause: the reconciliation boundary converted Codex `remote_error` into unavailable state but let the equally non-authoritative `request_timeout` escape and abort runtime admission.
+- Fix: classify optional read timeouts as unavailable, retain explicit stale/unknown projection truth, and continue startup without resuming or mutating the thread.
+- Current state: closed in pushed `410e966`. Direct read/goal/turn timeout coverage proves ready runtime admission with three stale/unavailable sessions and no hidden retry or thread mutation.
+
+### BUG-091 Resumed Historical Thread Cannot Rejoin HostDeck
+
+- Symptom: an ordinary `codex resume NATIVE_UUID` session ran on the standard shared broker while HostDeck kept its retained mapping recovery-required, omitted live updates, or failed startup during automatic enrollment.
+- Impact: normal laptop Codex and phone HostDeck were not reliably interchangeable for existing conversations.
+- Route: critical completed-task release blocker owned by `INT-V1-113`, `INT-V1-114`, and `IFC-V1-113`; the selected shared-session contract is unchanged.
+- Root cause: retained recovery mappings could not refresh atomically; eligibility compared historical thread-creation `cliVersion` with the active broker; `thread/started` bypassed existing stale mappings; and the reconnect reconcile lease rejected enrollment's read-class `thread/resume` subscription.
+- Fix: refresh retained mappings without changing native identity, derive eligibility from the admitted active app-server, route stale existing mappings through enrollment, and permit only the required read-class resume subscription during reconcile while keeping mutations blocked.
+- Current state: closed in pushed `acb23a8`, `d1d6a6a`, and `89d9eca`, installed as `0.0.7`. Focused 57, unit 3,282/32 intentional skips, contract 309, integration 36, web 960, typecheck, lint, package 44/two deterministic builds, packaged Chromium, and supply-chain 8 pass. A real historical SideCue thread retained its native/internal identity across preserved-state upgrade, projected an ordinary-TUI turn into HostDeck, and displayed one HostDeck-submitted turn in that same TUI without broker replacement.

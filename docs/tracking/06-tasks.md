@@ -16,7 +16,7 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-108` shared-session phone acceptance | blocked | Connected unlocked Android phone | Install and exercise candidate `eaca440f4029f6131bf118b1f333a9ebea07e410acb9eba8a18e62d1f27ba9db` over unrelated-network Tailscale HTTPS. |
+| 1 | `FE-V1-108` shared-session phone acceptance | blocked | Connected unlocked Android phone | Exercise installed candidate `edfde8bb4d51983e2e8cc4d3794477b594a03c477d143bdfd1905c85d6dcab62` over unrelated-network Tailscale HTTPS. |
 
 `REL-V1-109` records the approved shared-session/Ubuntu rebaseline. The dependency chain then proceeds through contracts, binding/state, broker, automatic enrollment, selected API/CLI, live catalog UI, hardening, Ubuntu packaging, physical phone acceptance, and clean release acceptance. Completed adoption and Windows work remains historical; unfinished Windows and superseded aggregate tasks are deferred rather than release blockers.
 

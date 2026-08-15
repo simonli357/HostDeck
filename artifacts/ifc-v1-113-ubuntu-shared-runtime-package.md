@@ -4,10 +4,10 @@ Status: passed
 
 ## Candidate
 
-- Ubuntu 24.04 x64 package schema 6; version `0.0.3`.
+- Ubuntu 24.04 x64 package schema 6; version `0.0.7`.
 - Exact Codex `0.147.0`; binding tree `673c02b5a758e082cb02c15f36bf4f37e88501470fd430ad232bebd754e8689c`.
-- Source closure commit `0ea369b820b90bf7e2d821202a214980e4bd3759`; 664 sources, 1,335 owned outputs, 6,361 entries.
-- Package SHA-256 `eaca440f4029f6131bf118b1f333a9ebea07e410acb9eba8a18e62d1f27ba9db`; web SHA-256 `184ff62f0c197d20dab8d2c9c6aee458089cded017a5b0631f30e764c857c556`.
+- Source closure commit `89d9ecad7d82f29841db81569999b7eac0e7d337`; 664 sources, 1,335 owned outputs, 6,361 entries.
+- Package SHA-256 `edfde8bb4d51983e2e8cc4d3794477b594a03c477d143bdfd1905c85d6dcab62`; web SHA-256 `5b4bdf79107a040da87895b934e478a16ee617570a9e619800f240ed64e80890`.
 - Bundled Node `22.22.2`/ABI `127`, native modules, verified Vite assets, launcher, broker host, service host, and separate systemd user units.
 
 ## Result
@@ -23,12 +23,12 @@ Status: passed
 
 | Gate | Result |
 | --- | --- |
-| Runtime compatibility | Exact model, command, token-usage, rate-limit, ordinary-TUI coexistence, shared turn, two teardown orders, privacy, and cleanup passed; evidence is bound to `31adce4` in `artifacts/int-v1-031-hostdeck-tui-coexistence-evidence.json`. |
-| Workspace | Typecheck passed; lint checked 929 files; unit passed 294 files and 3,279 tests with 30 files/32 tests intentionally device-gated. |
-| Package | `pnpm test:package` passed 43 checks plus two deterministic builds, read-only relocation, rollback, and runtime/config/static/web/native/tamper rejection. Independent verifier passed the candidate identity above. |
+| Runtime compatibility | Exact model, command, token-usage, rate-limit, ordinary-TUI coexistence, shared turn, two teardown orders, privacy, and cleanup passed. A real historical top-level thread resumed in ordinary Codex, refreshed its retained mapping, projected laptop activity, and accepted a HostDeck prompt in the same TUI without broker replacement. |
+| Workspace | Typecheck passed; lint checked 933 files; unit passed 294 files and 3,282 tests with 30 files/32 tests intentionally device-gated. |
+| Package | `pnpm test:package` passed 44 checks plus two deterministic builds, read-only relocation, rollback, and runtime/config/static/web/native/tamper rejection. Independent verifier passed the candidate identity above. |
 | Browser | Relocated read-only packaged Chromium passed `1/1` with strict API/static/browser policy. |
-| Lifecycle | Packaged executable, service-host, and systemd user-unit smokes passed exact 0.147.0. The user-manager run covered independent restart/stop recovery, explicit owner-safe broker stop, lease exclusion, security score `9.7/9.7`, Tailscale noninterference, and zero persistent manager state. |
-| Supply chain | Six supply-chain tests passed real-package deterministic checksum/license/CycloneDX/provenance generation and independent verification plus graph, license, target, checksum, privacy, and tamper failures. |
+| Lifecycle | Packaged executable, service-host, and systemd user-unit smokes passed exact 0.147.0. Preserved-state upgrade from `0.0.5` to `0.0.7` kept the broker PID and native thread identity, refreshed the retained mapping, and left the API ready. |
+| Supply chain | Eight supply-chain/release-bundle tests passed deterministic archive, checksum/license/CycloneDX/provenance generation, independent real-package verification, and graph/license/target/checksum/privacy/tamper failures. |
 
 ## Manual Inspection
 
