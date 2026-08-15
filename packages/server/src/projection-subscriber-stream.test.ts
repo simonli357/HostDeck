@@ -78,6 +78,25 @@ describe("bounded projection subscriber streams", () => {
     expect(view.close()).toBe(0);
   });
 
+  it("does not resolve target state after the subscriber service closes", () => {
+    const harness = createHarness();
+    const resolveSessionId = vi.fn(() => {
+      throw new Error("closed target resolution must not run");
+    });
+    const view = createProjectionSubscriberStreamTargetView({
+      resolve_session_id: resolveSessionId,
+      service: harness.service
+    });
+    expect(view.close()).toBe(0);
+
+    expectSubscriberError(
+      () => view.open(openInput(nativeThreadA, "subscriber-closed-target")),
+      "service_closed"
+    );
+    expect(view.archive_session(nativeThreadA)).toBe(0);
+    expect(resolveSessionId).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed config and exact open input before handoff work", () => {
     let openCalls = 0;
     const handoff = {

@@ -342,6 +342,7 @@ export function createProjectionSubscriberStreamTargetView(
   ) => string;
   const service = Object.freeze({
     archive_session(targetId: unknown) {
+      if (Reflect.apply(base.snapshot, undefined, []).closed) return 0;
       return Reflect.apply(base.archive_session, undefined, [
         resolveTargetSessionId(targetId, resolveSessionId)
       ]);
@@ -350,6 +351,9 @@ export function createProjectionSubscriberStreamTargetView(
       return Reflect.apply(base.close, undefined, []);
     },
     open(candidate: unknown) {
+      if (Reflect.apply(base.snapshot, undefined, []).closed) {
+        throw new HostDeckProjectionSubscriberError("service_closed");
+      }
       const value = readExactDataObject(
         candidate,
         [
