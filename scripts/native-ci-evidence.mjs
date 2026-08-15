@@ -11,6 +11,7 @@ const sha256Pattern = /^[a-f0-9]{64}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
 const safeTokenPattern = /^[A-Za-z0-9._+-]{1,128}$/u;
 const eventNames = Object.freeze(["pull_request", "push", "workflow_dispatch"]);
+const workflowNames = Object.freeze(["native-ci", "release"]);
 
 export const nativeCiTargetPolicies = Object.freeze({
   "linux-x64": Object.freeze({
@@ -134,7 +135,7 @@ export function createNativeCiEvidence(input) {
     "workflow"
   );
   if (!eventNames.includes(workflow.event)) throw new TypeError("workflow.event is invalid.");
-  exactString(workflow.name, "native-ci", "workflow.name");
+  if (!workflowNames.includes(workflow.name)) throw new TypeError("workflow.name is invalid.");
   exactInteger(workflow.run_attempt, 1, 1_000, "workflow.run_attempt");
   requirePattern(workflow.run_id, /^[1-9][0-9]{0,19}$/u, "workflow.run_id");
   const generatedAt = new Date(value.generated_at);

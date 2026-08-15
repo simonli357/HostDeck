@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -27,6 +28,7 @@ import {
   productionBuildIdentity,
   pruneProductionSourceMaps,
   publishCompletedPackage,
+  resolvePackageSourceCommit,
   selectedProductionSources
 } from "./build-production-package.mjs";
 import {
@@ -159,6 +161,41 @@ test("selects the exact non-web production closure", () => {
     [...new Set(sources.map((path) => path.split("/")[1]))].sort(),
     ["cli", "codex-adapter", "contracts", "core", "server", "storage"]
   );
+});
+
+test("binds package provenance to the exact checked-out commit", (context) => {
+  const root = mkdtempSync(join(tmpdir(), "hostdeck-package-source-commit-"));
+  context.after(() => rmSync(root, { force: true, recursive: true }));
+  execFileSync("git", ["init", "--quiet"], { cwd: root });
+  writeFileSync(join(root, "package.json"), "{}\n", { mode: 0o644 });
+  execFileSync("git", ["add", "package.json"], { cwd: root });
+  execFileSync(
+    "git",
+    ["-c", "user.name=HostDeck Test", "-c", "user.email=test@hostdeck.invalid", "commit", "--quiet", "-m", "package"],
+    { cwd: root }
+  );
+  const packageCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: root,
+    encoding: "utf8"
+  }).trim();
+
+  mkdirSync(join(root, "docs"));
+  writeFileSync(join(root, "docs", "status.md"), "release ready\n", { mode: 0o644 });
+  execFileSync("git", ["add", "docs/status.md"], { cwd: root });
+  execFileSync(
+    "git",
+    ["-c", "user.name=HostDeck Test", "-c", "user.email=test@hostdeck.invalid", "commit", "--quiet", "-m", "docs"],
+    { cwd: root }
+  );
+  const checkedOutCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: root,
+    encoding: "utf8"
+  }).trim();
+
+  assert.notEqual(checkedOutCommit, packageCommit);
+  assert.equal(resolvePackageSourceCommit(root), checkedOutCommit);
+  writeFileSync(join(root, "package.json"), '{"private":true}\n', { mode: 0o644 });
+  assert.throws(() => resolvePackageSourceCommit(root), /inputs must be committed/u);
 });
 
 test("rewrites source manifests to exact runtime-only package metadata", () => {

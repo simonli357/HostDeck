@@ -30,6 +30,9 @@ test("accepts exact Linux and Windows native CI evidence", () => {
     assert.deepEqual(parseNativeCiEvidence(evidence), evidence);
     assert.equal(serializeNativeCiEvidence(evidence).endsWith("\n"), true);
   }
+  const releaseEvidence = fixture("linux-x64");
+  releaseEvidence.workflow.name = "release";
+  assert.equal(createNativeCiEvidence(releaseEvidence).workflow.name, "release");
 });
 
 test("rejects skipped, partial, mismatched, and secret-bearing evidence", () => {
@@ -49,6 +52,10 @@ test("rejects skipped, partial, mismatched, and secret-bearing evidence", () => 
     {
       ...baseline,
       runner: { ...baseline.runner, image_version: "private/token" }
+    },
+    {
+      ...baseline,
+      workflow: { ...baseline.workflow, name: "untrusted-release" }
     },
     { ...baseline, private_path: "C:\\Users\\private" }
   ];

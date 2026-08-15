@@ -24,6 +24,8 @@ const rootFiles = [
 const requiredScripts = [
   "check:scaffold",
   "check:planning",
+  "check:native-ci",
+  "check:release-workflow",
   "check:runtime-boundary",
   "check:codex-bindings",
   "generate:codex-bindings",
@@ -34,6 +36,7 @@ const requiredScripts = [
   "test:contract",
   "test:integration",
   "test:package",
+  "test:supply-chain",
   "test:codex",
   "smoke:codex-compatibility",
   "smoke:codex-ipc",
@@ -43,6 +46,10 @@ const requiredScripts = [
   "test:web",
   "test:e2e",
   "build",
+  "release:metadata",
+  "verify:release-metadata",
+  "release:bundle",
+  "verify:release-bundle",
   "smoke:local"
 ];
 

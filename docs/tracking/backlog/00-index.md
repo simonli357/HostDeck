@@ -83,7 +83,8 @@ The `tmux-output.md` filename is retained temporarily so historical artifact lin
 | `INT-V1-112` shared broker | `INT-V1-113`, then `IFC-V1-111` | Automatic enrollment and the selected control plane require one proven standard-socket lifecycle. |
 | `IFC-V1-111` selected API/CLI | `IFC-V1-112`, then `FE-V1-107` | Mission Control consumes the selected catalog route after legacy administration is removed. |
 | `FE-V1-107` live catalog | `INT-V1-114`, then `IFC-V1-113` | Runtime hardening includes the actual browser consumer before packaging. |
-| `IFC-V1-113` Ubuntu package | `FE-V1-108`, then `REL-V1-110` | Physical phone acceptance and clean-host release use one immutable installed candidate. |
+| `IFC-V1-113` Ubuntu package | `FE-V1-108` and `REL-V1-111`, then `REL-V1-110` | Physical phone acceptance and publication tooling can proceed independently before clean-host release freezes one immutable candidate. |
+| `REL-V1-111` publication tooling | `REL-V1-110` | The tagged archive, release assets, attestation, and draft-publication path must fail closed before the clean-host release aggregate. |
 
 ## Requirement Trace Ownership
 

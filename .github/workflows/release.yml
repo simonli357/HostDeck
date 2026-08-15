@@ -1,0 +1,83 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ubuntu:
+    name: Ubuntu release
+    if: github.repository == 'simonli357/HostDeck'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      HOSTDECK_NATIVE_RUNNER_LABEL: ubuntu-24.04
+    steps:
+      - name: Check out exact tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+      - name: Install exact Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          check-latest: false
+          node-version: 22.22.2
+          package-manager-cache: false
+      - name: Activate exact pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.29.2 --activate
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify release workflow policy
+        run: pnpm check:release-workflow
+      - name: Run Ubuntu native release checks
+        run: node scripts/run-native-ci.mjs --target linux-x64 --output "${{ runner.temp }}/hostdeck-native-ci/linux-x64.json"
+      - name: Verify native release evidence
+        run: node scripts/native-ci-evidence.mjs verify "${{ runner.temp }}/hostdeck-native-ci/linux-x64.json"
+      - name: Build verified Ubuntu package
+        run: pnpm build
+      - name: Generate supply-chain metadata
+        run: pnpm release:metadata --package "${{ github.workspace }}/dist/hostdeck" --evidence "${{ runner.temp }}/hostdeck-native-ci/linux-x64.json" --output "${{ runner.temp }}/hostdeck-release-metadata" --repository "${{ github.workspace }}"
+      - name: Verify supply-chain metadata
+        run: pnpm verify:release-metadata --package "${{ github.workspace }}/dist/hostdeck" --evidence "${{ runner.temp }}/hostdeck-native-ci/linux-x64.json" --output "${{ runner.temp }}/hostdeck-release-metadata" --repository "${{ github.workspace }}"
+      - name: Generate deterministic release bundle
+        run: pnpm release:bundle --package "${{ github.workspace }}/dist/hostdeck" --metadata "${{ runner.temp }}/hostdeck-release-metadata" --evidence "${{ runner.temp }}/hostdeck-native-ci/linux-x64.json" --output "${{ runner.temp }}/hostdeck-release" --repository "${{ github.workspace }}" --tag "${{ github.ref_name }}"
+      - name: Verify deterministic release bundle
+        run: pnpm verify:release-bundle --package "${{ github.workspace }}/dist/hostdeck" --metadata "${{ runner.temp }}/hostdeck-release-metadata" --evidence "${{ runner.temp }}/hostdeck-native-ci/linux-x64.json" --output "${{ runner.temp }}/hostdeck-release" --repository "${{ github.workspace }}" --tag "${{ github.ref_name }}"
+      - name: Attest verified release assets
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/hostdeck-release/*
+          show-summary: false
+      - name: Create draft release
+        env:
+          GH_REPO: simonli357/HostDeck
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -f "${{ steps.attest.outputs.bundle-path }}"
+          version="${GITHUB_REF_NAME#v}"
+          notes="$RUNNER_TEMP/hostdeck-release/hostdeck-${version}-linux-x64.release-notes.md"
+          test -f "$notes"
+          gh release create "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP"/hostdeck-release/* \
+            "${{ steps.attest.outputs.bundle-path }}" \
+            --draft \
+            --verify-tag \
+            --title "HostDeck $GITHUB_REF_NAME" \
+            --notes-file "$notes"

@@ -103,8 +103,9 @@ const knownPublicUrls = new Set([
 ]);
 const privatePathPattern = /(?:^|["'\s])(?:[A-Za-z]:[\\/]|\\{2}[^\\\s]|\/(?!\/))/u;
 const privateIdentityPattern = /(?:[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\.ts\.net\b|\btskey-[A-Za-z0-9_-]+|\bgh[oprsu]_[A-Za-z0-9_]+|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|\b100\.(?:6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.\d{1,3}\.\d{1,3}\b)/iu;
+const licenseInventorySchemaVersion = 1;
 
-export const supplyChainMetadataSchemaVersion = 1;
+export const supplyChainMetadataSchemaVersion = 2;
 export const supplyChainMetadataFiles = metadataFileNames;
 export const supplyChainApprovedLicenseExpressions = approvedLicenseExpressions;
 
@@ -567,7 +568,7 @@ function createLicenseInventory(snapshot) {
       version: node.version
     }));
   const unsigned = {
-    schemaVersion: supplyChainMetadataSchemaVersion,
+    schemaVersion: licenseInventorySchemaVersion,
     name: "hostdeck-third-party-license-inventory",
     packageVersion: snapshot.manifest.packageVersion,
     target: snapshot.manifest.target.id,
@@ -694,7 +695,7 @@ function createSlsaProvenance(snapshot, byproducts) {
       runDetails: {
         builder: { id: "urn:hostdeck:builder:native-ci:v1" },
         metadata: {
-          invocationId: `urn:hostdeck:native-ci:${snapshot.evidence.target}:${snapshot.evidence.workflow.run_id}:${snapshot.evidence.workflow.run_attempt}`
+          invocationId: `urn:hostdeck:native-ci:${snapshot.evidence.workflow.name}:${snapshot.evidence.target}:${snapshot.evidence.workflow.run_id}:${snapshot.evidence.workflow.run_attempt}`
         },
         byproducts: [
           resourceDescriptor("SHA256SUMS", byproducts.checksums),
@@ -738,7 +739,8 @@ function createMetadataIndex(snapshot, documents) {
       evidenceSha256: snapshot.evidenceSha256,
       runAttempt: snapshot.evidence.workflow.run_attempt,
       runId: snapshot.evidence.workflow.run_id,
-      target: snapshot.evidence.target
+      target: snapshot.evidence.target,
+      workflowName: snapshot.evidence.workflow.name
     },
     documents: descriptors
   };

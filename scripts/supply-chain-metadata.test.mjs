@@ -23,6 +23,10 @@ import {
   writeNativeCiEvidence
 } from "./native-ci-evidence.mjs";
 import {
+  generateReleaseBundle,
+  verifyReleaseBundle
+} from "./release-bundle.mjs";
+import {
   collectPackageFileRecords,
   collectProductionDependencyGraph,
   createSupplyChainDocuments,
@@ -80,7 +84,8 @@ test("creates canonical checksum, license, CycloneDX, provenance, and index reco
   assert.equal(provenance.predicate.runDetails.byproducts.length, 3);
 
   const index = JSON.parse(first["metadata.json"]);
-  assert.equal(index.schemaVersion, 1);
+  assert.equal(index.schemaVersion, 2);
+  assert.equal(index.nativeCi.workflowName, "native-ci");
   assert.equal(index.documents.length, 4);
   assert.equal(index.package.fileCount, 2);
   assert.deepEqual(verifySupplyChainDocumentSet(snapshot, first), {
@@ -223,7 +228,7 @@ if (process.platform === "linux") {
         const evidencePath = join(root, "linux-x64.json");
         writeNativeCiEvidence(
           evidencePath,
-          nativeEvidenceFixture("linux-x64", build.sourceCommit, lockfileSha256)
+          nativeEvidenceFixture("linux-x64", build.sourceCommit, lockfileSha256, "release")
         );
         const options = {
           nativeEvidencePath: evidencePath,
@@ -242,6 +247,32 @@ if (process.platform === "linux") {
             readFileSync(join(secondOptions.outputRoot, name))
           );
         }
+
+        const bundleOptions = {
+          metadataRoot: options.outputRoot,
+          nativeEvidencePath: evidencePath,
+          outputRoot: join(root, "release-a"),
+          packageRoot,
+          repositoryRoot,
+          tag: `v${build.packageVersion}`
+        };
+        const release = generateReleaseBundle(bundleOptions);
+        assert.deepEqual(verifyReleaseBundle(bundleOptions), release);
+        const repeatedBundleOptions = { ...bundleOptions, outputRoot: join(root, "release-b") };
+        assert.deepEqual(generateReleaseBundle(repeatedBundleOptions), {
+          ...release,
+          outputRoot: repeatedBundleOptions.outputRoot
+        });
+        const archiveName = `hostdeck-${build.packageVersion}-linux-x64.tar.gz`;
+        assert.deepEqual(
+          readFileSync(join(bundleOptions.outputRoot, archiveName)),
+          readFileSync(join(repeatedBundleOptions.outputRoot, archiveName))
+        );
+        const archivePath = join(bundleOptions.outputRoot, archiveName);
+        const archiveBytes = readFileSync(archivePath);
+        writeFileSync(archivePath, Buffer.concat([archiveBytes, Buffer.from("tamper")]));
+        assert.throws(() => verifyReleaseBundle(bundleOptions));
+        writeFileSync(archivePath, archiveBytes, { mode: 0o644 });
 
         for (const name of supplyChainMetadataFiles) {
           const path = join(options.outputRoot, name);
@@ -371,7 +402,7 @@ function fixtureSnapshot(target) {
       node_version: "22.22.2",
       pnpm_version: "10.29.2"
     },
-    workflow: { run_attempt: 1, run_id: "123456789" }
+    workflow: { name: "native-ci", run_attempt: 1, run_id: "123456789" }
   };
   const packageFiles = {
     bytes: 10,
@@ -473,7 +504,7 @@ function fixtureGraph(packageVersion, target) {
   return { entryRefs, nodes };
 }
 
-function nativeEvidenceFixture(target, commit, lockfileSha256) {
+function nativeEvidenceFixture(target, commit, lockfileSha256, workflowName = "native-ci") {
   const policy = nativeCiTargetPolicies[target];
   return {
     checks: policy.checks.map((id, index) => ({
@@ -500,7 +531,7 @@ function nativeEvidenceFixture(target, commit, lockfileSha256) {
     },
     workflow: {
       event: "push",
-      name: "native-ci",
+      name: workflowName,
       run_attempt: 1,
       run_id: "123456789"
     }

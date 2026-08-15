@@ -1285,7 +1285,7 @@ export function resolvePackageSourceCommit(repositoryRoot = defaultRepositoryRoo
   }
   const commit = runChecked(
     "git",
-    ["log", "-1", "--format=%H", "--", ...packageSourceCommitPathspecs],
+    ["rev-parse", "--verify", "HEAD^{commit}"],
     root,
     "Production package source commit"
   ).stdout.trim();

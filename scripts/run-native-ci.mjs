@@ -192,7 +192,7 @@ async function main() {
     generated_at: new Date().toISOString(),
     workflow: {
       event: requiredEnvironment("GITHUB_EVENT_NAME"),
-      name: "native-ci",
+      name: requiredEnvironment("GITHUB_WORKFLOW"),
       run_attempt: parsePositiveInteger(requiredEnvironment("GITHUB_RUN_ATTEMPT")),
       run_id: requiredEnvironment("GITHUB_RUN_ID")
     },
