@@ -13,6 +13,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   unlinkSync,
   writeFileSync
 } from "node:fs";
@@ -76,6 +77,7 @@ const configSentinel = join(configHome, "hostdeck-clean-sentinel");
 const codexHome = join(stateHome, "codex-clean");
 const codexSentinel = join(codexHome, "ifc-v1-058-sentinel");
 const installDataRoot = join(dataHome, "hostdeck");
+const commandDir = join(cleanRoot, "bin");
 const codexPackageRoot = join(
   manifest.container.home,
   ".local",
@@ -84,12 +86,19 @@ const codexPackageRoot = join(
 const codexBin = realpathSync(
   join(codexPackageRoot, "node_modules", "@openai", "codex", "bin", "codex.js")
 );
-const runtimeRoot = join(manifest.container.runtime_dir, "hostdeck");
-const socketPath = join(runtimeRoot, "app-server.sock");
+const foregroundRuntimeRoot = join(manifest.container.runtime_dir, "hostdeck");
+const serviceRuntimeRoot = join(
+  manifest.container.runtime_dir,
+  "hostdeck-service"
+);
+const controlDir = join(codexHome, "app-server-control");
+const socketPath = join(controlDir, "app-server-control.sock");
+const ownerPath = join(controlDir, "hostdeck-broker-owner.json");
 const shellProfilePaths = [".bash_logout", ".bashrc", ".profile"].map((name) =>
   join(manifest.container.home, name)
 );
 const userEnvironment = createProductEnvironment();
+const managerEnvironment = createManagerEnvironment();
 
 if (process.env.HOSTDECK_REQUIRE_CLEAN_USER_ACCEPTANCE !== "1") {
   throw new Error("Clean-user acceptance was not explicitly enabled.");
@@ -348,11 +357,13 @@ async function buildAndRelocatePackages() {
   copyPackage(upgradeOutput, upgradePackage);
   makeReadOnly(primaryPackage);
   makeReadOnly(upgradePackage);
-  runCommand(process.execPath, [
+  mkdirSync(commandDir, { mode: 0o700, recursive: true });
+  symlinkSync(bundledNodePath(primaryPackage), join(commandDir, "node"));
+  runCommand(bundledNodePath(primaryPackage), [
     join(primaryPackage, "verify.mjs"),
     primaryPackage
   ], { cwd: unrelatedRoot });
-  runCommand(process.execPath, [
+  runCommand(bundledNodePath(upgradePackage), [
     join(upgradePackage, "verify.mjs"),
     upgradePackage
   ], { cwd: unrelatedRoot });
@@ -393,18 +404,27 @@ async function runForegroundAcceptance(port, packageEvidenceValue) {
     assert.equal(http.remote_ready, false);
     const processes = inspectForegroundProcesses(child.pid, command, port);
     assertPrivateSocket();
+    const foregroundBroker = brokerIdentity();
     assertLoopbackListener(port);
     child.kill("SIGTERM");
     const exit = await output.exited(manifest.bounds.readiness_ms);
     assert.equal(exit.code, 0);
     assert.equal(exit.signal, null);
     await eventually(
-      () => !isProcessAlive(child.pid) && !existsSync(socketPath),
+      () => !isProcessAlive(child.pid),
       manifest.bounds.readiness_ms,
-      "Foreground process/socket cleanup did not settle."
+      "Foreground process cleanup did not settle."
     );
-    assertEmptyRuntimeRoot();
+    assert.equal(brokerIdentity(), foregroundBroker);
+    assertPrivateSocket();
+    assertEmptyForegroundRuntimeRoot();
     assertNoListener(port);
+    const stoppedBroker = runBrokerControl(command, "stop");
+    assert.equal(stoppedBroker.action, "stop");
+    assert.equal(stoppedBroker.endpoint.kind, "standard_unix");
+    assert.equal(stoppedBroker.endpoint.state, "absent");
+    assert.equal(existsSync(socketPath), false);
+    assert.equal(existsSync(ownerPath), false);
     assertNoHostDeckProcesses();
     return Object.freeze({
       duration_ms: roundedDuration(started),
@@ -450,6 +470,7 @@ async function runInitialServiceAcceptance(port, packageEvidenceValue) {
   const firstHostDeckPid = startedResult.units.hostdeck.main_pid;
   const firstCodexPid = startedResult.units.codex.main_pid;
   const firstSocket = socketIdentity();
+  const firstBroker = brokerIdentity();
   const firstHttp = await inspectHttpSurface(port, primaryPackage, primaryManifest);
   assert.equal(firstHttp.remote_ready, false);
   assert.equal(firstHttp.web_identity_sha256, packageEvidenceValue.web_sha256);
@@ -464,12 +485,15 @@ async function runInitialServiceAcceptance(port, packageEvidenceValue) {
   assert.equal(repeatedStart.changed, false);
   assert.equal(repeatedStart.units.hostdeck.main_pid, firstHostDeckPid);
   assert.equal(repeatedStart.units.codex.main_pid, firstCodexPid);
+  assert.equal(socketIdentity(), firstSocket);
+  assert.equal(brokerIdentity(), firstBroker);
 
   const restarted = runLifecycle(command, port, "restart");
   assert.equal(restarted.api_state, "ready");
   assert.notEqual(restarted.units.hostdeck.main_pid, firstHostDeckPid);
   assert.equal(restarted.units.codex.main_pid, firstCodexPid);
   assert.equal(socketIdentity(), firstSocket);
+  assert.equal(brokerIdentity(), firstBroker);
   const hostDeckAfterRestart = restarted.units.hostdeck.main_pid;
 
   runSystemctl(["stop", "hostdeck-codex.service"]);
@@ -477,12 +501,15 @@ async function runInitialServiceAcceptance(port, packageEvidenceValue) {
   assert.equal(degraded.units.hostdeck.main_pid, hostDeckAfterRestart);
   assert.equal(degraded.units.codex.main_pid, 0);
   assert.equal(existsSync(socketPath), false);
+  assert.equal(existsSync(ownerPath), false);
   runSystemctl(["start", "hostdeck-codex.service"]);
   const firstRecovery = await waitForLifecycleStatus(command, port, "ready");
   assert.equal(firstRecovery.units.hostdeck.main_pid, hostDeckAfterRestart);
   assert.notEqual(firstRecovery.units.codex.main_pid, firstCodexPid);
   const recoveredSocket = socketIdentity();
+  const recoveredBroker = brokerIdentity();
   assert.notEqual(recoveredSocket, firstSocket);
+  assert.notEqual(recoveredBroker, firstBroker);
 
   runSystemctl(["restart", "hostdeck-codex.service"]);
   const recovered = await waitForLifecycleStatus(command, port, "ready");
@@ -491,14 +518,25 @@ async function runInitialServiceAcceptance(port, packageEvidenceValue) {
   assert.notEqual(socketIdentity(), recoveredSocket);
   const codexAfterRestart = recovered.units.codex.main_pid;
   const socketAfterRestart = socketIdentity();
+  const brokerAfterRestart = brokerIdentity();
+  assert.notEqual(brokerAfterRestart, recoveredBroker);
 
   const stopped = runLifecycle(command, port, "stop");
   assert.equal(stopped.units.hostdeck.main_pid, 0);
-  assert.equal(stopped.units.codex.main_pid, 0);
+  assert.equal(stopped.units.codex.main_pid, codexAfterRestart);
+  assert.equal(socketIdentity(), socketAfterRestart);
+  assert.equal(brokerIdentity(), brokerAfterRestart);
+  assert.equal(existsSync(serviceRuntimeRoot), false);
   const repeatedStop = runLifecycle(command, port, "stop");
   assert.equal(repeatedStop.changed, false);
+  assert.equal(repeatedStop.units.codex.main_pid, codexAfterRestart);
+  assert.equal(socketIdentity(), socketAfterRestart);
+  assert.equal(brokerIdentity(), brokerAfterRestart);
   const activeAgain = runLifecycle(command, port, "start");
   assert.equal(activeAgain.api_state, "ready");
+  assert.equal(activeAgain.units.codex.main_pid, codexAfterRestart);
+  assert.equal(socketIdentity(), socketAfterRestart);
+  assert.equal(brokerIdentity(), brokerAfterRestart);
   assertPreservationFixtures();
   assert.deepEqual(listFailedUnits(), [unrelatedUnitName]);
   assert.deepEqual(primaryManifest.deferrals, []);
@@ -553,10 +591,12 @@ async function runObservedServiceAcceptance(port, packages, initialService) {
   assert.equal(beforeObservation.api_state, "ready");
   const codexBeforeObservation = beforeObservation.units.codex.main_pid;
   const socketBeforeObservation = socketIdentity();
+  const brokerBeforeObservation = brokerIdentity();
   const observedRestart = runLifecycle(primaryCommand, port, "restart");
   assert.equal(observedRestart.api_state, "ready");
   assert.equal(observedRestart.units.codex.main_pid, codexBeforeObservation);
   assert.equal(socketIdentity(), socketBeforeObservation);
+  assert.equal(brokerIdentity(), brokerBeforeObservation);
 
   const upgradeManifest = readPackageManifest(upgradePackage);
   const upgradeCommand = packageCommand(upgradePackage, upgradeManifest);
@@ -572,6 +612,7 @@ async function runObservedServiceAcceptance(port, packages, initialService) {
   assert.notEqual(upgraded.units.hostdeck.main_pid, beforeUpgradeHostDeck);
   assert.equal(upgraded.units.codex.main_pid, codexBeforeObservation);
   assert.equal(socketIdentity(), socketBeforeObservation);
+  assert.equal(brokerIdentity(), brokerBeforeObservation);
   const installedState = await loadInstalledState(upgradePackage);
   const layout = installedState.layout;
   assertInstalledInventory(layout, upgradeManifest, installedState.owner);
@@ -630,6 +671,11 @@ function createPreservationFixtures() {
   writeFileSync(stateSentinel, "state-sentinel\n", { mode: 0o600 });
   writeFileSync(configSentinel, "config-sentinel\n", { mode: 0o600 });
   writeFileSync(codexSentinel, "codex-sentinel\n", { mode: 0o600 });
+  writeFileSync(
+    join(codexHome, "config.toml"),
+    "check_for_update_on_startup = false\n[features]\nplugins = false\n",
+    { mode: 0o600 }
+  );
   writeFileSync(
     unrelatedUnitPath,
     "[Unit]\nDescription=IFC-V1-058 unrelated failed-unit sentinel\n\n[Service]\nType=oneshot\nExecStart=/bin/false\n",
@@ -769,6 +815,10 @@ function inspectServiceProcesses(result, port, layout, owner) {
     owner.runtime.node_bin,
     join(owner.release.package_root, "dist", "service-host.js")
   ]);
+  assert.deepEqual(processCommand(codexPid), [
+    owner.runtime.node_bin,
+    join(owner.release.package_root, "dist", "broker-host.js")
+  ]);
   const codexCommands = [codexPid, ...codexDescendants].map((pid) =>
     processCommand(pid).join(" ")
   );
@@ -797,6 +847,7 @@ function inspectServiceProcesses(result, port, layout, owner) {
     assert.equal(processCgroup(pid), codexUnit.control_group);
   }
   assertPrivateSocket();
+  brokerIdentity();
   assertLoopbackListener(port);
   const codexControlGroup = "/app.slice/hostdeck-codex.service";
   const hostDeckControlGroup = "/app.slice/hostdeck.service";
@@ -906,7 +957,19 @@ function assertPrivateSocket() {
 
 function socketIdentity() {
   const stats = lstatSync(socketPath);
+  assert.equal(stats.isSocket(), true);
   return `${stats.dev}:${stats.ino}`;
+}
+
+function brokerIdentity() {
+  const owner = JSON.parse(readFileSync(ownerPath, "utf8"));
+  assert.equal(owner.schema, 1);
+  assert.equal(Number.isSafeInteger(owner.pid) && owner.pid > 0, true);
+  assert.equal(owner.process_group_id, owner.pid);
+  assert.equal(typeof owner.start_ticks, "string");
+  assert.equal(owner.socket_identity, socketIdentity());
+  process.kill(owner.pid, 0);
+  return `${owner.pid}:${owner.start_ticks}`;
 }
 
 function assertLoopbackListener(port) {
@@ -957,6 +1020,17 @@ function runLifecycleText(command, port, action) {
   return result.stdout;
 }
 
+function runBrokerControl(command, action) {
+  const result = runCommand(command, ["broker", action, "--json"], {
+    cwd: unrelatedRoot,
+    env: userEnvironment,
+    timeout: 30_000
+  });
+  assert.equal(result.stderr, "");
+  assertPrivateOutput(result.stdout);
+  return JSON.parse(result.stdout);
+}
+
 async function waitForLifecycleStatus(command, port, expectedApiState) {
   let latest = null;
   await eventually(
@@ -976,7 +1050,7 @@ async function waitForLifecycleStatus(command, port, expectedApiState) {
 
 function runSystemctl(args, options = {}) {
   return runCommand("systemctl", ["--user", "--no-pager", ...args], {
-    env: userEnvironment,
+    env: managerEnvironment,
     timeout: 120_000,
     ...options
   });
@@ -1044,7 +1118,10 @@ function assertInstalledInventory(layout, packageManifest, owner) {
     packageManifest.manifestSha256
   );
   assert.equal(owner.runtime.codex_bin, codexBin);
-  assert.equal(owner.runtime.node_bin, process.execPath);
+  assert.equal(
+    owner.runtime.node_bin,
+    join(owner.release.package_root, packageManifest.runtime.bundle.path)
+  );
   assertOwnedLink(layout.current_link, owner.release.selector_target);
   assertOwnedLink(layout.manifest_link, owner.manifest_link.target);
   assertOwnedLink(layout.command_path, owner.command.target);
@@ -1137,7 +1214,10 @@ function assertUninstalledInventory(layout) {
   ]) {
     assert.equal(existsNoFollow(path), false, `Uninstall residue: ${basename(path)}`);
   }
-  assert.equal(existsSync(runtimeRoot), false);
+  assert.equal(existsSync(serviceRuntimeRoot), false);
+  assert.equal(existsSync(socketPath), false);
+  assert.equal(existsSync(ownerPath), false);
+  assertEmptyForegroundRuntimeRoot();
   assertNoHostDeckProcesses();
 }
 
@@ -1150,7 +1230,10 @@ function uninstalledTreeIdentity(layout) {
 
 function assertFinalProductCleanup(port) {
   assertNoListener(port);
-  assert.equal(existsSync(runtimeRoot), false);
+  assert.equal(existsSync(serviceRuntimeRoot), false);
+  assert.equal(existsSync(socketPath), false);
+  assert.equal(existsSync(ownerPath), false);
+  assertEmptyForegroundRuntimeRoot();
   assertNoHostDeckProcesses();
   for (const name of ["hostdeck.service", "hostdeck-codex.service"]) {
     const state = unitState(name);
@@ -1167,7 +1250,10 @@ function assertFinalProductCleanup(port) {
 function assertNoInstalledProduct() {
   for (const path of [
     installDataRoot,
-    runtimeRoot,
+    foregroundRuntimeRoot,
+    serviceRuntimeRoot,
+    socketPath,
+    ownerPath,
     join(configHome, "systemd", "user", "hostdeck.service"),
     join(configHome, "systemd", "user", "hostdeck-codex.service"),
     join(manifest.container.home, ".local", "bin", "codexdeck")
@@ -1193,7 +1279,10 @@ function assertLifecycleCoordinationOnly() {
     sha256: hash(""),
     uid: manifest.container.uid
   });
-  assertEmptyRuntimeRoot();
+  assertEmptyForegroundRuntimeRoot();
+  assert.equal(existsSync(serviceRuntimeRoot), false);
+  assert.equal(existsSync(socketPath), false);
+  assert.equal(existsSync(ownerPath), false);
   for (const path of [
     join(configHome, "systemd", "user", "hostdeck.service"),
     join(configHome, "systemd", "user", "hostdeck-codex.service"),
@@ -1208,12 +1297,12 @@ function assertLifecycleCoordinationOnly() {
   }
 }
 
-function assertEmptyRuntimeRoot() {
-  const runtime = statSync(runtimeRoot);
+function assertEmptyForegroundRuntimeRoot() {
+  const runtime = statSync(foregroundRuntimeRoot);
   assert.equal(runtime.isDirectory(), true);
   assert.equal(runtime.uid, manifest.container.uid);
   assert.equal(runtime.mode & 0o7777, 0o700);
-  assert.deepEqual(readdirSync(runtimeRoot), []);
+  assert.deepEqual(readdirSync(foregroundRuntimeRoot), []);
 }
 
 function assertNoSystemInstallation() {
@@ -1240,6 +1329,7 @@ function assertNoHostDeckProcesses() {
       const commandLine = command.join(" ");
       if (
         commandLine.includes("service-host.js") ||
+        commandLine.includes("broker-host.js") ||
         (commandLine.includes("codex") && commandLine.includes("app-server"))
       ) {
         throw new Error("HostDeck product process remains after uninstall.");
@@ -1289,6 +1379,14 @@ function packageCommand(packagePath, packageManifest) {
   assert.equal(realpathSync(command), command);
   assert.equal(mode(command) & 0o111, 0o111);
   return command;
+}
+
+function bundledNodePath(packagePath) {
+  const packageManifest = readPackageManifest(packagePath);
+  const bundledNode = join(packagePath, packageManifest.runtime.bundle.path);
+  assert.equal(realpathSync(bundledNode), bundledNode);
+  assert.notEqual(mode(bundledNode) & 0o111, 0);
+  return bundledNode;
 }
 
 function readPackageManifest(packagePath) {
@@ -1360,6 +1458,19 @@ function createProductEnvironment() {
     CODEX_HOME: codexHome,
     HOME: manifest.container.home,
     HOSTDECK_CODEX_BIN: codexBin,
+    PATH: commandDir,
+    XDG_CONFIG_HOME: configHome,
+    XDG_DATA_HOME: dataHome,
+    XDG_RUNTIME_DIR: manifest.container.runtime_dir,
+    XDG_STATE_HOME: stateHome
+  });
+}
+
+function createManagerEnvironment() {
+  return Object.freeze({
+    ...process.env,
+    CODEX_HOME: codexHome,
+    HOME: manifest.container.home,
     XDG_CONFIG_HOME: configHome,
     XDG_DATA_HOME: dataHome,
     XDG_RUNTIME_DIR: manifest.container.runtime_dir,

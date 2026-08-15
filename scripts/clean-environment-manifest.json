@@ -2,7 +2,7 @@
   "schema_version": 1,
   "task_id": "IFC-V1-058",
   "contracts": {
-    "package_manifest_schema": 5,
+    "package_manifest_schema": 6,
     "source_lockfile": "pnpm-lock.yaml",
     "required_host_commands": [
       "docker",
