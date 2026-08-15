@@ -141,7 +141,7 @@ export interface CodexReconnectReconcileInput {
   readonly previous_admitted_generation: number | null;
   readonly compatibility: RuntimeCompatibility;
   readonly deadline: OperationDeadline;
-  readonly runtime: CodexReconnectReadPort;
+  readonly runtime: CodexReconnectResubscribePort;
 }
 
 export interface CodexReconnectReconciliation {
@@ -668,7 +668,7 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
         const allowedRead =
           typeof method === "string" && (codexReconnectReadMethods as readonly string[]).includes(method);
         const allowedResubscribe =
-          lease.stage === "resubscribe" &&
+          (lease.stage === "reconcile" || lease.stage === "resubscribe") &&
           typeof method === "string" &&
           (codexReconnectResubscribeMethods as readonly string[]).includes(method);
         if (

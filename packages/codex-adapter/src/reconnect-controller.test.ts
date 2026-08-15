@@ -5,6 +5,7 @@ import {
   type CodexReconnectClock,
   type CodexReconnectLifecyclePort,
   type CodexReconnectReadPort,
+  type CodexReconnectResubscribePort,
   createCodexRuntimeReconnectController,
   HostDeckCodexReconnectError
 } from "./reconnect-controller.js";
@@ -466,7 +467,7 @@ describe("Codex runtime reconnect controller", () => {
 
   it("enforces stage methods, generation, and revocation on the lifecycle runtime port", async () => {
     const transport = respondingTransport();
-    const retained: { value?: CodexReconnectReadPort } = {};
+    const retained: { value?: CodexReconnectResubscribePort } = {};
     const controller = createCodexRuntimeReconnectController({
       ...baseOptions(transport),
       lifecycle: lifecycle({
@@ -479,8 +480,12 @@ describe("Codex runtime reconnect controller", () => {
             input.runtime.request({ method: "turn/start", params: {}, kind: "read" } as never)
           ).rejects.toMatchObject({ code: "invalid_contract", stage: "reconcile" });
           await expect(
-            input.runtime.request({ method: "thread/resume", params: {}, kind: "read" } as never)
-          ).rejects.toMatchObject({ code: "invalid_contract", stage: "reconcile" });
+            input.runtime.request({
+              method: "thread/resume",
+              params: { threadId: "thread-a" },
+              kind: "read"
+            })
+          ).resolves.toEqual({ thread: { id: "thread-a" } });
           await expect(
             input.runtime.request({
               method: "thread/list",
@@ -515,7 +520,11 @@ describe("Codex runtime reconnect controller", () => {
     await expect(controller.start()).resolves.toMatchObject({ generation: 1 });
     expect(sentMethods(transport)).not.toContain("turn/start");
     await expect(
-      (retained.value as CodexReconnectReadPort).request({ method: "thread/list", params: {}, kind: "read" })
+      (retained.value as CodexReconnectResubscribePort).request({
+        method: "thread/list",
+        params: {},
+        kind: "read"
+      })
     ).rejects.toMatchObject({ code: "lifecycle_conflict", stage: "ready" });
     await controller.close();
   });

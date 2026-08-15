@@ -3,7 +3,7 @@ import { performance } from "node:perf_hooks";
 import {
   type CodexLoadedThreadRequestPort,
   type CodexReconnectLifecyclePort,
-  type CodexReconnectReadPort,
+  type CodexReconnectResubscribePort,
   type CodexRuntimeReconnectController,
   codexBindingDescriptor,
   codexResourceOptionsFromBudget,
@@ -487,7 +487,7 @@ export function createHostDeckProductionApplication(
   let eventPipeline: CodexEventPipeline | null = null;
   let approvalControl: CodexApprovalControlService | null = null;
   let automaticEnrollment: AutomaticSessionEnrollmentService | null = null;
-  let enrollmentRuntime: CodexReconnectReadPort | null = null;
+  let enrollmentRuntime: CodexReconnectResubscribePort | null = null;
   let reconnect: CodexRuntimeReconnectController | null = null;
   const resourceOptions = codexResourceOptionsFromBudget(budget);
   const transport = createCodexUnixWebSocketTransport({
@@ -660,7 +660,7 @@ export function createHostDeckProductionApplication(
         );
       }
       return (enrollmentRuntime ?? reconnectController).request(
-        input as Parameters<CodexReconnectReadPort["request"]>[0]
+        input as Parameters<CodexReconnectResubscribePort["request"]>[0]
       );
     }
   });
