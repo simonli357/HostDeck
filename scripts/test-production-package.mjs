@@ -624,8 +624,8 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
     runCommand("direct executable version", command, ["version"], unrelatedCwd),
     manifest.packageVersion
   );
-  assertUninstallResult(
-    runCommand(
+  const canProbeUninstall = assertUninstallResult(
+    runUncheckedCommand(
       "read-only relocated service uninstall",
       command,
       ["service", "uninstall", "--json"],
@@ -653,14 +653,16 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
     ),
     manifest.packageVersion
   );
-  assertUninstallResult(
-    runPnpm(
-      "package-manager service uninstall",
-      ["exec", "codexdeck", "service", "uninstall", "--json"],
-      managerProject
-    ),
-    "package-manager service uninstall"
-  );
+  if (canProbeUninstall) {
+    assertUninstallResult(
+      runPnpm(
+        "package-manager service uninstall",
+        ["exec", "codexdeck", "service", "uninstall", "--json"],
+        managerProject
+      ),
+      "package-manager service uninstall"
+    );
+  }
 
   const archive = join(acceptanceRoot, "hostdeck-runtime.tgz");
   runCommand(
@@ -691,15 +693,17 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
       unrelatedCwd
     )
   );
-  assertUninstallResult(
-    runCommand(
-      "packed runtime service uninstall",
-      join(packedPackage, packedManifest.command.path),
-      ["service", "uninstall", "--json"],
-      unrelatedCwd
-    ),
-    "packed runtime service uninstall"
-  );
+  if (canProbeUninstall) {
+    assertUninstallResult(
+      runCommand(
+        "packed runtime service uninstall",
+        join(packedPackage, packedManifest.command.path),
+        ["service", "uninstall", "--json"],
+        unrelatedCwd
+      ),
+      "packed runtime service uninstall"
+    );
+  }
 
   const globalPrefix = join(acceptanceRoot, "global-prefix");
   const globalPackage = join(
@@ -727,15 +731,17 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
     ),
     manifest.packageVersion
   );
-  assertUninstallResult(
-    runCommand(
-      "global-style service uninstall",
-      globalBin,
-      ["service", "uninstall", "--json"],
-      unrelatedCwd
-    ),
-    "global-style service uninstall"
-  );
+  if (canProbeUninstall) {
+    assertUninstallResult(
+      runCommand(
+        "global-style service uninstall",
+        globalBin,
+        ["service", "uninstall", "--json"],
+        unrelatedCwd
+      ),
+      "global-style service uninstall"
+    );
+  }
 
   const installedCommand = join(
     acceptanceRoot,
@@ -745,15 +751,17 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
   );
   mkdirSync(dirname(installedCommand), { recursive: true });
   symlinkSync(relative(dirname(installedCommand), command), installedCommand);
-  assertUninstallResult(
-    runCommand(
-      "installed-command service uninstall",
-      installedCommand,
-      ["service", "uninstall", "--json"],
-      unrelatedCwd
-    ),
-    "installed-command service uninstall"
-  );
+  if (canProbeUninstall) {
+    assertUninstallResult(
+      runCommand(
+        "installed-command service uninstall",
+        installedCommand,
+        ["service", "uninstall", "--json"],
+        unrelatedCwd
+      ),
+      "installed-command service uninstall"
+    );
+  }
   const missingConfig = join(acceptanceRoot, "private-missing-config.json");
   const config = runCommand(
     "missing config command",
@@ -785,6 +793,15 @@ function runExecutableInvocationMatrix(root, manifest, unrelatedCwd) {
 }
 
 function assertUninstallResult(result, label) {
+  if (result.status === 70) {
+    assert.equal(result.stdout, "", `${label} conflict must not write stdout`);
+    assert.equal(
+      result.stderr,
+      "HostDeck CLI error (operation_conflict): HostDeck service ownership could not be proven for safe uninstall.\n",
+      `${label} must expose only the exact foreign-installation refusal`
+    );
+    return false;
+  }
   assert.equal(result.status, 0, `${label} must succeed`);
   assert.equal(result.stderr, "", `${label} must not write stderr`);
   const parsed = JSON.parse(result.stdout);
@@ -829,6 +846,7 @@ function assertUninstallResult(result, label) {
     },
     `${label} result must be exact`
   );
+  return true;
 }
 
 function assertHelpResult(result) {
@@ -923,6 +941,28 @@ function runCommand(
   expectFailure = false,
   environmentOverrides = {}
 ) {
+  const result = runUncheckedCommand(
+    label,
+    command,
+    args,
+    cwd,
+    environmentOverrides
+  );
+  if (expectFailure ? result.status === 0 : result.status !== 0) {
+    throw new Error(
+      `${label} ${expectFailure ? "unexpectedly passed" : "failed"}:\n${result.stdout ?? ""}\n${result.stderr ?? ""}`
+    );
+  }
+  return result;
+}
+
+function runUncheckedCommand(
+  label,
+  command,
+  args,
+  cwd,
+  environmentOverrides = {}
+) {
   const environment = {
     ...process.env,
     HOME: join(acceptanceRoot, "home"),
@@ -943,11 +983,6 @@ function runCommand(
     timeout: 30_000
   });
   if (result.error !== undefined) throw new Error(`${label} could not run.`, { cause: result.error });
-  if (expectFailure ? result.status === 0 : result.status !== 0) {
-    throw new Error(
-      `${label} ${expectFailure ? "unexpectedly passed" : "failed"}:\n${result.stdout ?? ""}\n${result.stderr ?? ""}`
-    );
-  }
   return result;
 }
 
