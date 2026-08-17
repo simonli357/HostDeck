@@ -14,7 +14,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Publication: `REL-V1-111` now fail-closed verifies the 11-asset deterministic Ubuntu bundle and the SHA-pinned tag -> native checks -> package -> metadata -> attestation -> draft-release workflow. No tag or live attestation has been created.
 - Next chain: connect/unlock Android -> exercise installed `0.0.14` in `FE-V1-108`; then run `REL-V1-110` and the human `REL-V1-010` go/no-go.
 - Validation: the `0.0.13` baseline passed 3,299 unit tests with 32 device-gated skips, 309 contract, 36 integration, typecheck, lint, verifier, and deterministic package acceptance. `0.0.14` additionally passed typecheck, targeted formatting, production build/install, and a real ordinary-Codex auto-enroll -> detach -> one-shot archive flow while HostDeck stayed ready and the broker PID remained unchanged.
-- Git: shared-runtime implementation through installed `0.0.14` is committed on `feat/shared-codex-runtime`; push is the next action. The primary worktree remains untouched.
+- Git: shared-runtime implementation through installed `0.0.14` is committed and pushed on `feat/shared-codex-runtime`. The primary worktree remains untouched.
 
 ## Blockers
 
