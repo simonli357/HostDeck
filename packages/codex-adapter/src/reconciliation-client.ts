@@ -477,6 +477,9 @@ function parseThread(
   const turns = requireArray(value.turns, "Codex reconciliation thread turns must be an array.", 0);
   if (turns.length !== 0) throw invalidPayload("Codex reconciliation thread unexpectedly included turn history.");
   const { status, activeFlags } = parseThreadStatus(value.status);
+  if (typeof value.preview !== "string") {
+    throw invalidPayload("Codex thread preview must be text.");
+  }
   return Object.freeze({
     id: parsePayloadThreadId(value.id),
     cwd: parseAbsolutePath(value.cwd, "Codex thread cwd"),
@@ -488,7 +491,6 @@ function parseThread(
     thread_source: parseNullablePrintableString(value.threadSource, "Codex thread source marker", 160),
     model_provider: parsePrintableString(value.modelProvider, "Codex thread model provider", 120),
     name: parseNullablePrintableString(value.name, "Codex thread name", 240),
-    preview: parseBoundedText(value.preview, "Codex thread preview", 12_000, true),
     archived
   });
 }

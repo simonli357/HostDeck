@@ -42,7 +42,6 @@ export interface CodexThreadRecord {
   readonly thread_source: string | null;
   readonly model_provider: string;
   readonly name: string | null;
-  readonly preview: string;
   readonly archived: boolean | null;
 }
 
@@ -103,6 +102,10 @@ export interface CodexThreadClient {
     deadline?: OperationDeadline
   ) => Promise<CodexThreadPage>;
   readonly listAll: (deadline?: OperationDeadline) => Promise<readonly CodexThreadRecord[]>;
+  readonly listTargetThreads: (
+    threadIds: readonly (CodexThreadId | string)[],
+    deadline?: OperationDeadline
+  ) => Promise<readonly CodexThreadRecord[]>;
   readonly findByOperationId: (
     operationId: ClientOperationId | string,
     deadline?: OperationDeadline
@@ -344,6 +347,80 @@ class DefaultCodexThreadClient implements CodexThreadClient {
     return threads;
   }
 
+  async listTargetThreads(
+    threadIds: readonly (CodexThreadId | string)[],
+    deadline?: OperationDeadline
+  ): Promise<readonly CodexThreadRecord[]> {
+    if (!Array.isArray(threadIds)) {
+      throw invalidThreadInput("Codex target thread ids must be an array.");
+    }
+    const targets = threadIds.map(parseThreadId);
+    const remaining = new Set(targets);
+    if (remaining.size !== targets.length) {
+      throw invalidThreadInput("Codex target thread ids contain duplicates.");
+    }
+    if (remaining.size === 0) return Object.freeze([]);
+
+    void this.runtime_version;
+    const threads: CodexThreadRecord[] = [];
+    for (const archived of [false, true]) {
+      let cursor: string | null = null;
+      const seenCursors = new Set<string>();
+      for (let pageNumber = 0; pageNumber < this.options.max_pages; pageNumber += 1) {
+        const params = {
+          archived,
+          cursor,
+          limit: this.options.page_size,
+          sortDirection: "desc",
+          sortKey: "created_at",
+          useStateDbOnly: true
+        } satisfies ThreadListParams;
+        const result = requireRecord(
+          await this.port.request({
+            method: "thread/list",
+            params,
+            kind: "read",
+            ...codexRequestOptionsFromDeadline(deadline, this.options.read_timeout_ms)
+          }),
+          "Codex target thread/list result must be an object."
+        );
+        assertExactKeys(
+          result,
+          ["backwardsCursor", "data", "nextCursor"],
+          "Codex target thread/list fields are invalid."
+        );
+        if (!Array.isArray(result.data) || result.data.length > this.options.page_size) {
+          throw invalidThreadPayload("Codex target thread/list data exceeds the requested page bound.");
+        }
+        if (result.backwardsCursor !== null) parseCursor(result.backwardsCursor);
+        for (const candidate of result.data) {
+          const candidateId = targetCandidateId(candidate);
+          if (candidateId === null || !remaining.has(candidateId)) continue;
+          threads.push(parseThread(candidate, archived));
+          remaining.delete(candidateId);
+        }
+        if (remaining.size === 0) break;
+        if (result.nextCursor === null) break;
+        const nextCursor = parseCursor(result.nextCursor);
+        if (nextCursor === cursor || seenCursors.has(nextCursor)) {
+          throw invalidThreadPayload("Codex target thread/list pagination cursor repeated.");
+        }
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
+        if (pageNumber === this.options.max_pages - 1) {
+          throw new HostDeckCodexAdapterError(
+            "broker_overloaded",
+            "Codex target thread/list exceeded the configured page bound.",
+            { outcome: "not_applicable", retry_safe: false }
+          );
+        }
+      }
+      if (remaining.size === 0) break;
+    }
+    assertUniqueThreadIds(threads, "Codex target active and archived thread lists overlap.");
+    return Object.freeze(threads);
+  }
+
   async findByOperationId(
     operationId: ClientOperationId | string,
     deadline?: OperationDeadline
@@ -552,6 +629,9 @@ class DefaultCodexThreadClient implements CodexThreadClient {
 
 function parseThread(candidate: unknown, archived: boolean | null): CodexThreadRecord {
   const value = requireRecord(candidate, "Codex thread payload must be an object.");
+  if (typeof value.preview !== "string") {
+    throw invalidThreadPayload("Codex thread preview must be text.");
+  }
   const createdAt = unixSecondsToIso(value.createdAt, "createdAt");
   const updatedAt = unixSecondsToIso(value.updatedAt, "updatedAt");
   if (updatedAt < createdAt) throw invalidThreadPayload("Codex thread updatedAt precedes createdAt.");
@@ -567,9 +647,14 @@ function parseThread(candidate: unknown, archived: boolean | null): CodexThreadR
     thread_source: value.threadSource === null ? null : parsePrintableString(value.threadSource, "Codex thread source marker", 160),
     model_provider: parsePrintableString(value.modelProvider, "Codex thread model provider", 120),
     name: value.name === null ? null : parsePrintableString(value.name, "Codex thread name", 240),
-    preview: parseBoundedText(value.preview, "Codex thread preview", 12_000),
     archived
   };
+}
+
+function targetCandidateId(candidate: unknown): CodexThreadId | null {
+  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+  const parsed = codexThreadIdSchema.safeParse((candidate as Record<string, unknown>).id);
+  return parsed.success ? parsed.data : null;
 }
 
 function parseStatus(candidate: unknown): {

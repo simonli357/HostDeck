@@ -483,6 +483,19 @@ describe("managed Codex thread start saga", () => {
 });
 
 describe("managed Codex archive and reconciliation", () => {
+  it("uses exact target disposition instead of scanning unrelated runtime threads", async () => {
+    const fixture = createFixture();
+    await fixture.service.start(request);
+    fixture.threads.listAll = async () => {
+      throw new Error("Archive must not inspect unrelated runtime threads.");
+    };
+
+    await expect(fixture.service.archive("sess_managed_001")).resolves.toMatchObject({
+      projection: { session: { session_state: "archived" } }
+    });
+    expect(fixture.threads.archive_calls).toEqual(["thread-managed-1"]);
+  });
+
   it.each(["completed", "failed", "interrupted"] as const)(
     "archives an idle runtime when the retained turn state is %s",
     async (turnState) => {
@@ -569,7 +582,7 @@ describe("managed Codex archive and reconciliation", () => {
       clock: { now: () => clockNow }
     });
     const records = [...fixture.threads.records];
-    fixture.threads.listAll = async (observedDeadline) => {
+    fixture.threads.listTargetThreads = async (_threadIds, observedDeadline) => {
       expect(observedDeadline).toBe(deadline);
       clockNow = 10;
       return records;
@@ -940,6 +953,14 @@ class FakeThreadClient implements CodexThreadClient {
     return [...this.records];
   }
 
+  async listTargetThreads(
+    threadIds: readonly string[],
+    _deadline?: OperationDeadline
+  ): Promise<readonly CodexThreadRecord[]> {
+    const targets = new Set(threadIds);
+    return this.records.filter((thread) => targets.has(thread.id));
+  }
+
   async findByOperationId(operationId: string): Promise<readonly CodexThreadRecord[]> {
     const marker = codexThreadOperationMarker(operationId);
     return this.records.filter((thread) => thread.thread_source === marker);
@@ -1067,7 +1088,6 @@ function threadRecord(overrides: Record<string, unknown> = {}): CodexThreadRecor
     thread_source: null,
     model_provider: "openai",
     name: null,
-    preview: "",
     archived: false,
     ...overrides
   };
@@ -1082,7 +1102,6 @@ function threadRecord(overrides: Record<string, unknown> = {}): CodexThreadRecor
     thread_source: candidate.thread_source as string | null,
     model_provider: candidate.model_provider as string,
     name: candidate.name as string | null,
-    preview: candidate.preview as string,
     archived: candidate.archived as boolean | null
   };
 }

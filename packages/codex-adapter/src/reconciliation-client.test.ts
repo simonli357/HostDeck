@@ -32,7 +32,11 @@ describe("Codex reconnect-only reconciliation clients", () => {
           useStateDbOnly: false
         });
         if (!params.archived && params.cursor === null) {
-          return page([rawThread({ id: threadA })], "active-page-2", "active-back-1");
+          return page(
+            [rawThread({ id: threadA, preview: "private".repeat(4_000) })],
+            "active-page-2",
+            "active-back-1"
+          );
         }
         if (!params.archived) return page([rawThread({ id: threadB, cwd: "/tmp/project-b" })], null, "active-back-2");
         return page([rawThread({ id: threadArchived, cwd: "/tmp/project-archived" })], null, "archive-back");
@@ -46,11 +50,13 @@ describe("Codex reconnect-only reconciliation clients", () => {
       protocol_thread_max_pages: 2
     }));
 
-    await expect(client.listAllThreads(signal)).resolves.toMatchObject([
+    const listed = await client.listAllThreads(signal);
+    expect(listed).toMatchObject([
       { id: threadA, cwd: "/tmp/project-a", archived: false, source: "app_server" },
       { id: threadB, cwd: "/tmp/project-b", archived: false, source: "app_server" },
       { id: threadArchived, cwd: "/tmp/project-archived", archived: true, source: "app_server" }
     ]);
+    expect(listed[0]).not.toHaveProperty("preview");
     await expect(client.readThread(threadA, signal)).resolves.toMatchObject({ id: threadA, archived: null });
     await expect(client.readGoal(threadA, signal)).resolves.toMatchObject({
       thread_id: threadA,

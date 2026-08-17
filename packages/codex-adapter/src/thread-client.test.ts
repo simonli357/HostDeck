@@ -97,6 +97,58 @@ describe("normalized Codex thread client", () => {
     ]);
   });
 
+  it("lists exact target dispositions without retaining or parsing unrelated private previews", async () => {
+    let activePage = 0;
+    const port = fakePort((request) => {
+      const params = request.params as {
+        readonly archived: boolean;
+        readonly cursor: string | null;
+      };
+      if (params.archived) {
+        return { backwardsCursor: null, data: [], nextCursor: null };
+      }
+      activePage += 1;
+      if (activePage === 1) {
+        return {
+          backwardsCursor: null,
+          data: [rawThread({ id: "thread-unrelated", preview: "x".repeat(24_000) })],
+          nextCursor: "target-page"
+        };
+      }
+      return {
+        backwardsCursor: null,
+        data: [rawThread({ id: "thread-target", preview: "y".repeat(24_000) })],
+        nextCursor: null
+      };
+    });
+
+    const threads = await createCodexThreadClient(port, {
+      page_size: 2,
+      max_pages: 3
+    }).listTargetThreads(["thread-target"]);
+
+    expect(threads).toEqual([
+      expect.objectContaining({ id: "thread-target", archived: false })
+    ]);
+    expect(threads[0]).not.toHaveProperty("preview");
+    expect(Object.isFrozen(threads)).toBe(true);
+    expect(port.requests.map((request) => request.params)).toEqual([
+      expect.objectContaining({
+        archived: false,
+        cursor: null,
+        limit: 2,
+        sortDirection: "desc",
+        sortKey: "created_at",
+        useStateDbOnly: true
+      }),
+      expect.objectContaining({
+        archived: false,
+        cursor: "target-page",
+        useStateDbOnly: true
+      })
+    ]);
+  });
+
   it("derives a decreasing timeout from one deadline for every active and archived page", async () => {
     let now = 0;
     let page = 0;

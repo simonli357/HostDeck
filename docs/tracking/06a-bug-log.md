@@ -1158,4 +1158,13 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Route: critical small bugfix owned by `FE-V1-108`; no product, UI, security, or setup contract change.
 - Root cause: both archive preflights admitted only the projected `idle` turn state, while retained projections deliberately preserve terminal `completed`, `failed`, or `interrupted` states after the runtime returns to idle.
 - Fix: admit all terminal projected turn states at the local preflight, retain the authoritative runtime idle and active-flag checks immediately before dispatch, and continue rejecting busy, stale, incompatible, or contradictory state.
-- Current state: focused route and service regressions pass for every admitted terminal state; server typecheck and formatting pass. Final packaged runtime validation remains pending.
+- Current state: fixed in pushed `df97eac`; the `0.0.9` package crossed the former terminal-state rejection and exposed the independent target-listing failure tracked as `BUG-094`. Focused route and service regressions pass for every admitted terminal state; final packaged runtime validation remains pending with `BUG-094`.
+
+### BUG-094 Unrelated Private Preview Blocks Archive
+
+- Symptom: after terminal-state admission was fixed, archiving an exact current idle session returned `runtime_unavailable`, while a direct targeted read and archive of the same native thread succeeded.
+- Impact: any unrelated Codex session with a valid long preview could block archive for every managed session.
+- Route: critical small bugfix owned by `FE-V1-108`; no product, UI, security, or setup contract change.
+- Root cause: archive preflight used the global thread inventory and fully retained every private preview before selecting its one target. Codex can emit valid previews longer than HostDeck's obsolete 12,000-character internal bound.
+- Fix: resolve archive disposition through bounded exact-target pages, skip unrelated payload bodies, validate but never retain private preview text in internal thread records, and keep full target identity/status validation.
+- Current state: 27 focused adapter/reconciliation and 61 archive/lifecycle tests, adapter/server typecheck, and formatting pass. Final packaged runtime validation remains pending.

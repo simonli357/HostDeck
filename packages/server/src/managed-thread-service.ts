@@ -253,7 +253,10 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
 
       let listedThreads: readonly CodexThreadRecord[];
       try {
-        listedThreads = await this.options.threads.listAll(deadline);
+        listedThreads = await this.options.threads.listTargetThreads(
+          [current.mapping.codex_thread_id],
+          deadline
+        );
       } catch (error) {
         throw mapAdapterError(error, "Codex thread disposition could not be verified before archive.");
       }
