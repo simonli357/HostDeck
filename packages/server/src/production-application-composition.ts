@@ -813,6 +813,17 @@ export function createHostDeckProductionApplication(
     states: stateRepository,
     now: readNow
   });
+  const projectionCoordinatedManagedSessions = Object.freeze({
+    archive: (sessionId: string, deadline: OperationDeadline) =>
+      pipeline.transitionMembership(async (membership) => {
+        const archived = await managedSessions.archive(sessionId, deadline);
+        membership.forgetThread(archived.mapping.codex_thread_id);
+        return archived;
+      }, deadline.signal),
+    read: (sessionId: string) => managedSessions.read(sessionId),
+    start: (input: unknown, deadline: OperationDeadline) =>
+      managedSessions.start(input, deadline)
+  });
   const runtimeView = Object.freeze({
     read: () => reconnectController.compatibility
   });
@@ -904,7 +915,7 @@ export function createHostDeckProductionApplication(
     securityAudit,
     sessions: Object.freeze({
       catalog,
-      managed: createHostDeckBoundFunctionView(managedSessions, ["archive", "read", "start"]),
+      managed: projectionCoordinatedManagedSessions,
       read: targetSessionRead,
       resume,
       subscribers: targetSubscribers
