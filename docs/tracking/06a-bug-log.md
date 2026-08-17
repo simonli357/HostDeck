@@ -1158,7 +1158,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Route: critical small bugfix owned by `FE-V1-108`; no product, UI, security, or setup contract change.
 - Root cause: both archive preflights admitted only the projected `idle` turn state, while retained projections deliberately preserve terminal `completed`, `failed`, or `interrupted` states after the runtime returns to idle.
 - Fix: admit all terminal projected turn states at the local preflight, retain the authoritative runtime idle and active-flag checks immediately before dispatch, and continue rejecting busy, stale, incompatible, or contradictory state.
-- Current state: fixed in pushed `df97eac`; the `0.0.9` package crossed the former terminal-state rejection and exposed the independent target-listing failure tracked as `BUG-094`. Focused route and service regressions pass for every admitted terminal state; final packaged runtime validation remains pending with `BUG-094`.
+- Current state: closed through installed `0.0.14`. Focused route/service regressions admit every valid terminal state, and a real ordinary Codex session with a completed turn archived successfully in one request.
 
 ### BUG-094 Unrelated Private Preview Blocks Archive
 
@@ -1167,7 +1167,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Route: critical small bugfix owned by `FE-V1-108`; no product, UI, security, or setup contract change.
 - Root cause: archive preflight used the global thread inventory and fully retained every private preview before selecting its one target. Codex can emit valid previews longer than HostDeck's obsolete 12,000-character internal bound.
 - Fix: resolve archive disposition through bounded exact-target pages, skip unrelated payload bodies, validate but never retain private preview text in internal thread records, and keep full target identity/status validation.
-- Current state: 27 focused adapter/reconciliation and 61 archive/lifecycle tests, adapter/server typecheck, and formatting pass. Final packaged runtime validation remains pending.
+- Current state: closed through installed `0.0.14`. The focused adapter/reconciliation and archive/lifecycle tests pass, and exact-target live archive completed without scanning failure.
 
 ### BUG-095 Successful Native Activity Latches Projector Failed
 
@@ -1177,4 +1177,13 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: reconnect automatic enrollment accepted audit operations for loaded no-rollout native roots before startup orphan reconciliation. The same startup then marked those operations incomplete; their bounded retry later encountered an already-terminal audit and poisoned the enrollment observer. Independently, any pre-mapping candidate timeout was treated as a global projector failure.
 - Fix: complete startup maintenance and seal the prior-process reconciliation gap before reconnect can accept enrollment work. Keep storage, pipeline, and selected-session uncertainty fail-closed, but isolate and audit pre-mapping candidate failures without disabling healthy managed sessions.
 - Harsh success criteria: identify and fix the exact observer failure; one ordinary Codex start, multiple completed turns, client exit, HostDeck archive, and a HostDeck-only restart must preserve ready health and the same broker. Malformed required managed events must still fail closed; optional or unmanaged activity must not masquerade as projected success. Add direct regression coverage and pass packaged real-runtime acceptance without retrying a failed mutation.
-- Current state: implementation and direct regression pass 3,297 unit, 309 contract, 36 integration, exact production-composition smoke, typecheck, lint/export, planning, runtime-boundary, scaffold, and binding gates. Packaged real-runtime acceptance remains pending; the failed archive was not retried.
+- Current state: closed through installed `0.0.14`. The baseline passed 3,299 unit, 309 contract, 36 integration, typecheck, lint/export, and deterministic package acceptance; real ordinary-session enrollment, completed activity, detach, and archive preserved ready host health and the same shared broker.
+
+### BUG-096 Successful Archive Poisons The Projector
+
+- Symptom: native archive and durable audit both succeeded, but the trailing Codex status notification changed host health to `projector_failed` and closed mutation admission.
+- Impact: the archived session disappeared correctly while every remaining phone write became unavailable until a HostDeck restart.
+- Route: critical small bugfix owned by `FE-V1-108`; no product, API, UI, security, or setup contract change.
+- Root cause: a notification passed managed-thread classification before archive persistence, waited behind the archive, then projected after the mapping became archived and treated that valid membership transition as fatal scope drift.
+- Fix: serialize archive inside the existing projection membership queue and forget the native thread only after durable archive succeeds; queued trailing notifications are then classified as unmanaged instead of poisoning projection.
+- Current state: closed in installed `0.0.14`. Typecheck and formatting pass; a fresh ordinary Codex session auto-enrolled, completed, detached, archived once, disappeared from the public catalog, and left HostDeck `ready` with broker PID `801536` unchanged.
