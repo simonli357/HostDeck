@@ -27,6 +27,7 @@ import {
   type ResourceBudget,
   type RuntimeCompatibility,
   runtimeCompatibilitySchema,
+  type SharedSessionEnrollment,
   selectedRequestAuthenticationContextSchema
 } from "@hostdeck/contracts";
 import type { OperationDeadline } from "@hostdeck/core";
@@ -56,6 +57,7 @@ import {
   createHostDeckSelectedWriteShutdownPort,
   type HostDeckApplicationShutdown
 } from "./application-shutdown.js";
+import { classifyAutomaticEnrollmentFailureHealth } from "./automatic-session-enrollment-health.js";
 import {
   type AutomaticSessionEnrollmentService,
   createAutomaticSessionEnrollmentService
@@ -649,6 +651,45 @@ export function createHostDeckProductionApplication(
     }
   });
   const pipeline = eventPipeline;
+  const observeEnrollmentFailure = (
+    outcome: SharedSessionEnrollment
+  ): boolean => {
+    if (outcome.state !== "failed") return false;
+    let hasSelectedMapping = false;
+    try {
+      const state = stateRepository.getByThreadId(outcome.native_thread_id);
+      hasSelectedMapping =
+        state !== null &&
+        state.mapping.disposition === "selected" &&
+        state.mapping.archived_at === null;
+    } catch (error) {
+      attemptLocalHealthUpdate(
+        "projector",
+        "failed",
+        ["projector_failed"],
+        "projection"
+      );
+      report(
+        "projection",
+        errorCode(error, "enrollment_state_lookup_failed")
+      );
+      return true;
+    }
+    const effect = classifyAutomaticEnrollmentFailureHealth(outcome, {
+      event_pipeline_failed: pipeline.failure !== null,
+      has_selected_mapping: hasSelectedMapping
+    });
+    if (effect === "projector_failed") {
+      attemptLocalHealthUpdate(
+        "projector",
+        "failed",
+        ["projector_failed"],
+        "projection"
+      );
+    }
+    report("projection", `enrollment_${outcome.failure}`);
+    return effect === "projector_failed";
+  };
   const loadedRuntime: CodexLoadedThreadRequestPort = Object.freeze({
     get compatibility() {
       return (enrollmentRuntime ?? reconnectController).compatibility;
@@ -677,14 +718,7 @@ export function createHostDeckProductionApplication(
     resource_budget: budget,
     now: readNow,
     on_background_outcome(outcome) {
-      if (outcome.state !== "failed") return;
-      attemptLocalHealthUpdate(
-        "projector",
-        "failed",
-        ["projector_failed"],
-        "projection"
-      );
-      report("projection", `enrollment_${outcome.failure}`);
+      observeEnrollmentFailure(outcome);
     }
   });
   const enrollment = automaticEnrollment;
@@ -745,9 +779,23 @@ export function createHostDeckProductionApplication(
           input.generation,
           input.deadline.signal
         );
-        const failed = result.outcomes.find((outcome) => outcome.state === "failed");
-        if (failed !== undefined) {
-          throw new TypeError(`Automatic enrollment failed with ${failed.failure}.`);
+        let projectorFailure: Extract<
+          (typeof result.outcomes)[number],
+          { readonly state: "failed" }
+        > | null = null;
+        for (const outcome of result.outcomes) {
+          if (
+            outcome.state === "failed" &&
+            observeEnrollmentFailure(outcome) &&
+            projectorFailure === null
+          ) {
+            projectorFailure = outcome;
+          }
+        }
+        if (projectorFailure !== null) {
+          throw new TypeError(
+            `Automatic enrollment failed with ${projectorFailure.failure}.`
+          );
         }
         const reconciled = await healthAwareReconciliation.reconcile(input);
         catalog.reconcile(input.generation);
@@ -937,6 +985,27 @@ export function createHostDeckProductionApplication(
     phase = "starting";
     startPromise = (async () => {
       try {
+        startupMaintenance = await runHostDeckStartupMaintenance({
+          now: readNow,
+          ports: startupMaintenancePorts,
+          signal: deadline.signal
+        });
+        localHealth.update(
+          "storage",
+          startupMaintenance.storage_observation.state,
+          startupMaintenance.storage_observation.reasons
+        );
+        if (startupMaintenance.status !== "ready") {
+          throw new TypeError(
+            "HostDeck startup maintenance did not establish ready storage."
+          );
+        }
+        deadline.throwIfAborted();
+
+        // Close only prior-process work before this process can accept enrollment audits.
+        await reconciliation.sealStartupUnavailable({ deadline });
+        deadline.throwIfAborted();
+
         let diagnosticCompatibility: RuntimeCompatibility | null = null;
         try {
           await reconnectController.start(deadline.signal);
@@ -957,29 +1026,12 @@ export function createHostDeckProductionApplication(
             compatibilityRepository,
             diagnosticCompatibility
           );
-          await reconciliation.sealStartupUnavailable({ deadline });
           subscribers.close();
           localHealth.update("compatibility", "failed", [
             "runtime_incompatible"
           ]);
           localHealth.update("runtime", "failed", ["runtime_failed"]);
           report("reconnect", "incompatible");
-        }
-        deadline.throwIfAborted();
-        startupMaintenance = await runHostDeckStartupMaintenance({
-          now: readNow,
-          ports: startupMaintenancePorts,
-          signal: deadline.signal
-        });
-        localHealth.update(
-          "storage",
-          startupMaintenance.storage_observation.state,
-          startupMaintenance.storage_observation.reasons
-        );
-        if (startupMaintenance.status !== "ready") {
-          throw new TypeError(
-            "HostDeck startup maintenance did not establish ready storage."
-          );
         }
         if (pipeline.failure !== null || fanout.failure !== null || fanout.closed) {
           throw new TypeError(

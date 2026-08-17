@@ -118,7 +118,8 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
             orphan: {
               status: "complete",
               actionable_remaining: false,
-              failure: false
+              failure: false,
+              reconciled_operation_count: 1
             },
             retention: {
               status: "complete",
@@ -148,7 +149,7 @@ describe.skipIf(!requireSmoke)("exact production application composition smoke",
             unmanaged_runtime_count: null,
             boundary_count: 1,
             ready_count: 0,
-            audits_reconciled: 1,
+            audits_reconciled: 0,
             issues: {
               archived: 0,
               contradictions: 0,

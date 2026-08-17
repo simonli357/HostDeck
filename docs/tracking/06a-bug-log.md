@@ -1168,3 +1168,13 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: archive preflight used the global thread inventory and fully retained every private preview before selecting its one target. Codex can emit valid previews longer than HostDeck's obsolete 12,000-character internal bound.
 - Fix: resolve archive disposition through bounded exact-target pages, skip unrelated payload bodies, validate but never retain private preview text in internal thread records, and keep full target identity/status validation.
 - Current state: 27 focused adapter/reconciliation and 61 archive/lifecycle tests, adapter/server typecheck, and formatting pass. Final packaged runtime validation remains pending.
+
+### BUG-095 Successful Native Activity Latches Projector Failed
+
+- Symptom: the installed `0.0.10` service starts ready and automatically enrolls an ordinary Codex session, then changes to `projector_failed` about 30 seconds later while the shared broker, TUI, and enrolled session remain healthy.
+- Impact: Mission Control becomes unavailable and every later write, including archive, fails with `runtime_unavailable` until a HostDeck-only restart.
+- Route: critical release blocker owned by `FE-V1-108`; no product, UI, security, or setup contract change.
+- Root cause: reconnect automatic enrollment accepted audit operations for loaded no-rollout native roots before startup orphan reconciliation. The same startup then marked those operations incomplete; their bounded retry later encountered an already-terminal audit and poisoned the enrollment observer. Independently, any pre-mapping candidate timeout was treated as a global projector failure.
+- Fix: complete startup maintenance and seal the prior-process reconciliation gap before reconnect can accept enrollment work. Keep storage, pipeline, and selected-session uncertainty fail-closed, but isolate and audit pre-mapping candidate failures without disabling healthy managed sessions.
+- Harsh success criteria: identify and fix the exact observer failure; one ordinary Codex start, multiple completed turns, client exit, HostDeck archive, and a HostDeck-only restart must preserve ready health and the same broker. Malformed required managed events must still fail closed; optional or unmanaged activity must not masquerade as projected success. Add direct regression coverage and pass packaged real-runtime acceptance without retrying a failed mutation.
+- Current state: implementation and direct regression pass 3,297 unit, 309 contract, 36 integration, exact production-composition smoke, typecheck, lint/export, planning, runtime-boundary, scaffold, and binding gates. Packaged real-runtime acceptance remains pending; the failed archive was not retried.

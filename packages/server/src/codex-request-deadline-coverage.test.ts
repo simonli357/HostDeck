@@ -39,7 +39,7 @@ const directDeadlineServiceFiles = Object.freeze([
 ]);
 
 const clientRequestInventory = Object.freeze([
-  { file: "thread-client.ts", requests: 10 },
+  { file: "thread-client.ts", requests: 11 },
   { file: "turn-client.ts", requests: 3 },
   { file: "model-client.ts", requests: 2 },
   { file: "goal-client.ts", requests: 3 },

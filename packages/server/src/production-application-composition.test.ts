@@ -14,6 +14,7 @@ import {
 import { createOperationDeadline, type OperationDeadline } from "@hostdeck/core";
 import {
   createRuntimeCompatibilityRepository,
+  createSelectedAuditRepository,
   createSelectedStateRepository,
   createSettingsRepository
 } from "@hostdeck/storage";
@@ -349,6 +350,10 @@ describe("IFC-V1-082 production application composition", () => {
 
   it("reports bounded runtime-start failure without opening mutation or remote ingress", async () => {
     const fixture = await createFixture("runtime-failure");
+    const auditRepository = createSelectedAuditRepository(
+      fixture.resources.database
+    );
+    auditRepository.recordAccepted(startupOrphanAuditRecord());
     const application = compose(fixture, () => {
       throw new Error("observer-private-sentinel");
     });
@@ -388,6 +393,21 @@ describe("IFC-V1-082 production application composition", () => {
     expect(application.remote.snapshot()).toMatchObject({
       phase: "idle",
       poll_cycles: 0
+    });
+    expect(application.snapshot().startup_maintenance).toMatchObject({
+      status: "ready",
+      orphan: { reconciled_operation_count: 1 }
+    });
+    expect(auditRepository.require("op_production_startup_orphan_001")).toMatchObject({
+      state: "terminal",
+      records: [
+        { phase: "accepted", outcome: "accepted" },
+        {
+          phase: "terminal",
+          outcome: "incomplete",
+          error_code: "runtime_unavailable"
+        }
+      ]
     });
   });
 
@@ -736,6 +756,32 @@ function diagnosticRuntimeSession(): Readonly<Record<string, unknown>> {
       earliest_retained_cursor: null,
       retention_boundary_cursor: null
     }
+  });
+}
+
+function startupOrphanAuditRecord(): Readonly<Record<string, unknown>> {
+  return Object.freeze({
+    id: "audit:production:startup-orphan:accepted",
+    operation_id: "op_production_startup_orphan_001",
+    at: "2026-07-20T11:59:00.000Z",
+    actor: {
+      type: "system",
+      device_id: null,
+      permission: null,
+      origin: null
+    },
+    action: "session_enroll",
+    target: {
+      type: "native_codex_thread",
+      codex_thread_id: "019f489a-1f9d-7402-ae00-eac6ea322f64"
+    },
+    phase: "accepted",
+    outcome: "accepted",
+    payload_summary: {
+      schema_version: 1,
+      enrollment_origin: "loaded_before"
+    },
+    error_code: null
   });
 }
 
