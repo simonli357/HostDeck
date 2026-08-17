@@ -502,9 +502,9 @@ describe("physical Android phone-driver protocol", () => {
         platform: "linux",
         pnpm: "10.29.2"
       },
-      source: { commit: "1".repeat(40), count: 664, sha256: sourceHash },
-      output: { count: 1_335, sha256: outputHash },
-      content: { bytes: 162_000_000, entryCount: 6_361, sha256: contentHash },
+      source: { commit: "1".repeat(40), count: 665, sha256: sourceHash },
+      output: { count: 1_337, sha256: outputHash },
+      content: { bytes: 162_000_000, entryCount: 6_363, sha256: contentHash },
       manifestSha256: manifestHash,
       target: {
         architecture: "x64",
@@ -521,10 +521,10 @@ describe("physical Android phone-driver protocol", () => {
       }
     };
     const buildResult = parsePhysicalPackageBuildOutput(
-      `HostDeck package built: 664 sources, 1335 owned outputs, 6361 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      `HostDeck package built: 665 sources, 1337 owned outputs, 6363 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
     );
     const verification = parsePhysicalPackageVerificationOutput(
-      `HostDeck package verified: 6361 entries, 1335 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      `HostDeck package verified: 6363 entries, 1337 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
     );
     const browserManifest = {
       package: {
@@ -544,14 +544,14 @@ describe("physical Android phone-driver protocol", () => {
         verification
       })
     ).toEqual({
-      content_entry_count: 6_361,
+      content_entry_count: 6_363,
       content_tree_sha256: contentHash,
       manifest_sha256: manifestHash,
-      output_file_count: 1_335,
+      output_file_count: 1_337,
       output_tree_sha256: outputHash,
       package_schema_version: 6,
       package_version: "0.0.0",
-      source_file_count: 664,
+      source_file_count: 665,
       source_tree_sha256: sourceHash,
       web_manifest_sha256: webManifestHash,
       web_tree_sha256: webHash
@@ -28079,8 +28079,8 @@ function parsePhysicalDashboardPackageIdentity(input: Readonly<{
       (runtimeBundle.size as number) <= 256 * 1024 * 1024 &&
       typeof source.commit === "string" &&
       /^[a-f0-9]{40}$/u.test(source.commit) &&
-      source.count === 664 &&
-      output.count === 1_335 &&
+      source.count === 665 &&
+      output.count === 1_337 &&
       Number.isSafeInteger(content.entryCount) &&
       (content.entryCount as number) >= 1_000 &&
       (content.entryCount as number) <= 10_000 &&
