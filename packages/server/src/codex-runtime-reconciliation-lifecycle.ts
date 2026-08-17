@@ -373,8 +373,24 @@ class DefaultCodexRuntimeReconciliationLifecycle {
       const observations: RuntimeObservation[] = [];
       for (const current of states) {
         input.deadline.throwIfAborted();
+        const listed = runtimeById.get(current.mapping.codex_thread_id) ?? null;
+        if (
+          current.mapping.archived_at === null &&
+          current.mapping.runtime_version !== reads.runtime_version
+        ) {
+          observations.push({
+            current,
+            listed,
+            read: null,
+            read_unavailable: false,
+            goal: null,
+            latest_turn: null,
+            detail_unavailable: false
+          });
+          continue;
+        }
         observations.push(
-          await this.observeSession(current, runtimeById.get(current.mapping.codex_thread_id) ?? null, reads, input.deadline)
+          await this.observeSession(current, listed, reads, input.deadline)
         );
       }
       input.deadline.throwIfAborted();
@@ -916,6 +932,9 @@ function deriveOutcome(
     patch: stalePatch(reason)
   });
 
+  if (current.mapping.runtime_version !== runtimeVersion) {
+    return stale("contradiction", "Managed Codex runtime version changed.", "recovery_required");
+  }
   if (listed === null) {
     return read === null
       ? stale(
@@ -933,9 +952,6 @@ function deriveOutcome(
     !safeRuntimeIdentity(current, read, repository)
   ) {
     return stale("contradiction", "Managed Codex thread identity changed.", "recovery_required");
-  }
-  if (current.mapping.runtime_version !== runtimeVersion) {
-    return stale("contradiction", "Managed Codex runtime version changed.", "recovery_required");
   }
   if (current.mapping.disposition !== "selected") {
     return stale("contradiction", "Managed session still requires explicit recovery.", "recovery_required");

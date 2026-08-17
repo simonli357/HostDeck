@@ -127,6 +127,57 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
     }
   });
 
+  it("does not inspect incompatible unarchived mappings during startup reconciliation", async () => {
+    const harness = createHarness();
+    try {
+      harness.repository.create(stateCandidate("sess_legacy", "thread-legacy", {
+        runtime_version: "0.144.0"
+      }));
+      harness.repository.create(stateCandidate("sess_current", "thread-current"));
+      const runtime = scriptedRuntime([
+        runtimeThread("thread-legacy", "/tmp/sess_legacy"),
+        runtimeThread("thread-current", "/tmp/sess_current")
+      ], 7);
+      const operation = testDeadline();
+      try {
+        const reconciliation = await reconcile(harness.lifecycle, runtime, operation, 7, null);
+        await resubscribe(harness.lifecycle, runtime, operation, reconciliation, 7, null);
+        await ready(harness.lifecycle, runtime, operation, reconciliation, 7, null);
+      } finally {
+        operation.dispose();
+      }
+
+      expect(
+        runtime.requests
+          .filter((request) => request.method !== "thread/list")
+          .map(threadIdFromRequest)
+      ).not.toContain("thread-legacy");
+      expect(harness.repository.require("sess_legacy")).toMatchObject({
+        mapping: { disposition: "recovery_required", runtime_version: "0.144.0" },
+        projection: {
+          session: {
+            freshness: "stale",
+            freshness_reason: "Managed Codex runtime version changed.",
+            session_state: "unknown"
+          }
+        }
+      });
+      expect(harness.repository.require("sess_current")).toMatchObject({
+        mapping: { disposition: "selected", runtime_version: "0.147.0" },
+        projection: { session: { freshness: "current", session_state: "active" } }
+      });
+      expect(harness.lifecycle.snapshot()).toMatchObject({
+        phase: "ready",
+        recoverable_session_count: 1,
+        resumed_count: 1,
+        ready_count: 1,
+        issues: { contradictions: 1, stale: 1, unavailable: 0 }
+      });
+    } finally {
+      harness.close();
+    }
+  });
+
   it("reconciles an initial restart across active, interrupted, missing, and archived threads", async () => {
     const harness = createHarness();
     try {
@@ -1262,6 +1313,7 @@ function stateCandidate(
     readonly created_at?: string;
     readonly last_activity_at?: string | null;
     readonly model?: string | null;
+    readonly runtime_version?: string;
     readonly settings?: ReturnType<typeof settings> | null;
     readonly turn_state?: string;
     readonly updated_at?: string;
@@ -1271,13 +1323,14 @@ function stateCandidate(
   const durableCreatedAt = overrides.created_at ?? createdAt;
   const durableUpdatedAt = overrides.updated_at ?? archivedAt ?? durableCreatedAt;
   const lastActivityAt = overrides.last_activity_at === undefined ? null : overrides.last_activity_at;
+  const runtimeVersion = overrides.runtime_version ?? "0.147.0";
   const mapping = {
     id: sessionId,
     name: sessionId.replace("sess_", "session-"),
     codex_thread_id: threadId,
     cwd: `/tmp/${sessionId}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: runtimeVersion,
     disposition: "selected",
     created_at: durableCreatedAt,
     updated_at: durableUpdatedAt,

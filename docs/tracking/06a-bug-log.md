@@ -1141,3 +1141,12 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: retained recovery mappings could not refresh atomically; eligibility compared historical thread-creation `cliVersion` with the active broker; `thread/started` bypassed existing stale mappings; and the reconnect reconcile lease rejected enrollment's read-class `thread/resume` subscription.
 - Fix: refresh retained mappings without changing native identity, derive eligibility from the admitted active app-server, route stale existing mappings through enrollment, and permit only the required read-class resume subscription during reconcile while keeping mutations blocked.
 - Current state: closed in pushed `acb23a8`, `d1d6a6a`, and `89d9eca`, installed as `0.0.7`. Focused 57, unit 3,282/32 intentional skips, contract 309, integration 36, web 960, typecheck, lint, package 44/two deterministic builds, packaged Chromium, and supply-chain 8 pass. A real historical SideCue thread retained its native/internal identity across preserved-state upgrade, projected an ordinary-TUI turn into HostDeck, and displayed one HostDeck-submitted turn in that same TUI without broker replacement.
+
+### BUG-092 Legacy Runtime Mapping Blocks HostDeck Restart
+
+- Symptom: HostDeck required repeated systemd starts and about 80 seconds to recover while the shared broker and ordinary Codex TUIs remained healthy.
+- Impact: phone control became unavailable after a HostDeck-only restart, blocking `FE-V1-108` and release acceptance.
+- Route: critical release blocker owned by `FE-V1-108`; no product, UI, security, or setup contract change.
+- Root cause: startup reconciliation read goal and turn detail from every retained mapping before checking its recorded Codex runtime version. Incompatible legacy responses could time out or fail current protocol parsing and abort the entire listener start.
+- Fix: classify incompatible unarchived mappings as explicit `recovery_required` stale state before any thread-detail operation while continuing normal reconciliation for current mappings.
+- Current state: the focused lifecycle regression, related lifecycle tests, server typecheck, and formatting pass. Packaged service and physical phone restart validation remain pending.
