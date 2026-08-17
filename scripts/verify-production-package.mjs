@@ -11,7 +11,7 @@ import { pathToFileURL } from "node:url";
 
 export const productionPackageManifestName = "hostdeck-package.json";
 export const productionPackageManifestSchemaVersion = 6;
-export const productionPackageSourceCount = 664;
+export const productionPackageSourceCount = 665;
 export const productionPackageVerifierName = "verify.mjs";
 export const productionLinuxLauncherPath = "bin/codexdeck";
 export const productionLinuxLauncherContent = `#!/bin/sh
