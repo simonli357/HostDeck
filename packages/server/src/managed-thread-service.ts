@@ -100,6 +100,8 @@ export function isManagedSessionArchiveCandidateTurnState(
   return ["idle", "completed", "failed", "interrupted"].includes(turnState);
 }
 
+const archivePersistenceAttemptLimit = 3;
+
 class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
   private readonly archiveInFlight = new Set<string>();
   private readonly uncertainArchives = new Set<string>();
@@ -331,38 +333,8 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
         throw mapped;
       }
 
-      const updatedAt = this.advanceTimestamp(
-        dispatchState.mapping.updated_at,
-        dispatchState.projection.session.updated_at
-      );
-      const archived = {
-        mapping: {
-          ...dispatchState.mapping,
-          disposition: "selected" as const,
-          updated_at: updatedAt,
-          archived_at: updatedAt
-        },
-        projection: {
-          ...dispatchState.projection,
-          session: {
-            ...dispatchState.projection.session,
-            session_state: "archived" as const,
-            turn_state: "idle" as const,
-            attention: "none" as const,
-            freshness: "current" as const,
-            freshness_reason: null,
-            archived_at: updatedAt,
-            updated_at: updatedAt,
-            last_activity_at: updatedAt,
-            recent_summary: "Managed Codex session archived."
-          }
-        }
-      };
       try {
-        const persisted = this.options.states.replace(
-          archived,
-          selectedStateRevision(dispatchState)
-        );
+        const persisted = this.persistConfirmedArchive(dispatchState);
         this.uncertainArchives.delete(parsedSessionId);
         return persisted;
       } catch (error) {
@@ -379,6 +351,60 @@ class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
     } finally {
       this.archiveInFlight.delete(parsedSessionId);
     }
+  }
+
+  private persistConfirmedArchive(dispatchState: SelectedSessionState): SelectedSessionState {
+    let current = dispatchState;
+    let lastConflict: HostDeckSelectedStateRepositoryError | null = null;
+
+    for (let attempt = 0; attempt < archivePersistenceAttemptLimit; attempt += 1) {
+      if (isConfirmedArchivedState(dispatchState, current)) return current;
+      assertConfirmedArchivePersistenceCandidate(dispatchState, current);
+      const updatedAt = this.advanceTimestamp(
+        current.mapping.updated_at,
+        current.projection.session.updated_at
+      );
+      try {
+        return this.options.states.replace(
+          {
+            mapping: {
+              ...current.mapping,
+              disposition: "selected" as const,
+              updated_at: updatedAt,
+              archived_at: updatedAt
+            },
+            projection: {
+              ...current.projection,
+              session: {
+                ...current.projection.session,
+                session_state: "archived" as const,
+                turn_state: "idle" as const,
+                attention: "none" as const,
+                freshness: "current" as const,
+                freshness_reason: null,
+                archived_at: updatedAt,
+                updated_at: updatedAt,
+                last_activity_at: updatedAt,
+                recent_summary: "Managed Codex session archived."
+              }
+            }
+          },
+          selectedStateRevision(current)
+        );
+      } catch (error) {
+        if (
+          !(error instanceof HostDeckSelectedStateRepositoryError) ||
+          error.code !== "projection_conflict"
+        ) {
+          throw error;
+        }
+        lastConflict = error;
+      }
+
+      current = this.options.states.requireByTargetId(dispatchState.mapping.id);
+    }
+
+    throw lastConflict ?? new Error("Confirmed archive persistence exhausted without a revision conflict.");
   }
 
   async reconcile(): Promise<ManagedThreadReconciliationResult> {
@@ -1101,6 +1127,84 @@ function assertSameArchiveCandidate(
       before.mapping.codex_thread_id
     );
   }
+}
+
+function isConfirmedArchivedState(
+  target: SelectedSessionState,
+  candidate: SelectedSessionState
+): boolean {
+  const mapping = candidate.mapping;
+  const session = candidate.projection.session;
+  return (
+    hasSameManagedIdentity(target, candidate) &&
+    mapping.disposition === "selected" &&
+    mapping.archived_at !== null &&
+    session.archived_at === mapping.archived_at &&
+    session.session_state === "archived" &&
+    session.turn_state === "idle" &&
+    session.attention === "none" &&
+    session.freshness === "current" &&
+    session.freshness_reason === null
+  );
+}
+
+function assertConfirmedArchivePersistenceCandidate(
+  target: SelectedSessionState,
+  candidate: SelectedSessionState
+): void {
+  const mapping = candidate.mapping;
+  const session = candidate.projection.session;
+  const stillArchivable =
+    session.session_state === "active" &&
+    isManagedSessionArchiveCandidateTurnState(session.turn_state) &&
+    session.freshness === "current";
+  const nativeArchiveEventPending =
+    session.session_state === "unknown" &&
+    session.turn_state === "unknown" &&
+    session.attention === "unknown" &&
+    session.freshness === "stale" &&
+    session.freshness_reason ===
+      "Codex archived the thread before HostDeck lifecycle reconciliation.";
+  if (
+    !hasSameManagedIdentity(target, candidate) ||
+    mapping.disposition !== "selected" ||
+    mapping.archived_at !== null ||
+    session.archived_at !== null ||
+    (!stillArchivable && !nativeArchiveEventPending)
+  ) {
+    throw serviceError(
+      "recovery_required",
+      "Codex archived the thread but concurrent managed state requires reconciliation.",
+      "remote_succeeded",
+      false,
+      target.mapping.codex_thread_id
+    );
+  }
+}
+
+function hasSameManagedIdentity(
+  expected: SelectedSessionState,
+  candidate: SelectedSessionState
+): boolean {
+  const expectedMapping = expected.mapping;
+  const mapping = candidate.mapping;
+  const session = candidate.projection.session;
+  return (
+    expectedMapping.id === mapping.id &&
+    expectedMapping.name === mapping.name &&
+    expectedMapping.codex_thread_id === mapping.codex_thread_id &&
+    expectedMapping.cwd === mapping.cwd &&
+    expectedMapping.runtime_source === mapping.runtime_source &&
+    expectedMapping.runtime_version === mapping.runtime_version &&
+    expectedMapping.created_at === mapping.created_at &&
+    mapping.id === session.id &&
+    mapping.name === session.name &&
+    mapping.codex_thread_id === session.codex_thread_id &&
+    mapping.cwd === session.cwd &&
+    mapping.runtime_source === session.runtime_source &&
+    mapping.runtime_version === session.runtime_version &&
+    mapping.created_at === session.created_at
+  );
 }
 
 function isKnownNoThreadOutcome(error: unknown): error is HostDeckCodexAdapterError {
