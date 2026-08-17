@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { cliExitCodes, runCli } from "../packages/cli/src/index.js";
 import {
+  absoluteCwdSchema,
+  codexThreadIdSchema,
   defaultResourceBudget,
+  isoTimestampSchema,
   runtimeCompatibilitySchema,
   sessionIdSchema
 } from "../packages/contracts/src/index.js";
@@ -247,6 +250,10 @@ function createThreadFixture(cwd: string): {
     async listAll() {
       return [...records];
     },
+    async listTargetThreads(threadIds) {
+      const targets = new Set(threadIds);
+      return records.filter((record) => targets.has(record.id));
+    },
     async findByOperationId(candidate) {
       return records.filter(
         (record) => record.thread_source === `hostdeck:${candidate}`
@@ -272,20 +279,19 @@ function threadRecord(
   overrides: Partial<ThreadRecord> = {}
 ): ThreadRecord {
   return {
-    id: "thread-start-vertical-001",
-    cwd,
-    created_at: at,
-    updated_at: at,
+    id: codexThreadIdSchema.parse("thread-start-vertical-001"),
+    cwd: absoluteCwdSchema.parse(cwd),
+    created_at: isoTimestampSchema.parse(at),
+    updated_at: isoTimestampSchema.parse(at),
     status: "idle",
     active_flags: [],
     source: "app_server",
     thread_source: null,
     model_provider: "openai",
     name: null,
-    preview: "",
     archived: false,
     ...overrides
-  } as ThreadRecord;
+  };
 }
 
 function runtimeCompatibility() {

@@ -242,6 +242,12 @@ class VerticalThreadClient implements ManagedThreads {
     return [this.thread];
   }
 
+  async listTargetThreads(
+    threadIds: readonly string[]
+  ): Promise<readonly CodexThreadRecord[]> {
+    return threadIds.includes(this.thread.id) ? [this.thread] : [];
+  }
+
   async findByOperationId(_operationId: string): Promise<readonly CodexThreadRecord[]> {
     return [];
   }
@@ -314,7 +320,6 @@ function threadRecord(archived: boolean): CodexThreadRecord {
     thread_source: null,
     model_provider: "openai",
     name: "archive-vertical",
-    preview: "",
     archived
   };
 }
