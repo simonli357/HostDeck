@@ -1149,4 +1149,13 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Route: critical release blocker owned by `FE-V1-108`; no product, UI, security, or setup contract change.
 - Root cause: startup reconciliation read goal and turn detail from every retained mapping before checking its recorded Codex runtime version. Incompatible legacy responses could time out or fail current protocol parsing and abort the entire listener start.
 - Fix: classify incompatible unarchived mappings as explicit `recovery_required` stale state before any thread-detail operation while continuing normal reconciliation for current mappings.
-- Current state: the focused lifecycle regression, related lifecycle tests, server typecheck, and formatting pass. Packaged service and physical phone restart validation remain pending.
+- Current state: closed in pushed `7b4f5dd` and installed as `0.0.8`. Focused and related lifecycle tests, server typecheck, formatting, package verification, an explicit HostDeck-only restart, same-TUI continuity, phone reload, and post-restart phone-to-TUI prompting pass while the shared broker PID remains unchanged.
+
+### BUG-093 Completed Session Cannot Be Archived
+
+- Symptom: `codexdeck archive` rejected a current session after its turn completed even though the native Codex runtime reported the thread idle with no active flags.
+- Impact: users could not archive normal completed sessions, and shared-session acceptance could not remove its throwaway session cleanly.
+- Route: critical small bugfix owned by `FE-V1-108`; no product, UI, security, or setup contract change.
+- Root cause: both archive preflights admitted only the projected `idle` turn state, while retained projections deliberately preserve terminal `completed`, `failed`, or `interrupted` states after the runtime returns to idle.
+- Fix: admit all terminal projected turn states at the local preflight, retain the authoritative runtime idle and active-flag checks immediately before dispatch, and continue rejecting busy, stale, incompatible, or contradictory state.
+- Current state: focused route and service regressions pass for every admitted terminal state; server typecheck and formatting pass. Final packaged runtime validation remains pending.

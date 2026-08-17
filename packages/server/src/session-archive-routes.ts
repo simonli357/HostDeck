@@ -30,6 +30,7 @@ import {
 } from "./host-lock-routes.js";
 import {
   HostDeckManagedCodexThreadServiceError,
+  isManagedSessionArchiveCandidateTurnState,
   type ManagedCodexThreadService
 } from "./managed-thread-service.js";
 import {
@@ -431,7 +432,10 @@ function resolveManagedTarget(
       false
     );
   }
-  if (session.session_state !== "active" || session.turn_state !== "idle") {
+  if (
+    session.session_state !== "active" ||
+    !isManagedSessionArchiveCandidateTurnState(session.turn_state)
+  ) {
     throw archiveHttpError(
       409,
       "session_not_writable",

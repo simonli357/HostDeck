@@ -180,6 +180,25 @@ describe("selected managed-session archive route", () => {
     }
   });
 
+  it.each(["completed", "failed", "interrupted"] as const)(
+    "admits a current %s projection for authoritative runtime archive validation",
+    async (turnState) => {
+      const harness = await createHarness({ readResult: selectedState(turnState) });
+      try {
+        const response = await archive(harness, {
+          ...archiveRequest,
+          operation_id: `op_session_archive_${turnState}`
+        });
+
+        expect(response.statusCode, response.body).toBe(202);
+        expect(harness.runtimeReads()).toBe(1);
+        expect(harness.archiveCalls()).toEqual([sessionId]);
+      } finally {
+        await harness.close();
+      }
+    }
+  );
+
   it("rejects malformed requests, query injection, and already archived or stale state before audit", async () => {
     const malformed = await createHarness();
     try {
@@ -668,7 +687,15 @@ function runtimeCandidate(
 }
 
 function selectedState(
-  state: "active" | "archived" | "busy" | "stale" | "unknown"
+  state:
+    | "active"
+    | "archived"
+    | "busy"
+    | "completed"
+    | "failed"
+    | "interrupted"
+    | "stale"
+    | "unknown"
 ): SelectedSessionState {
   const archiveTimestamp = state === "archived" ? archivedAt : null;
   const mapping = selectedSessionMappingRecordSchema.parse({
@@ -706,7 +733,9 @@ function selectedState(
           ? "unknown"
           : state === "busy"
             ? "waiting_for_input"
-            : "idle",
+            : state === "completed" || state === "failed" || state === "interrupted"
+              ? state
+              : "idle",
       attention:
         state === "stale" || state === "unknown"
           ? "unknown"

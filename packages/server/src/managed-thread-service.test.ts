@@ -28,7 +28,8 @@ import {
   createSelectedStateRepository,
   openMigratedDatabase,
   type SelectedStateRepository,
-  selectedProjectedEventByteLength
+  selectedProjectedEventByteLength,
+  selectedStateRevision
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -482,6 +483,52 @@ describe("managed Codex thread start saga", () => {
 });
 
 describe("managed Codex archive and reconciliation", () => {
+  it.each(["completed", "failed", "interrupted"] as const)(
+    "archives an idle runtime when the retained turn state is %s",
+    async (turnState) => {
+      const fixture = createFixture();
+      await fixture.service.start(request);
+      const current = fixture.states.require("sess_managed_001");
+      const terminalAt = isoTimestampSchema.parse(
+        new Date(
+          Math.max(
+            Date.parse(current.mapping.updated_at),
+            Date.parse(current.projection.session.updated_at)
+          ) + 1
+        ).toISOString()
+      );
+      fixture.states.replace(
+        {
+          ...current,
+          mapping: {
+            ...current.mapping,
+            updated_at: terminalAt
+          },
+          projection: {
+            ...current.projection,
+            session: {
+              ...current.projection.session,
+              turn_state: turnState,
+              attention: "none",
+              updated_at: terminalAt,
+              last_activity_at: terminalAt
+            }
+          }
+        },
+        selectedStateRevision(current)
+      );
+
+      const archived = await fixture.service.archive("sess_managed_001");
+
+      expect(archived.projection.session).toMatchObject({
+        session_state: "archived",
+        turn_state: "idle",
+        attention: "none"
+      });
+      expect(fixture.threads.archive_calls).toEqual(["thread-managed-1"]);
+    }
+  );
+
   it("archives the exact mapped thread once and rejects an already archived session", async () => {
     const fixture = createFixture();
     await fixture.service.start(request);

@@ -94,6 +94,12 @@ export function createManagedCodexThreadService(options: ManagedCodexThreadServi
   return new DefaultManagedCodexThreadService(options);
 }
 
+export function isManagedSessionArchiveCandidateTurnState(
+  turnState: SelectedSessionState["projection"]["session"]["turn_state"]
+): boolean {
+  return ["idle", "completed", "failed", "interrupted"].includes(turnState);
+}
+
 class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
   private readonly archiveInFlight = new Set<string>();
   private readonly uncertainArchives = new Set<string>();
@@ -1013,7 +1019,7 @@ function assertArchivableState(state: SelectedSessionState): void {
   if (
     mapping.disposition !== "selected" ||
     session.session_state !== "active" ||
-    session.turn_state !== "idle" ||
+    !isManagedSessionArchiveCandidateTurnState(session.turn_state) ||
     session.freshness !== "current"
   ) {
     throw serviceError(
