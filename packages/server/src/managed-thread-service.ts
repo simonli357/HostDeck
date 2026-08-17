@@ -101,6 +101,10 @@ export function isManagedSessionArchiveCandidateTurnState(
 }
 
 const archivePersistenceAttemptLimit = 3;
+const confirmedArchiveTransitionReasons = [
+  "Codex thread is not loaded; reconciliation is required.",
+  "Codex archived the thread before HostDeck lifecycle reconciliation."
+] as const;
 
 class DefaultManagedCodexThreadService implements ManagedCodexThreadService {
   private readonly archiveInFlight = new Set<string>();
@@ -1158,19 +1162,21 @@ function assertConfirmedArchivePersistenceCandidate(
     session.session_state === "active" &&
     isManagedSessionArchiveCandidateTurnState(session.turn_state) &&
     session.freshness === "current";
-  const nativeArchiveEventPending =
+  const nativeArchiveNotificationPending =
     session.session_state === "unknown" &&
     session.turn_state === "unknown" &&
     session.attention === "unknown" &&
     session.freshness === "stale" &&
-    session.freshness_reason ===
-      "Codex archived the thread before HostDeck lifecycle reconciliation.";
+    session.freshness_reason !== null &&
+    confirmedArchiveTransitionReasons.some(
+      (reason) => reason === session.freshness_reason
+    );
   if (
     !hasSameManagedIdentity(target, candidate) ||
     mapping.disposition !== "selected" ||
     mapping.archived_at !== null ||
     session.archived_at !== null ||
-    (!stillArchivable && !nativeArchiveEventPending)
+    (!stillArchivable && !nativeArchiveNotificationPending)
   ) {
     throw serviceError(
       "recovery_required",

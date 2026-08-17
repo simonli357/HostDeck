@@ -542,56 +542,68 @@ describe("managed Codex archive and reconciliation", () => {
     }
   );
 
-  it("converges when the native archived event wins the local persistence race", async () => {
-    const fixture = createFixture();
-    await fixture.service.start(request);
-    fixture.threads.archive_succeeded = () => {
-      const current = fixture.states.require("sess_managed_001");
-      const eventAt = isoTimestampSchema.parse(
-        new Date(
-          Math.max(
-            Date.parse(current.mapping.updated_at),
-            Date.parse(current.projection.session.updated_at)
-          ) + 1
-        ).toISOString()
-      );
-      fixture.states.replace(
-        {
-          mapping: { ...current.mapping, updated_at: eventAt },
-          projection: {
-            ...current.projection,
-            session: {
-              ...current.projection.session,
-              session_state: "unknown",
-              turn_state: "unknown",
-              attention: "unknown",
-              freshness: "stale",
-              freshness_reason:
-                "Codex archived the thread before HostDeck lifecycle reconciliation.",
-              updated_at: eventAt,
-              last_activity_at: eventAt,
-              recent_summary:
-                "Codex archived the thread; HostDeck lifecycle reconciliation is required."
+  it.each([
+    [
+      "not-loaded notification",
+      "Codex thread is not loaded; reconciliation is required.",
+      "Codex thread is not loaded; reconciliation is required."
+    ],
+    [
+      "archived notification",
+      "Codex archived the thread before HostDeck lifecycle reconciliation.",
+      "Codex archived the thread; HostDeck lifecycle reconciliation is required."
+    ]
+  ] as const)(
+    "converges when the native %s wins the local persistence race",
+    async (_label, freshnessReason, summary) => {
+      const fixture = createFixture();
+      await fixture.service.start(request);
+      fixture.threads.archive_succeeded = () => {
+        const current = fixture.states.require("sess_managed_001");
+        const eventAt = isoTimestampSchema.parse(
+          new Date(
+            Math.max(
+              Date.parse(current.mapping.updated_at),
+              Date.parse(current.projection.session.updated_at)
+            ) + 1
+          ).toISOString()
+        );
+        fixture.states.replace(
+          {
+            mapping: { ...current.mapping, updated_at: eventAt },
+            projection: {
+              ...current.projection,
+              session: {
+                ...current.projection.session,
+                session_state: "unknown",
+                turn_state: "unknown",
+                attention: "unknown",
+                freshness: "stale",
+                freshness_reason: freshnessReason,
+                updated_at: eventAt,
+                last_activity_at: eventAt,
+                recent_summary: summary
+              }
             }
-          }
-        },
-        selectedStateRevision(current)
-      );
-    };
+          },
+          selectedStateRevision(current)
+        );
+      };
 
-    await expect(fixture.service.archive("sess_managed_001")).resolves.toMatchObject({
-      mapping: { archived_at: expect.any(String) },
-      projection: {
-        session: {
-          session_state: "archived",
-          turn_state: "idle",
-          attention: "none",
-          freshness: "current"
+      await expect(fixture.service.archive("sess_managed_001")).resolves.toMatchObject({
+        mapping: { archived_at: expect.any(String) },
+        projection: {
+          session: {
+            session_state: "archived",
+            turn_state: "idle",
+            attention: "none",
+            freshness: "current"
+          }
         }
-      }
-    });
-    expect(fixture.threads.archive_calls).toEqual(["thread-managed-1"]);
-  });
+      });
+      expect(fixture.threads.archive_calls).toEqual(["thread-managed-1"]);
+    }
+  );
 
   it("archives the exact mapped thread once and rejects an already archived session", async () => {
     const fixture = createFixture();
