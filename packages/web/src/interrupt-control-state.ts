@@ -1057,19 +1057,16 @@ function parseContext(candidate: unknown, sessionId: SessionId): InterruptContro
     deepFreeze(selectedProjectionEventSchema.parse(event))
   );
   let previous = -1;
-  let boundarySeen = false;
-  for (const [index, event] of events.entries()) {
+  for (const event of events) {
     if (event.session_id !== sessionId || event.cursor <= previous) {
       throw new TypeError("HostDeck interrupt-control context contains invalid event ownership.");
     }
-    if (previous >= 0 && event.cursor !== previous + 1) {
-      throw new TypeError("HostDeck interrupt-control context contains an event cursor gap.");
-    }
     if (event.type === "replay_boundary") {
-      if (boundarySeen || index !== 0) {
+      if (previous >= 0 && (event.after === null || event.after < previous)) {
         throw new TypeError("HostDeck interrupt-control context contains invalid boundary order.");
       }
-      boundarySeen = true;
+    } else if (previous >= 0 && event.cursor !== previous + 1) {
+      throw new TypeError("HostDeck interrupt-control context contains an event cursor gap.");
     }
     previous = event.cursor;
   }

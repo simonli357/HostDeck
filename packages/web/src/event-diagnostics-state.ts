@@ -1021,16 +1021,19 @@ function parseContext(
     deepFreeze(selectedProjectionEventSchema.parse(candidateEvent))
   );
   let previousCursor = -1;
-  let boundaryEventIndex = -1;
-  for (const [index, event] of events.entries()) {
+  for (const event of events) {
     if (event.session_id !== sessionId || event.cursor <= previousCursor) {
       throw new TypeError("HostDeck event-diagnostics context contains invalid event ownership.");
     }
     if (event.type === "replay_boundary") {
-      if (boundaryEventIndex !== -1 || index !== 0) {
+      if (
+        previousCursor >= 0 &&
+        (event.after === null || event.after < previousCursor)
+      ) {
         throw new TypeError("HostDeck event-diagnostics context contains invalid boundary order.");
       }
-      boundaryEventIndex = index;
+    } else if (previousCursor >= 0 && event.cursor !== previousCursor + 1) {
+      throw new TypeError("HostDeck event-diagnostics context contains an event cursor gap.");
     }
     previousCursor = event.cursor;
   }

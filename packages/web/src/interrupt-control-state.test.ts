@@ -572,6 +572,26 @@ describe("interrupt control state", () => {
     for (const release of releases) release();
   });
 
+  it("accepts multiple forward replay boundaries from later reconnects", () => {
+    const events = [
+      turnEvent(1, "in_progress"),
+      boundaryEvent(2, 1, "restart"),
+      turnEvent(3, "in_progress"),
+      boundaryEvent(4, 3, "restart"),
+      turnEvent(5, "in_progress")
+    ];
+    const controller = createController(undefined, context({
+      events,
+      boundary: { after: 3, cursor: 4, reason: "restart" }
+    }));
+
+    expect(controller.snapshot().visible).toBe(true);
+    expect(() => createController(undefined, context({
+      events: [turnEvent(1, "in_progress"), boundaryEvent(2, 0, "restart")]
+    }))).toThrow("invalid boundary order");
+    controller.close();
+  });
+
   it("aborts owned work, suppresses late settlement, and rejects updates after close", async () => {
     const pending = deferred<unknown>();
     const port = interruptPort({ interrupt: () => pending.promise });

@@ -589,6 +589,26 @@ describe("event-diagnostics state", () => {
     expect(() => controller.open(99)).toThrow("cursor is not retained");
   });
 
+  it("accepts multiple forward replay boundaries from later reconnects", () => {
+    const events = [
+      eventOf("message", 2),
+      eventOf("replay_boundary", 9, { boundaryAfter: 8 }),
+      eventOf("message", 10),
+      eventOf("replay_boundary", 14, { boundaryAfter: 13 }),
+      eventOf("message", 15)
+    ];
+    const controller = createController(eventPort(), context({
+      events,
+      boundary: { after: 13, cursor: 14, reason: "retention" }
+    }));
+
+    expect(controller.snapshot().phase).toBe("closed");
+    expect(() => createController(eventPort(), context({
+      events: [eventOf("message", 10), eventOf("replay_boundary", 14, { boundaryAfter: 9 })]
+    }))).toThrow("invalid boundary order");
+    controller.close();
+  });
+
   it("owns subscriptions, dismissal cancellation, deep immutability, and terminal close", async () => {
     const event = eventOf("message", 2);
     const pending = deferred<unknown>();
