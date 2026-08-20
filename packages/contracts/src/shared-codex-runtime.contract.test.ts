@@ -207,7 +207,13 @@ describe("loaded-thread enrollment contracts", () => {
     expect(
       pendingEnrollmentSnapshotSchema.safeParse({
         ...pendingEnrollment(),
-        deadline_at: "2026-08-14T14:02:00.001Z"
+        deadline_at: "2026-08-14T14:04:00.000Z"
+      }).success
+    ).toBe(true);
+    expect(
+      pendingEnrollmentSnapshotSchema.safeParse({
+        ...pendingEnrollment(),
+        deadline_at: "2026-08-14T14:04:00.001Z"
       }).success
     ).toBe(false);
   });

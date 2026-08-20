@@ -30,6 +30,7 @@ export const sharedCodexRuntimeContractLimits = Object.freeze({
   pendingEventsPerThread: resourceBudgetDefinitionByKey.protocol_enrollment_pending_events_per_thread.maximum,
   pendingBytesPerThread: resourceBudgetDefinitionByKey.protocol_enrollment_pending_bytes_per_thread.maximum,
   pendingTimeoutMs: resourceBudgetDefinitionByKey.protocol_enrollment_pending_timeout_ms.maximum,
+  pendingTotalTimeoutMs: resourceBudgetDefinitionByKey.protocol_enrollment_pending_timeout_ms.maximum * 2,
   pendingAttempts: 10_000,
   recentTurns: 20,
   recentEvents: resourceBudgetDefinitionByKey.sse_replay_max_events.maximum,
@@ -383,7 +384,7 @@ export const pendingEnrollmentSnapshotSchema = z
     }
     const pendingDuration = Date.parse(value.deadline_at) - Date.parse(value.first_seen_at);
     const retryDelay = Date.parse(value.next_retry_at) - Date.parse(value.last_attempt_at);
-    if (pendingDuration > sharedCodexRuntimeContractLimits.pendingTimeoutMs) {
+    if (pendingDuration > sharedCodexRuntimeContractLimits.pendingTotalTimeoutMs) {
       context.addIssue({ code: "custom", path: ["deadline_at"], message: "Pending enrollment exceeds its hard timeout bound." });
     }
     if (retryDelay > resourceBudgetDefinitionByKey.protocol_enrollment_retry_interval_ms.maximum) {

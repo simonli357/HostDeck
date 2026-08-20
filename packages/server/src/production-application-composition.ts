@@ -721,6 +721,7 @@ export function createHostDeckProductionApplication(
     events: pipeline,
     resource_budget: budget,
     now: readNow,
+    background_unmapped_enrollment: true,
     on_background_outcome(outcome) {
       observeEnrollmentFailure(outcome);
     }

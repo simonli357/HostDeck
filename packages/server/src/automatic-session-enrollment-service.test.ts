@@ -14,7 +14,8 @@ import {
   type LoadedThreadCandidate,
   loadedThreadCandidateSchema,
   nativeCodexHistoryTurnSchema,
-  type ResourceBudget
+  type ResourceBudget,
+  type SharedSessionEnrollment
 } from "@hostdeck/contracts";
 import {
   createProductionProjectionAppendPort,
@@ -120,6 +121,90 @@ describe("automatic shared-session enrollment", () => {
       });
       expect(service.pending).toEqual([]);
       expect(service.background_failure).toBeNull();
+      service.close();
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("enrolls an unmapped loaded thread in the background without blocking reconciliation or notifications", async () => {
+    const harness = storageHarness();
+    try {
+      const eligible = candidate(threadA);
+      const gate = deferred<CodexLoadedThreadSnapshot>();
+      const outcomes: SharedSessionEnrollment[] = [];
+      const loaded = fakeLoaded({
+        ids: [threadA],
+        candidates: new Map([[threadA, eligible]]),
+        snapshot: () => gate.promise
+      });
+      const service = createAutomaticSessionEnrollmentService({
+        loaded,
+        states: harness.repository,
+        audit: harness.audit,
+        events: harness.pipeline,
+        now: () => new Date(enrolledAt),
+        create_operation_id: harness.createOperationId,
+        create_record_id: harness.createRecordId,
+        capture_branch: () => "main",
+        background_unmapped_enrollment: true,
+        on_background_outcome: (outcome) => outcomes.push(outcome)
+      });
+
+      const reconciliation = service.reconcileLoaded("loaded_before", 1);
+      await waitFor(() => loaded.snapshotCalls.length === 1);
+      await expect(reconciliation).resolves.toMatchObject({
+        outcomes: [{ state: "pending", pending: { native_thread_id: threadA } }]
+      });
+      await expect(service.observeNotification(selected("thread/status/changed", {
+        threadId: threadA,
+        status: { type: "idle" }
+      }), 1)).resolves.toMatchObject({
+        kind: "enrollment",
+        enrollment: { state: "pending" }
+      });
+
+      gate.resolve(snapshot(eligible));
+      await waitFor(() => outcomes.length === 1);
+      expect(outcomes).toMatchObject([{ state: "enrolled", session: { native_thread_id: threadA } }]);
+      expect(harness.repository.getByThreadId(threadA)).not.toBeNull();
+      expect(service.pending).toEqual([]);
+      service.close();
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("grants subscription a fresh bounded phase after metadata materializes", async () => {
+    const harness = storageHarness();
+    try {
+      const eligible = candidate(threadA);
+      const gate = deferred<CodexLoadedThreadSnapshot>();
+      let now = Date.parse(enrolledAt);
+      const budget: ResourceBudget = {
+        ...defaultResourceBudget,
+        protocol_enrollment_pending_timeout_ms: 1_000
+      };
+      const loaded = fakeLoaded({
+        ids: [threadA],
+        candidates: new Map(),
+        readCandidate: () => {
+          now += 900;
+          return eligible;
+        },
+        snapshot: () => gate.promise
+      });
+      const service = createService(harness, loaded, budget, () => new Date(now));
+
+      const enrollment = service.reconcileLoaded("loaded_before", 1);
+      await waitFor(() => loaded.snapshotCalls.length === 1);
+      expect(service.pending[0]?.deadline_at).toBe("2026-08-14T16:00:01.900Z");
+      now += 600;
+      gate.resolve(snapshot(eligible));
+
+      await expect(enrollment).resolves.toMatchObject({
+        outcomes: [{ state: "enrolled", session: { native_thread_id: threadA } }]
+      });
       service.close();
     } finally {
       harness.close();
@@ -655,6 +740,7 @@ interface FakeLoadedClient extends CodexLoadedThreadClient {
 function fakeLoaded(options: {
   readonly ids: readonly string[];
   readonly candidates: ReadonlyMap<string, LoadedThreadCandidate>;
+  readonly readCandidate?: () => LoadedThreadCandidate | Promise<LoadedThreadCandidate>;
   readonly snapshot: CodexLoadedThreadSnapshot | (() => CodexLoadedThreadSnapshot | Promise<CodexLoadedThreadSnapshot>);
   readonly startedCandidate?: LoadedThreadCandidate;
 }): FakeLoadedClient {
@@ -666,6 +752,7 @@ function fakeLoaded(options: {
       return options.ids as never;
     },
     async readCandidate(threadId) {
+      if (options.readCandidate !== undefined) return options.readCandidate();
       const value = options.candidates.get(String(threadId));
       if (value === undefined) throw new Error("Missing fake candidate.");
       return value;

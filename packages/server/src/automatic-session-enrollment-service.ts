@@ -80,6 +80,7 @@ export interface AutomaticSessionEnrollmentServiceOptions {
   readonly create_operation_id?: () => string;
   readonly create_record_id?: () => string;
   readonly capture_branch?: (cwd: string) => string | null;
+  readonly background_unmapped_enrollment?: boolean;
   readonly on_background_outcome?: (outcome: SharedSessionEnrollment) => void;
 }
 
@@ -111,6 +112,7 @@ interface ParsedOptions {
   readonly createOperationId: () => string;
   readonly createRecordId: () => string;
   readonly captureBranch: (cwd: string) => string | null;
+  readonly backgroundUnmappedEnrollment: boolean;
   readonly onBackgroundOutcome: ((outcome: SharedSessionEnrollment) => void) | undefined;
 }
 
@@ -126,6 +128,7 @@ interface PendingEnrollment {
   readonly generation: number;
   audit: EnrollmentAuditContext | null;
   attempts: number;
+  readonly background: boolean;
   timer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -216,13 +219,24 @@ class DefaultAutomaticSessionEnrollmentService {
     for (const threadId of ids) {
       if (signal?.aborted === true) throw aborted(signal);
       this.terminalByThread.delete(threadId);
-      const pending = this.pendingByThread.get(threadId) ?? this.createPending(threadId, origin, generation, null);
+      const existingState = this.options.states.getByThreadId(threadId);
+      const pending = this.pendingByThread.get(threadId) ?? this.createPending(
+        threadId,
+        origin,
+        generation,
+        null,
+        this.options.backgroundUnmappedEnrollment && existingState === null
+      );
       if (pending === null) {
         outcomes.push(this.requireTerminal(threadId));
         continue;
       }
       if (pending.generation !== generation) {
         outcomes.push(this.failPending(pending, "runtime_boundary", "Shared Codex generation changed during enrollment."));
+        continue;
+      }
+      if (pending.background) {
+        outcomes.push(this.beginBackgroundEnrollment(pending));
         continue;
       }
       outcomes.push(await settleWithAbort(this.ensureEnrollment(pending), signal));
@@ -256,6 +270,9 @@ class DefaultAutomaticSessionEnrollmentService {
       }
       const overflow = this.bufferNotification(pending, notification, generation);
       if (overflow !== null) return { kind: "enrollment", enrollment: overflow };
+      if (pending.background) {
+        return { kind: "enrollment", enrollment: this.beginBackgroundEnrollment(pending) };
+      }
       return { kind: "enrollment", enrollment: await this.ensureEnrollment(pending) };
     }
 
@@ -287,11 +304,15 @@ class DefaultAutomaticSessionEnrollmentService {
       threadId,
       notification.method === "thread/started" ? "created_after" : "resumed_after",
       generation,
-      candidate
+      candidate,
+      this.options.backgroundUnmappedEnrollment && existingState === null
     );
     if (created === null) return { kind: "enrollment", enrollment: this.requireTerminal(threadId) };
     const overflow = this.bufferNotification(created, notification, generation);
     if (overflow !== null) return { kind: "enrollment", enrollment: overflow };
+    if (created.background) {
+      return { kind: "enrollment", enrollment: this.beginBackgroundEnrollment(created) };
+    }
     return { kind: "enrollment", enrollment: await this.ensureEnrollment(created) };
   }
 
@@ -326,6 +347,18 @@ class DefaultAutomaticSessionEnrollmentService {
     });
     this.inFlight.set(threadId, operation);
     return operation;
+  }
+
+  private beginBackgroundEnrollment(pending: PendingEnrollment): SharedSessionEnrollment {
+    const threadId = String(pending.snapshot.native_thread_id);
+    if (!this.inFlight.has(threadId)) {
+      void this.ensureEnrollment(pending)
+        .then((outcome) => this.options.onBackgroundOutcome?.(outcome))
+        .catch((error: unknown) => {
+          if (this.backgroundFailure === null) this.backgroundFailure = asError(error);
+        });
+    }
+    return deepFreeze(sharedSessionEnrollmentSchema.parse({ state: "pending", pending: pending.snapshot }));
   }
 
   private async attemptEnrollment(pending: PendingEnrollment): Promise<SharedSessionEnrollment> {
@@ -521,7 +554,8 @@ class DefaultAutomaticSessionEnrollmentService {
     threadId: NativeCodexThreadId,
     origin: PendingEnrollmentSnapshot["origin"],
     generation: number,
-    candidate: LoadedThreadCandidate | null
+    candidate: LoadedThreadCandidate | null,
+    background = false
   ): PendingEnrollment | null {
     if (this.pendingByThread.size >= this.options.budget.protocol_enrollment_max_pending_threads) {
       const failure = failedOutcome(
@@ -557,6 +591,7 @@ class DefaultAutomaticSessionEnrollmentService {
       generation,
       audit: null,
       attempts: 0,
+      background,
       timer: null
     };
     this.pendingByThread.set(threadId, pending);
@@ -623,10 +658,25 @@ class DefaultAutomaticSessionEnrollmentService {
     candidate: LoadedThreadCandidate | null,
     phase: PendingEnrollmentSnapshot["phase"]
   ): void {
+    const materialized = pending.snapshot.candidate === null && candidate !== null;
+    const phaseStarted = materialized ? this.timestamp() : null;
+    const deadline = phaseStarted === null
+      ? pending.snapshot.deadline_at
+      : earlierTimestamp(
+          addMilliseconds(
+            pending.snapshot.first_seen_at,
+            this.options.budget.protocol_enrollment_pending_timeout_ms * 2
+          ),
+          addMilliseconds(
+            phaseStarted,
+            this.options.budget.protocol_enrollment_pending_timeout_ms
+          )
+        );
     pending.snapshot = deepFreeze(pendingEnrollmentSnapshotSchema.parse({
       ...pending.snapshot,
       candidate,
-      phase
+      phase,
+      deadline_at: deadline
     }));
   }
 
@@ -1231,6 +1281,7 @@ function parseOptions(options: AutomaticSessionEnrollmentServiceOptions): Parsed
     (options.create_operation_id !== undefined && typeof options.create_operation_id !== "function") ||
     (options.create_record_id !== undefined && typeof options.create_record_id !== "function") ||
     (options.capture_branch !== undefined && typeof options.capture_branch !== "function") ||
+    (options.background_unmapped_enrollment !== undefined && typeof options.background_unmapped_enrollment !== "boolean") ||
     (options.on_background_outcome !== undefined && typeof options.on_background_outcome !== "function")
   ) {
     throw new TypeError("Automatic enrollment requires loaded-thread, storage, and event-pipeline ports.");
@@ -1245,6 +1296,7 @@ function parseOptions(options: AutomaticSessionEnrollmentServiceOptions): Parsed
     createOperationId: options.create_operation_id ?? createEnrollmentOperationId,
     createRecordId: options.create_record_id ?? createEnrollmentAuditRecordId,
     captureBranch: options.capture_branch ?? captureGitBranchMetadata,
+    backgroundUnmappedEnrollment: options.background_unmapped_enrollment ?? false,
     onBackgroundOutcome: options.on_background_outcome
   });
 }
@@ -1278,6 +1330,10 @@ function addMilliseconds(timestamp: string, milliseconds: number): IsoTimestamp 
   const result = Date.parse(timestamp) + milliseconds;
   if (!Number.isSafeInteger(result)) throw new TypeError("Automatic enrollment timestamp range is exhausted.");
   return new Date(result).toISOString() as IsoTimestamp;
+}
+
+function earlierTimestamp(left: IsoTimestamp, right: IsoTimestamp): IsoTimestamp {
+  return left <= right ? left : right;
 }
 
 function nextRetryAt(attemptedAt: string, deadlineAt: string, retryMs: number): IsoTimestamp {
