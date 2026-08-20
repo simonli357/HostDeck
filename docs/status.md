@@ -14,7 +14,7 @@ Current handoff only. Detailed scope, tasks, and evidence live in owning docs/ar
 - Publication: `REL-V1-111` now fail-closed verifies the 11-asset deterministic Ubuntu bundle and the SHA-pinned tag -> native checks -> package -> metadata -> attestation -> draft-release workflow. No tag or live attestation has been created.
 - Next chain: run `REL-V1-110`, then obtain the human `REL-V1-010` go/no-go.
 - Validation: immutable `0.0.20` passed a cellular/Tailscale Xiaomi phone flow covering fresh ordinary `codex` auto-enrollment, bidirectional laptop/phone turns, stock native-UUID resume, HostDeck restart with broker/TUI continuity, post-restart prompting, and 60 ms live catalog removal. Focused regressions and deterministic production build/install passed; cleanup restored phone Wi-Fi and removed test state/tunnels.
-- Git: six implementation commits and this acceptance evidence are local on `feat/shared-codex-runtime`, pending the required handoff push. The primary worktree remains untouched.
+- Git: shared-runtime implementation and `FE-V1-108` acceptance evidence are pushed on `feat/shared-codex-runtime` through `d6c4234`. The primary worktree remains untouched.
 
 ## Blockers
 
