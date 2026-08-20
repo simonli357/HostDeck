@@ -180,6 +180,7 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
 
   it("reconciles an initial restart across active, interrupted, missing, and archived threads", async () => {
     const harness = createHarness();
+    const longGoal = "Continue approved work. ".repeat(150).slice(0, 3_500);
     try {
       harness.repository.create(stateCandidate("sess_reconcile_a", "thread-reconcile-a", {
         turn_state: "waiting_for_approval",
@@ -205,7 +206,7 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
         runtimeThread("thread-reconcile-a", "/tmp/sess_reconcile_a", {
           status: { type: "active", activeFlags: ["waitingOnApproval"] },
           latest: rawTurn("turn-reconcile-a", "inProgress"),
-          goal: rawGoal("thread-reconcile-a", "Continue approved work.", "active"),
+          goal: rawGoal("thread-reconcile-a", longGoal, "active"),
           resume_model: "runtime-a",
           resume_effort: "high"
         }),
@@ -251,7 +252,7 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
           runtime_model: "runtime-a",
           reasoning_effort: "high"
         },
-        goal: { objective: "Continue approved work.", state: "active" }
+        goal: { objective: longGoal, state: "active" }
       });
       expect(harness.repository.require("sess_reconcile_b").projection.session).toMatchObject({
         turn_state: "interrupted",

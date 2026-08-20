@@ -40,6 +40,8 @@ export const codexModelContractLimits = Object.freeze({
   reasoningEffortLength: 80
 });
 
+export const goalCueObjectiveMaxLength = 4_000;
+
 const selectedRuntimeLimits = {
   versionLength: 64,
   bindingIdLength: 192,
@@ -179,7 +181,7 @@ export const runtimeCompatibilitySchema = z
 
 export const goalCueSchema = z
   .object({
-    objective: z.string().min(1).max(selectedRuntimeLimits.summaryLength),
+    objective: z.string().min(1).max(goalCueObjectiveMaxLength),
     state: z.enum(["active", "paused", "blocked", "usage_limited", "budget_limited", "complete"])
   })
   .strict();

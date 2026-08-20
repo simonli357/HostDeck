@@ -16,6 +16,7 @@ import {
 } from "@hostdeck/codex-adapter";
 import {
   assertResolvedResourceBudget,
+  goalCueObjectiveMaxLength,
   isoTimestampSchema,
   type ManagedSessionProjection,
   type ManagedSessionTarget,
@@ -1131,7 +1132,7 @@ function stalePatch(reason: string): Partial<ManagedSessionProjection> {
 
 function goalPatch(goal: CodexThreadGoal | null): ManagedSessionProjection["goal"] | undefined {
   if (goal === null) return null;
-  if (goal.objective.length > 512) return undefined;
+  if (goal.objective.length > goalCueObjectiveMaxLength) return undefined;
   return { objective: goal.objective, state: goal.status };
 }
 
