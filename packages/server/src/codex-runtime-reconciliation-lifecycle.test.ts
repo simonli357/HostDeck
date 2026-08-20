@@ -433,6 +433,78 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
     }
   });
 
+  it("recovers retained messages and terminal truth when a restart follows a stalled active projection", async () => {
+    const harness = createHarness();
+    try {
+      harness.repository.create(stateCandidate("sess_recovery", "thread-recovery", {
+        turn_state: "in_progress",
+        attention: "watch"
+      }));
+      const runtime = scriptedRuntime([
+        runtimeThread("thread-recovery", "/tmp/sess_recovery", {
+          status: { type: "idle" },
+          latest: rawTurn("turn-recovery", "completed"),
+          terminal_history: {
+            ...rawTurn("turn-recovery", "completed"),
+            itemsView: "summary",
+            items: [
+              rawUserMessage("item-recovery-user", "Inspect the current release state."),
+              {
+                type: "commandExecution",
+                id: "item-recovery-command",
+                aggregatedOutput: "private command output".repeat(20_000)
+              },
+              rawAgentMessage("item-recovery-progress", "I found the projection failure and repaired it.", "commentary"),
+              rawAgentMessage("item-recovery-final", "The repaired release is ready for validation.", "final_answer")
+            ]
+          }
+        })
+      ], 18);
+      const deadline = testDeadline();
+      try {
+        const reconciliation = await reconcile(harness.lifecycle, runtime, deadline, 18, null);
+        await resubscribe(harness.lifecycle, runtime, deadline, reconciliation, 18, null);
+        await ready(harness.lifecycle, runtime, deadline, reconciliation, 18, null);
+      } finally {
+        deadline.dispose();
+      }
+
+      const events = harness.repository.listEvents("sess_recovery").events;
+      expect(events.map((event) => ({ type: event.type, cursor: event.cursor }))).toEqual([
+        { type: "replay_boundary", cursor: 2 },
+        { type: "message", cursor: 3 },
+        { type: "message", cursor: 4 },
+        { type: "message", cursor: 5 },
+        { type: "turn", cursor: 6 },
+        { type: "runtime", cursor: 7 }
+      ]);
+      expect(events.filter((event) => event.type === "message")).toMatchObject([
+        { role: "user", text: "Inspect the current release state." },
+        { role: "agent", text: "I found the projection failure and repaired it." },
+        { role: "agent", text: "The repaired release is ready for validation." }
+      ]);
+      expect(events.find((event) => event.type === "turn")).toMatchObject({
+        turn_id: "turn-recovery",
+        state: "completed"
+      });
+      expect(harness.repository.require("sess_recovery").projection.session).toMatchObject({
+        turn_state: "completed",
+        attention: "none",
+        freshness: "current",
+        recent_summary: "The repaired release is ready for validation."
+      });
+      expect(JSON.stringify(events)).not.toContain("private command output");
+      expect(
+        runtime.requests.filter((request) =>
+          request.method === "thread/turns/list" &&
+          (request.params as { readonly itemsView?: string }).itemsView === "summary"
+        )
+      ).toHaveLength(1);
+    } finally {
+      harness.close();
+    }
+  });
+
   it("supersedes approvals and persists disconnected truth before read-only reconnect inspection", async () => {
     const harness = createHarness({ approvalsSuperseded: 2 });
     try {
@@ -1085,6 +1157,7 @@ interface RuntimeFixture {
   readonly source: unknown;
   readonly goal: Record<string, unknown> | null;
   readonly latest: Record<string, unknown> | null;
+  readonly terminal_history: Record<string, unknown> | null;
   readonly resume_model: string;
   readonly resume_effort: string | null;
 }
@@ -1236,10 +1309,12 @@ function scriptedRuntime(
       if (input.method === "thread/read") return { thread: rawThread(fixture) };
       if (input.method === "thread/goal/get") return { goal: fixture.goal };
       if (input.method === "thread/turns/list") {
+        const itemsView = (input.params as { readonly itemsView?: string }).itemsView;
+        const turn = itemsView === "summary" ? fixture.terminal_history : fixture.latest;
         return {
-          data: fixture.latest === null ? [] : [fixture.latest],
+          data: turn === null ? [] : [turn],
           nextCursor: null,
-          backwardsCursor: fixture.latest === null ? null : `turn-back-${threadId}`
+          backwardsCursor: turn === null ? null : `turn-back-${threadId}`
         };
       }
       if (input.method === "thread/resume") {
@@ -1263,6 +1338,7 @@ function runtimeThread(
     source: "appServer",
     goal: null,
     latest: null,
+    terminal_history: null,
     resume_model: "runtime-default",
     resume_effort: null,
     ...overrides
@@ -1313,6 +1389,23 @@ function rawTurn(turnId: string, status: "completed" | "failed" | "inProgress" |
     startedAt: unixSeconds("2026-07-16T12:40:00.000Z"),
     completedAt: terminal ? unixSeconds("2026-07-16T12:41:00.000Z") : null,
     durationMs: terminal ? 60_000 : null
+  };
+}
+
+function rawAgentMessage(
+  itemId: string,
+  text: string,
+  phase: "commentary" | "final_answer"
+): Record<string, unknown> {
+  return { type: "agentMessage", id: itemId, text, phase, memoryCitation: null };
+}
+
+function rawUserMessage(itemId: string, text: string): Record<string, unknown> {
+  return {
+    type: "userMessage",
+    id: itemId,
+    clientId: null,
+    content: [{ type: "text", text, text_elements: [] }]
   };
 }
 

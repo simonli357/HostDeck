@@ -369,7 +369,10 @@ export function normalizeCodexItem(
             source: z.enum(["agent", "userShell", "unifiedExecStartup", "unifiedExecInteraction"]),
             status: z.enum(["inProgress", "completed", "failed", "declined"]),
             commandActions: z.array(commandActionSchema).max(maximumCollectionLength),
-            aggregatedOutput: boundedStringSchema(maximumTextLength * 4).nullable(),
+            // The transport already bounds the complete frame. This field is
+            // validated for shape and then discarded, so projection text
+            // limits must not reject otherwise valid Codex command output.
+            aggregatedOutput: z.string().nullable(),
             exitCode: z.number().int().nullable(),
             durationMs: nonnegativeSafeIntegerSchema.nullable()
           })

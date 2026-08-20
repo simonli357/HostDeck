@@ -118,6 +118,7 @@ export {
   type CodexReconciliationLatestTurn,
   type CodexReconciliationReadClient,
   type CodexReconciliationResubscribeClient,
+  type CodexReconciliationTerminalTurnHistory,
   type CodexReconciliationTurnFailureCode,
   createCodexReconciliationReadClient,
   createCodexReconciliationResubscribeClient

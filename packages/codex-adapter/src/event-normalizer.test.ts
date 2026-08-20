@@ -345,6 +345,27 @@ describe("exact Codex event normalizer", () => {
     expect(JSON.stringify(reasoning)).not.toContain("secret summary");
     expect(JSON.stringify(reasoning)).not.toContain("secret content");
 
+    const completed = normalizeEvent(
+      normalizer.normalize(
+        selected(
+          "item/completed",
+          itemParams(
+            threadA,
+            turnA,
+            {
+              ...rawCommand("item-secret-command", "completed"),
+              aggregatedOutput: "private-output".repeat(20_000)
+            },
+            "completed"
+          )
+        )
+      )
+    );
+    expect(completed).toMatchObject({
+      item: { category: "command", content_state: "redacted", state: "completed", text: null }
+    });
+    expect(JSON.stringify(completed)).not.toContain("private-output");
+
     const malformed = activeTurnNormalizer(threadB, turnB);
     expectNormalizationError(
       () =>

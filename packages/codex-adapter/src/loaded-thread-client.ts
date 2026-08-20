@@ -396,7 +396,7 @@ class DefaultCodexLoadedThreadClient implements CodexLoadedThreadClient {
         activeTurnStartedAt = unixSecondsToIso(turn.startedAt, "loaded-thread active turn start");
         continue;
       }
-      const normalized = parseTerminalHistoryTurn(turn, this.options.max_history_items_per_turn);
+      const normalized = normalizeCodexTerminalHistoryTurn(turn, this.options.max_history_items_per_turn);
       turns.push(normalized.turn);
       truncatedBefore ||= normalized.truncated_before;
     }
@@ -539,7 +539,7 @@ export function codexLoadedThreadProjectCue(cwd: string): string {
   return basename.slice(0, sharedCodexRuntimeContractLimits.projectCueLength) || "root";
 }
 
-function parseTerminalHistoryTurn(
+export function normalizeCodexTerminalHistoryTurn(
   turn: ReturnType<typeof turnSchema.parse>,
   maxItems: number
 ): { readonly turn: NativeCodexHistoryTurn; readonly truncated_before: boolean } {

@@ -72,6 +72,7 @@ describe("Codex reconnect-only reconciliation clients", () => {
       "listTargetThreads",
       "readGoal",
       "readLatestTurn",
+      "readTerminalTurnHistory",
       "readThread",
       "runtime_version"
     ]);
@@ -184,6 +185,64 @@ describe("Codex reconnect-only reconciliation clients", () => {
       budget()
     );
     await expect(empty.readLatestTurn(threadA)).resolves.toBeNull();
+  });
+
+  it("recovers only bounded user and agent messages from one exact terminal turn", async () => {
+    const port = fakeReadPort((request) => {
+      expect(request).toMatchObject({
+        method: "thread/turns/list",
+        kind: "read",
+        params: {
+          threadId: threadA,
+          cursor: null,
+          limit: 1,
+          sortDirection: "desc",
+          itemsView: "summary"
+        }
+      });
+      return {
+        data: [rawTurn({
+          itemsView: "summary",
+          items: [
+            rawUserMessage("item-recovery-user", "Review the current implementation."),
+            {
+              type: "commandExecution",
+              id: "item-recovery-command",
+              aggregatedOutput: "private command output".repeat(20_000)
+            },
+            rawAgentMessage("item-recovery-agent", "The implementation review is complete.")
+          ]
+        })],
+        nextCursor: "older-turn",
+        backwardsCursor: "newer-turn"
+      };
+    });
+
+    const result = await createCodexReconciliationReadClient(port, budget())
+      .readTerminalTurnHistory(threadA, "turn-reconcile-a");
+
+    expect(result).toEqual({
+      turn: {
+        turn_id: "turn-reconcile-a",
+        status: "completed",
+        started_at: "2026-07-16T14:00:00.000Z",
+        completed_at: "2026-07-16T14:00:02.000Z",
+        messages: [
+          {
+            item_id: "item-recovery-user",
+            role: "user",
+            text: "Review the current implementation."
+          },
+          {
+            item_id: "item-recovery-agent",
+            role: "agent",
+            text: "The implementation review is complete."
+          }
+        ]
+      },
+      truncated_before: false
+    });
+    expect(JSON.stringify(result)).not.toContain("private command output");
   });
 
   it("rejects contradictory, content-loaded, malformed, oversized, and extra-field latest turns", async () => {
@@ -453,6 +512,19 @@ function rawTurn(overrides: Record<string, unknown> = {}): Record<string, unknow
     completedAt: unixSeconds("2026-07-16T14:00:02.000Z"),
     durationMs: 2_000,
     ...overrides
+  };
+}
+
+function rawAgentMessage(id: string, text: string): Record<string, unknown> {
+  return { type: "agentMessage", id, text, phase: "final_answer", memoryCitation: null };
+}
+
+function rawUserMessage(id: string, text: string): Record<string, unknown> {
+  return {
+    type: "userMessage",
+    id,
+    clientId: null,
+    content: [{ type: "text", text, text_elements: [] }]
   };
 }
 

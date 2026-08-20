@@ -147,6 +147,7 @@ export function projectSessionDetailTimeline(
   const working: WorkingTimelineItem[] = [];
   const messageIndexes = new Map<string, number>();
   const approvalIndexes = new Map<string, number>();
+  const activityIndexes = new Map<string, number>();
 
   for (const event of feed.events) {
     if (event.type === "message") {
@@ -155,6 +156,10 @@ export function projectSessionDetailTimeline(
     }
     if (event.type === "approval") {
       projectApprovalEvent(working, approvalIndexes, event, formatTimestamp);
+      continue;
+    }
+    if (event.type === "activity") {
+      projectActivityEvent(working, activityIndexes, event, formatTimestamp);
       continue;
     }
     working.push(Object.freeze({
@@ -188,6 +193,30 @@ export function projectSessionDetailTimeline(
       .map((entry) => entry.item)
       .sort((left, right) => left.order - right.order)
   );
+}
+
+function projectActivityEvent(
+  working: WorkingTimelineItem[],
+  indexes: Map<string, number>,
+  event: Extract<SelectedProjectionEvent, { readonly type: "activity" }>,
+  formatTimestamp: SessionDetailTimestampFormatter
+): void {
+  const identity = `activity:${event.activity}`;
+  const existingIndex = indexes.get(identity);
+  const projected = projectActivity(event, formatTimestamp);
+  if (existingIndex === undefined) {
+    working.push(Object.freeze({ identity, item: projected }));
+    indexes.set(identity, working.length - 1);
+    return;
+  }
+  const existing = working[existingIndex];
+  if (existing === undefined) {
+    throw new TypeError("HostDeck Session Detail activity index is inconsistent.");
+  }
+  working[existingIndex] = Object.freeze({
+    identity,
+    item: freezeTimelineItem({ ...projected, key: existing.item.key })
+  });
 }
 
 function projectApprovalEvent(
@@ -357,7 +386,7 @@ function projectActivity(
   formatTimestamp: SessionDetailTimestampFormatter
 ): SessionDetailTimelineItem {
   const failed = event.state === "failed";
-  const pending = event.state === "started" || event.state === "updated";
+  const pending = event.state === "started";
   const label = activityLabel(event.activity);
   return freezeTimelineItem({
     key: `activity:${event.cursor}`,
@@ -554,7 +583,7 @@ function activityStateLabel(
     case "started":
       return "Started";
     case "updated":
-      return "In progress";
+      return "Updated";
     case "completed":
       return "Completed";
     case "failed":

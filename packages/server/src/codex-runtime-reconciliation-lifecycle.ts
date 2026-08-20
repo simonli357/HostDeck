@@ -1,6 +1,7 @@
 import {
   type CodexEventNormalizerReconciliation,
   type CodexReconciliationLatestTurn,
+  type CodexReconciliationTerminalTurnHistory,
   type CodexReconnectDisconnectedInput,
   type CodexReconnectLifecyclePort,
   type CodexReconnectReadyInput,
@@ -163,6 +164,7 @@ interface RuntimeObservation {
   readonly read_unavailable: boolean;
   readonly goal: CodexThreadGoal | null;
   readonly latest_turn: CodexReconciliationLatestTurn | null;
+  readonly recovery_history: CodexReconciliationTerminalTurnHistory | null;
   readonly detail_unavailable: boolean;
 }
 
@@ -173,6 +175,7 @@ interface SessionOutcome {
   readonly issue: SessionIssue;
   readonly mapping_disposition: "recovery_required" | "selected";
   readonly normalizer_state: CodexEventNormalizerReconciliation | null;
+  readonly recovery_history: CodexReconciliationTerminalTurnHistory | null;
   readonly patch: Partial<ManagedSessionProjection>;
 }
 
@@ -386,6 +389,7 @@ class DefaultCodexRuntimeReconciliationLifecycle {
             read_unavailable: false,
             goal: null,
             latest_turn: null,
+            recovery_history: null,
             detail_unavailable: false
           });
           continue;
@@ -554,7 +558,9 @@ class DefaultCodexRuntimeReconciliationLifecycle {
           freshness: "current",
           freshness_reason: null,
           updated_at: capturedAt,
-          recent_summary: readySummary(current.projection.session.turn_state)
+          recent_summary: activeTurnState(current.projection.session.turn_state)
+            ? readySummary(current.projection.session.turn_state)
+            : current.projection.session.recent_summary
         });
         await this.options.projection.append({
           session_id: target.session_id,
@@ -706,6 +712,7 @@ class DefaultCodexRuntimeReconciliationLifecycle {
         read_unavailable: true,
         goal: null,
         latest_turn: null,
+        recovery_history: null,
         detail_unavailable: true
       };
     }
@@ -718,6 +725,7 @@ class DefaultCodexRuntimeReconciliationLifecycle {
         read_unavailable: false,
         goal: null,
         latest_turn: null,
+        recovery_history: null,
         detail_unavailable: false
       };
     }
@@ -729,14 +737,30 @@ class DefaultCodexRuntimeReconciliationLifecycle {
       () => reads.readLatestTurn(current.mapping.codex_thread_id, deadline.signal)
     );
     deadline.throwIfAborted();
+    const latestTurn = turnResult.value;
+    const recoveryResult =
+      latestTurn !== null &&
+      latestTurn.status !== "in_progress" &&
+      activeTurnState(current.projection.session.turn_state)
+        ? await remoteReadOrUnavailable(() =>
+            reads.readTerminalTurnHistory(
+              current.mapping.codex_thread_id,
+              latestTurn.turn_id,
+              deadline.signal
+            )
+          )
+        : { unavailable: false, value: null };
+    deadline.throwIfAborted();
     return {
       current,
       listed,
       read,
       read_unavailable: false,
       goal: goalResult.value,
-      latest_turn: turnResult.value,
-      detail_unavailable: goalResult.unavailable || turnResult.unavailable
+      latest_turn: latestTurn,
+      recovery_history: recoveryResult.value,
+      detail_unavailable:
+        goalResult.unavailable || turnResult.unavailable || recoveryResult.unavailable
     };
   }
 
@@ -815,6 +839,92 @@ class DefaultCodexRuntimeReconciliationLifecycle {
         ...outcome.patch,
         archived_at: current.mapping.archived_at,
         updated_at: capturedAt
+      })
+    });
+    deadline.throwIfAborted();
+    await this.appendRecoveredTerminalTurn(outcome, deadline);
+  }
+
+  private async appendRecoveredTerminalTurn(
+    outcome: SessionOutcome,
+    deadline: OperationDeadline
+  ): Promise<void> {
+    const recovery = outcome.recovery_history;
+    if (recovery === null) return;
+    const turn = recovery.turn;
+
+    for (const message of turn.messages) {
+      deadline.throwIfAborted();
+      const current = this.requireExactTarget(outcome.target, false, outcome.identity);
+      const capturedAt = this.timestampAfter(
+        current.mapping.updated_at,
+        current.projection.session.updated_at,
+        turn.started_at
+      );
+      await this.options.projection.append({
+        session_id: outcome.target.session_id,
+        expected_revision: selectedStateRevision(current),
+        event: {
+          captured_at: capturedAt,
+          upstream_at: turn.started_at,
+          codex_event_id: `native:item:${message.item_id}`,
+          codex_event_type: `native_recovery/${message.role}_message`,
+          content_state: "complete",
+          content_notice: null,
+          type: "message",
+          role: message.role,
+          phase: "completed",
+          item_id: message.item_id,
+          text: message.text
+        },
+        next_session: omitCursor({
+          ...current.projection.session,
+          updated_at: capturedAt,
+          last_activity_at: reconciledActivityAt(
+            current,
+            turn.completed_at ?? turn.started_at
+          ),
+          recent_summary: message.role === "agent"
+            ? boundedRecentSummary(message.text)
+            : current.projection.session.recent_summary
+        })
+      });
+    }
+
+    deadline.throwIfAborted();
+    const current = this.requireExactTarget(outcome.target, false, outcome.identity);
+    const capturedAt = this.timestampAfter(
+      current.mapping.updated_at,
+      current.projection.session.updated_at,
+      turn.completed_at ?? turn.started_at
+    );
+    const contentNotice = recovery.truncated_before
+      ? "Earlier items in the recovered turn were omitted."
+      : null;
+    await this.options.projection.append({
+      session_id: outcome.target.session_id,
+      expected_revision: selectedStateRevision(current),
+      event: {
+        captured_at: capturedAt,
+        upstream_at: turn.completed_at,
+        codex_event_id: `native:turn:${turn.turn_id}`,
+        codex_event_type: "native_recovery/turn",
+        content_state: contentNotice === null ? "complete" : "truncated",
+        content_notice: contentNotice,
+        type: "turn",
+        turn_id: turn.turn_id,
+        state: turn.status,
+        error: turn.status === "failed"
+          ? { code: "unknown_error", message: "Recovered native Codex turn failed." }
+          : null
+      },
+      next_session: omitCursor({
+        ...current.projection.session,
+        updated_at: capturedAt,
+        last_activity_at: reconciledActivityAt(
+          current,
+          turn.completed_at ?? turn.started_at
+        )
       })
     });
   }
@@ -930,6 +1040,7 @@ function deriveOutcome(
     issue,
     mapping_disposition: disposition,
     normalizer_state: null,
+    recovery_history: null,
     patch: stalePatch(reason)
   });
 
@@ -969,6 +1080,7 @@ function deriveOutcome(
       issue: "none",
       mapping_disposition: "selected",
       normalizer_state: null,
+      recovery_history: observation.recovery_history,
       patch: {
         session_state: "archived",
         turn_state: terminal.turn_state,
@@ -1012,6 +1124,7 @@ function deriveOutcome(
         thread_id: target.codex_thread_id,
         active_turn_id: observation.latest_turn.turn_id
       },
+      recovery_history: null,
       patch: {
         session_state: "active",
         turn_state: waitingApproval ? "waiting_for_approval" : waitingInput ? "waiting_for_input" : "in_progress",
@@ -1042,6 +1155,7 @@ function deriveOutcome(
       thread_id: target.codex_thread_id,
       active_turn_id: null
     },
+    recovery_history: observation.recovery_history,
     patch: {
       session_state: "active",
       turn_state: terminal.turn_state,
@@ -1218,6 +1332,10 @@ function readySummary(state: ManagedSessionProjection["turn_state"]): string {
   if (state === "waiting_for_input") return "Codex runtime is ready; the active turn requires input.";
   if (state === "in_progress") return "Codex runtime is ready; the turn remains active.";
   return "Codex runtime is ready.";
+}
+
+function boundedRecentSummary(value: string): string {
+  return value.length <= 512 ? value : `${value.slice(0, 509)}...`;
 }
 
 function assertCompleteAudit(

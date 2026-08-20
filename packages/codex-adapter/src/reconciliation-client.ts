@@ -2,6 +2,8 @@ import {
   absoluteCwdSchema,
   codexThreadIdSchema,
   codexTurnIdSchema,
+  type NativeCodexHistoryTurn,
+  nativeSessionContractLimits,
   type ResourceBudget,
   type RuntimeCompatibility
 } from "@hostdeck/contracts";
@@ -19,10 +21,12 @@ import {
   type CodexOperationOutcome,
   HostDeckCodexAdapterError
 } from "./errors.js";
+import { turnSchema } from "./event-normalizer-schemas.js";
 import type { ThreadListParams } from "./generated/v2/ThreadListParams.js";
 import type { ThreadReadParams } from "./generated/v2/ThreadReadParams.js";
 import type { ThreadTurnsListParams } from "./generated/v2/ThreadTurnsListParams.js";
 import { type CodexThreadGoal, createCodexGoalClient } from "./goal-client.js";
+import { normalizeCodexTerminalHistoryTurn } from "./loaded-thread-client.js";
 import { type CodexThreadModelState, createCodexModelClient } from "./model-client.js";
 import type {
   CodexReconnectReadMethod,
@@ -98,6 +102,16 @@ export interface CodexReconciliationReadClient {
     threadId: CodexThreadId | string,
     signal?: AbortSignal
   ) => Promise<CodexReconciliationLatestTurn | null>;
+  readonly readTerminalTurnHistory: (
+    threadId: CodexThreadId | string,
+    turnId: CodexTurnId | string,
+    signal?: AbortSignal
+  ) => Promise<CodexReconciliationTerminalTurnHistory>;
+}
+
+export interface CodexReconciliationTerminalTurnHistory {
+  readonly turn: NativeCodexHistoryTurn;
+  readonly truncated_before: boolean;
 }
 
 export interface CodexReconciliationResubscribeClient {
@@ -367,6 +381,57 @@ export function createCodexReconciliationReadClient(
     return turns.length === 0 ? null : parseLatestTurn(turns[0]);
   };
 
+  const readTerminalTurnHistory = async (
+    threadId: CodexThreadId | string,
+    turnId: CodexTurnId | string,
+    signal?: AbortSignal
+  ): Promise<CodexReconciliationTerminalTurnHistory> => {
+    void runtimeVersion();
+    const parsedThreadId = parseInputThreadId(threadId);
+    const parsedTurnId = parseInputTurnId(turnId);
+    const params = {
+      threadId: parsedThreadId,
+      cursor: null,
+      limit: 1,
+      sortDirection: "desc",
+      itemsView: "summary"
+    } satisfies ThreadTurnsListParams;
+    const result = requireRecord(
+      await guarded.request({
+        method: "thread/turns/list",
+        params,
+        kind: "read",
+        timeout_ms: readTimeoutMs,
+        ...(signal === undefined ? {} : { signal })
+      }),
+      "Codex reconciliation terminal-turn result must be an object."
+    );
+    assertExactKeys(
+      result,
+      ["backwardsCursor", "data", "nextCursor"],
+      "Codex reconciliation terminal-turn fields are invalid."
+    );
+    const turns = requireArray(
+      result.data,
+      "Codex reconciliation terminal-turn data must be an array.",
+      1
+    );
+    validateBackwardsCursor(result.backwardsCursor, turns.length, "terminal-turn");
+    if (result.nextCursor !== null) {
+      parseCursor(result.nextCursor, "Codex reconciliation terminal-turn cursor");
+    }
+    const parsed = turns.length === 1 ? turnSchema.safeParse(turns[0]) : null;
+    if (parsed === null || !parsed.success || parsed.data.itemsView !== "summary" || parsed.data.id !== parsedTurnId) {
+      throw invalidPayload("Codex reconciliation terminal-turn history is unavailable or contradictory.");
+    }
+    return Object.freeze(
+      normalizeCodexTerminalHistoryTurn(
+        parsed.data,
+        nativeSessionContractLimits.historyItemsPerTurn
+      )
+    );
+  };
+
   return Object.freeze({
     get runtime_version() {
       return runtimeVersion();
@@ -379,7 +444,8 @@ export function createCodexReconciliationReadClient(
       withSignalDeadline(signal, readTimeoutMs, (deadline) =>
         goals.read(threadId, deadline)
       ),
-    readLatestTurn
+    readLatestTurn,
+    readTerminalTurnHistory
   });
 }
 
@@ -699,6 +765,12 @@ function requireRuntimeVersion(compatibility: RuntimeCompatibility): string {
 function parseInputThreadId(candidate: unknown): CodexThreadId {
   const parsed = codexThreadIdSchema.safeParse(candidate);
   if (!parsed.success) throw invalidInput("Codex reconciliation thread id is invalid.", parsed.error);
+  return parsed.data;
+}
+
+function parseInputTurnId(candidate: unknown): CodexTurnId {
+  const parsed = codexTurnIdSchema.safeParse(candidate);
+  if (!parsed.success) throw invalidInput("Codex reconciliation turn id is invalid.", parsed.error);
   return parsed.data;
 }
 

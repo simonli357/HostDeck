@@ -160,6 +160,34 @@ describe("Session Detail timeline projection", () => {
     expect(timeline[1]?.order).toBe(3);
   });
 
+  it("keeps only the latest row per activity kind and does not present snapshots as pending", () => {
+    let state = createSessionDetailFeed(sessionId);
+    state = appendSessionDetailEvent(state, activityStateEvent(1, "command", "started", "command-a"));
+    state = appendSessionDetailEvent(state, activityStateEvent(2, "command", "completed", "command-a"));
+    state = appendSessionDetailEvent(state, messageEvent(3, "agent", "completed", "Checking the final package."));
+    state = appendSessionDetailEvent(state, activityStateEvent(4, "command", "started", "command-b"));
+    state = appendSessionDetailEvent(state, activityStateEvent(5, "command", "completed", "command-b"));
+    state = appendSessionDetailEvent(state, activityStateEvent(6, "usage", "updated", null));
+    state = appendSessionDetailEvent(state, activityStateEvent(7, "usage", "updated", null));
+
+    const timeline = projectSessionDetailTimeline(state, null, formatTimestamp);
+
+    expect(timeline).toHaveLength(3);
+    expect(timeline.map(({ label }) => label)).toEqual(["Agent", "Command", "Usage"]);
+    expect(timeline[1]).toMatchObject({
+      order: 5,
+      stateLabel: "Completed",
+      pending: false,
+      diagnosticCursor: 5
+    });
+    expect(timeline[2]).toMatchObject({
+      order: 7,
+      stateLabel: "Updated",
+      pending: false,
+      diagnosticCursor: 7
+    });
+  });
+
   it("adds one synthetic retained-history boundary and avoids duplicating a streamed one", () => {
     const syntheticFeed = appendSessionDetailEvent(
       createSessionDetailFeed(sessionId),
@@ -397,6 +425,23 @@ function activityEvent(
     item_id: null,
     title: options.title ?? "Tool activity",
     detail: "Read selected files."
+  });
+}
+
+function activityStateEvent(
+  cursor: number,
+  activity: "command" | "usage",
+  state: "started" | "updated" | "completed",
+  itemId: string | null
+): SelectedProjectionEvent {
+  return parseEvent({
+    ...base(cursor),
+    type: "activity",
+    activity,
+    state,
+    item_id: itemId,
+    title: activity === "command" ? "Command execution" : "Token usage updated",
+    detail: null
   });
 }
 
