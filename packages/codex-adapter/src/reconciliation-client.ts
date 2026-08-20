@@ -178,9 +178,13 @@ export function createCodexReconciliationReadClient(
 ): CodexReconciliationReadClient {
   const generation = parseGeneration(port);
   const options = codexResourceOptionsFromBudget(resourceBudget);
+  const readTimeoutMs = Math.max(
+    options.thread.read_timeout_ms,
+    resourceBudget.protocol_enrollment_pending_timeout_ms
+  );
   const guarded = createGuardedPort(port, readMethods);
   const goals = createCodexGoalClient(guarded, {
-    read_timeout_ms: options.thread.read_timeout_ms,
+    read_timeout_ms: readTimeoutMs,
     mutation_timeout_ms: options.thread.mutation_timeout_ms
   });
 
@@ -205,7 +209,7 @@ export function createCodexReconciliationReadClient(
             method: "thread/list",
             params,
             kind: "read",
-            timeout_ms: options.thread.read_timeout_ms,
+            timeout_ms: readTimeoutMs,
             ...(signal === undefined ? {} : { signal })
           }),
           "Codex reconciliation thread/list result must be an object."
@@ -264,7 +268,7 @@ export function createCodexReconciliationReadClient(
             method: "thread/list",
             params,
             kind: "read",
-            timeout_ms: options.thread.read_timeout_ms,
+            timeout_ms: readTimeoutMs,
             ...(signal === undefined ? {} : { signal })
           }),
           "Codex reconciliation target thread/list result must be an object."
@@ -318,7 +322,7 @@ export function createCodexReconciliationReadClient(
         method: "thread/read",
         params,
         kind: "read",
-        timeout_ms: options.thread.read_timeout_ms,
+        timeout_ms: readTimeoutMs,
         ...(signal === undefined ? {} : { signal })
       }),
       "Codex reconciliation thread/read result must be an object."
@@ -347,7 +351,7 @@ export function createCodexReconciliationReadClient(
         method: "thread/turns/list",
         params,
         kind: "read",
-        timeout_ms: options.thread.read_timeout_ms,
+        timeout_ms: readTimeoutMs,
         ...(signal === undefined ? {} : { signal })
       }),
       "Codex reconciliation thread/turns/list result must be an object."
@@ -372,7 +376,7 @@ export function createCodexReconciliationReadClient(
     listTargetThreads,
     readThread,
     readGoal: (threadId: CodexThreadId | string, signal?: AbortSignal) =>
-      withSignalDeadline(signal, options.thread.read_timeout_ms, (deadline) =>
+      withSignalDeadline(signal, readTimeoutMs, (deadline) =>
         goals.read(threadId, deadline)
       ),
     readLatestTurn
