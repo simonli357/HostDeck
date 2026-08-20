@@ -260,7 +260,12 @@ class DefaultAutomaticSessionEnrollmentService {
     }
 
     const terminal = this.terminalByThread.get(threadId);
-    if (terminal !== undefined) return { kind: "enrollment", enrollment: terminal };
+    if (terminal !== undefined) {
+      if (!isRetryableTerminalTimeout(terminal)) {
+        return { kind: "enrollment", enrollment: terminal };
+      }
+      this.terminalByThread.delete(threadId);
+    }
     const existingState = this.options.states.getByThreadId(threadId);
     if (
       existingState !== null &&
@@ -1094,6 +1099,12 @@ function requiresAutomaticRefresh(
     state.mapping.disposition !== "selected" ||
     state.mapping.runtime_version !== runtimeVersion
   );
+}
+
+function isRetryableTerminalTimeout(
+  outcome: SharedSessionEnrollment
+): outcome is Extract<SharedSessionEnrollment, { readonly state: "failed" }> {
+  return outcome.state === "failed" && outcome.failure === "pending_timeout";
 }
 
 function replayableNotifications(

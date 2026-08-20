@@ -379,7 +379,12 @@ describe("automatic shared-session enrollment", () => {
     try {
       const eligible = candidate(threadA);
       const gate = deferred<CodexLoadedThreadSnapshot>();
-      const loaded = fakeLoaded({ ids: [], candidates: new Map(), snapshot: () => gate.promise, startedCandidate: eligible });
+      const loaded = fakeLoaded({
+        ids: [],
+        candidates: new Map([[threadA, eligible]]),
+        snapshot: () => gate.promise,
+        startedCandidate: eligible
+      });
       let now = Date.parse(enrolledAt);
       const budget: ResourceBudget = {
         ...defaultResourceBudget,
@@ -390,7 +395,15 @@ describe("automatic shared-session enrollment", () => {
       const enrollment = service.observeNotification(startedNotification(threadA), 6);
       await waitFor(() => loaded.snapshotCalls.length === 1);
       now += 1_000;
-      gate.resolve(snapshot(eligible));
+      gate.resolve(snapshot(eligible, {
+        turns: [{
+          turn_id: "turn-after-timeout",
+          status: "completed",
+          started_at: "2026-08-14T15:30:00.000Z",
+          completed_at: "2026-08-14T15:31:00.000Z",
+          messages: []
+        }]
+      }));
 
       await expect(enrollment).resolves.toMatchObject({
         kind: "enrollment",
@@ -399,6 +412,18 @@ describe("automatic shared-session enrollment", () => {
       expect(harness.repository.getByThreadId(threadA)).toBeNull();
       expect(harness.audit.require("op_session_enroll_test_0001")).toMatchObject({
         records: [{ outcome: "accepted" }, { outcome: "failed", error_code: "operation_timeout" }]
+      });
+
+      await expect(service.observeNotification(selected("turn/completed", {
+        threadId: threadA,
+        turn: rawTurn("turn-after-timeout", "completed")
+      }), 6)).resolves.toMatchObject({
+        kind: "enrollment",
+        enrollment: { state: "enrolled", session: { native_thread_id: threadA } }
+      });
+      expect(harness.repository.getByThreadId(threadA)).not.toBeNull();
+      expect(harness.audit.require("op_session_enroll_test_0002")).toMatchObject({
+        records: [{ outcome: "accepted" }, { outcome: "succeeded" }]
       });
       service.close();
     } finally {
