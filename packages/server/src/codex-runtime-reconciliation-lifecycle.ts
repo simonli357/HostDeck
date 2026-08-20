@@ -558,9 +558,11 @@ class DefaultCodexRuntimeReconciliationLifecycle {
           freshness: "current",
           freshness_reason: null,
           updated_at: capturedAt,
-          recent_summary: activeTurnState(current.projection.session.turn_state)
-            ? readySummary(current.projection.session.turn_state)
-            : current.projection.session.recent_summary
+          recent_summary:
+            recoveredAgentSummary(outcome.recovery_history) ??
+            (activeTurnState(current.projection.session.turn_state)
+              ? readySummary(current.projection.session.turn_state)
+              : current.projection.session.recent_summary)
         });
         await this.options.projection.append({
           session_id: target.session_id,
@@ -741,7 +743,7 @@ class DefaultCodexRuntimeReconciliationLifecycle {
     const recoveryResult =
       latestTurn !== null &&
       latestTurn.status !== "in_progress" &&
-      activeTurnState(current.projection.session.turn_state)
+      recoverableHistoryState(current.projection.session.turn_state)
         ? await remoteReadOrUnavailable(() =>
             reads.readTerminalTurnHistory(
               current.mapping.codex_thread_id,
@@ -1325,6 +1327,21 @@ function omitCursor(session: ManagedSessionProjection): Omit<ManagedSessionProje
 
 function activeTurnState(state: ManagedSessionProjection["turn_state"]): boolean {
   return ["in_progress", "waiting_for_approval", "waiting_for_input"].includes(state);
+}
+
+function recoverableHistoryState(
+  state: ManagedSessionProjection["turn_state"]
+): boolean {
+  return state !== "idle" && state !== "unknown";
+}
+
+function recoveredAgentSummary(
+  recovery: CodexReconciliationTerminalTurnHistory | null
+): string | null {
+  const message = recovery?.turn.messages.findLast(
+    (candidate) => candidate.role === "agent"
+  );
+  return message === undefined ? null : boundedRecentSummary(message.text);
 }
 
 function readySummary(state: ManagedSessionProjection["turn_state"]): string {

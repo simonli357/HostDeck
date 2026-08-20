@@ -440,26 +440,25 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
         turn_state: "in_progress",
         attention: "watch"
       }));
-      const runtime = scriptedRuntime([
-        runtimeThread("thread-recovery", "/tmp/sess_recovery", {
-          status: { type: "idle" },
-          latest: rawTurn("turn-recovery", "completed"),
-          terminal_history: {
-            ...rawTurn("turn-recovery", "completed"),
-            itemsView: "summary",
-            items: [
-              rawUserMessage("item-recovery-user", "Inspect the current release state."),
-              {
-                type: "commandExecution",
-                id: "item-recovery-command",
-                aggregatedOutput: "private command output".repeat(20_000)
-              },
-              rawAgentMessage("item-recovery-progress", "I found the projection failure and repaired it.", "commentary"),
-              rawAgentMessage("item-recovery-final", "The repaired release is ready for validation.", "final_answer")
-            ]
-          }
-        })
-      ], 18);
+      const fixture = runtimeThread("thread-recovery", "/tmp/sess_recovery", {
+        status: { type: "idle" },
+        latest: rawTurn("turn-recovery", "completed"),
+        terminal_history: {
+          ...rawTurn("turn-recovery", "completed"),
+          itemsView: "summary",
+          items: [
+            rawUserMessage("item-recovery-user", "Inspect the current release state."),
+            {
+              type: "commandExecution",
+              id: "item-recovery-command",
+              aggregatedOutput: "private command output".repeat(20_000)
+            },
+            rawAgentMessage("item-recovery-progress", "I found the projection failure and repaired it.", "commentary"),
+            rawAgentMessage("item-recovery-final", "The repaired release is ready for validation.", "final_answer")
+          ]
+        }
+      });
+      const runtime = scriptedRuntime([fixture], 18);
       const deadline = testDeadline();
       try {
         const reconciliation = await reconcile(harness.lifecycle, runtime, deadline, 18, null);
@@ -500,6 +499,57 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
           (request.params as { readonly itemsView?: string }).itemsView === "summary"
         )
       ).toHaveLength(1);
+
+      const restarted = createCodexRuntimeReconciliationLifecycle(harness.options);
+      const restartedRuntime = scriptedRuntime([fixture], 19);
+      const restartedDeadline = testDeadline();
+      try {
+        const reconciliation = await reconcile(
+          restarted,
+          restartedRuntime,
+          restartedDeadline,
+          19,
+          null
+        );
+        await resubscribe(
+          restarted,
+          restartedRuntime,
+          restartedDeadline,
+          reconciliation,
+          19,
+          null
+        );
+        await ready(
+          restarted,
+          restartedRuntime,
+          restartedDeadline,
+          reconciliation,
+          19,
+          null
+        );
+      } finally {
+        restartedDeadline.dispose();
+      }
+
+      expect(
+        harness.repository.listEvents("sess_recovery").events.map((event) => ({
+          type: event.type,
+          cursor: event.cursor
+        }))
+      ).toEqual([
+        { type: "replay_boundary", cursor: 9 },
+        { type: "message", cursor: 10 },
+        { type: "message", cursor: 11 },
+        { type: "message", cursor: 12 },
+        { type: "turn", cursor: 13 },
+        { type: "runtime", cursor: 14 }
+      ]);
+      expect(harness.repository.require("sess_recovery").projection.session)
+        .toMatchObject({
+          turn_state: "completed",
+          freshness: "current",
+          recent_summary: "The repaired release is ready for validation."
+        });
     } finally {
       harness.close();
     }

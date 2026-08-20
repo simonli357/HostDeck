@@ -378,7 +378,6 @@ function parseAndValidatePage(
   if (crossesRetentionBoundary) {
     if (
       first?.type !== "replay_boundary" ||
-      first.reason !== "retention" ||
       first.after !== layout.retentionBoundaryCursor ||
       first.cursor !== layout.retentionBoundaryCursor + 1 ||
       !page.truncated

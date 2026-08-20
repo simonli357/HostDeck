@@ -18,6 +18,7 @@ import {
 } from "@hostdeck/contracts";
 import {
   createProductionProjectionAppendPort,
+  createProductionProjectionContinuityPort,
   createSelectedStateRepository,
   HostDeckAuthRepositoryError,
   openMigratedDatabase,
@@ -531,6 +532,51 @@ describe("selected projected-event diagnostic read route", () => {
       next_cursor: 1,
       truncated: true,
       events: [{ type: "replay_boundary", after: null, reason: "disconnect" }]
+    });
+
+    const continuityHarness = await createSqliteHarness();
+    await appendMessages(continuityHarness.repository, 2);
+    const continuity = createProductionProjectionContinuityPort({
+      repository: continuityHarness.repository,
+      publish() {
+        // Route evidence reads only committed durable state.
+      }
+    });
+    const beforeRestart = continuityHarness.repository.require(sessionId);
+    const {
+      last_event_cursor: _lastEventCursor,
+      ...uncommittedSession
+    } = beforeRestart.projection.session;
+    await continuity.replaceWithBoundary({
+      session_id: sessionId,
+      expected_revision: selectedStateRevision(beforeRestart),
+      captured_at: eventTime(3),
+      reason: "restart",
+      next_session: {
+        ...uncommittedSession,
+        updated_at: eventTime(3)
+      }
+    });
+    const continuityApp = createEventApp(
+      selectedStatePort(continuityHarness.repository)
+    );
+    await continuityApp.ready();
+    const afterRestart = await injectHostDeckLoopback(continuityApp, {
+      method: "GET",
+      url: `/api/v1/sessions/${sessionId}/events?after=0`
+    });
+    expect(afterRestart.statusCode, afterRestart.body).toBe(200);
+    expect(afterRestart.json()).toMatchObject({
+      next_cursor: 3,
+      truncated: true,
+      events: [
+        {
+          type: "replay_boundary",
+          cursor: 3,
+          after: 2,
+          reason: "restart"
+        }
+      ]
     });
 
     const harness = await createSqliteHarness();
