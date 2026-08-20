@@ -381,6 +381,7 @@ interface ActiveCatalogStream {
   readonly authorityKey: string;
   readonly startedAt: string;
   connection: BrowserSessionCatalogSseConnection | null;
+  pendingEvent: SessionCatalogEvent | null;
   active: boolean;
   closeReason: "client_closed" | "route_changed" | null;
 }
@@ -660,7 +661,9 @@ export function createBrowserConnectionStateCoordinator(
       observedAt
     });
 
-  const synchronizeCurrentTargetFromCatalog = (): void => {
+  const synchronizeCurrentTargetFromCatalog = (
+    triggeringEvent: SessionCatalogEvent | null = null
+  ): void => {
     if (
       catalog.state !== "current" ||
       catalog.data === null ||
@@ -684,6 +687,12 @@ export function createBrowserConnectionStateCoordinator(
       (candidate) => candidate.session.id === selectedSessionId
     );
     if (item === undefined) {
+      if (
+        triggeringEvent?.type !== "session_remove" ||
+        triggeringEvent.internal_session_id !== selectedSessionId
+      ) {
+        return;
+      }
       if (
         targetState.state === "not_found" &&
         targetState.failure?.reason === "session_removed"
@@ -755,6 +764,7 @@ export function createBrowserConnectionStateCoordinator(
       authorityKey,
       startedAt: observedAt,
       connection: null,
+      pendingEvent: null,
       active: true,
       closeReason: null
     };
@@ -775,6 +785,7 @@ export function createBrowserConnectionStateCoordinator(
             catalogReducer,
             event
           );
+          owner.pendingEvent = event;
           if (catalogRevision === Number.MAX_SAFE_INTEGER) {
             throw connectionError("client_contract");
           }
@@ -792,6 +803,8 @@ export function createBrowserConnectionStateCoordinator(
           const failure = snapshot.failure === null
             ? null
             : catalogSseFailure(snapshot, epoch, owner.startedAt);
+          const triggeringEvent = owner.pendingEvent;
+          owner.pendingEvent = null;
           catalog = catalogStateFromSnapshot(
             catalog,
             catalogReducer,
@@ -800,7 +813,7 @@ export function createBrowserConnectionStateCoordinator(
             failure
           );
           if (failure !== null) rememberFailure(failure);
-          synchronizeCurrentTargetFromCatalog();
+          synchronizeCurrentTargetFromCatalog(triggeringEvent);
           if (
             snapshot.phase === "failed" ||
             snapshot.phase === "closed"

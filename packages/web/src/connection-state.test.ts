@@ -1220,7 +1220,22 @@ describe("browser shell connection-state coordinator", () => {
         : null
     ).toBe(catalogNativeId("b"));
 
-    catalogReader.pushText(eventFrame(catalogRemove(107, "b")));
+    catalogReader.pushText(
+      eventFrame(catalogUpsert(107, "a")) +
+        eventFrame(catalogRemove(108, "a"))
+    );
+    await waitFor(
+      () => harness.coordinator.snapshot().catalog?.snapshot?.cursor === 108
+    );
+    expect(harness.coordinator.snapshot().targetState).toMatchObject({
+      state: "current",
+      data: {
+        kind: "session_detail",
+        response: { session: { session: { id: "sess_catalog_connection_b" } } }
+      }
+    });
+
+    catalogReader.pushText(eventFrame(catalogRemove(109, "b")));
     await waitFor(
       () => harness.coordinator.snapshot().targetState.state === "not_found"
     );
