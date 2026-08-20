@@ -17,6 +17,7 @@ import {
   createProductionProjectionAppendPort,
   createProductionProjectionContinuityPort,
   createSelectedStateRepository,
+  deriveAutomaticSessionIdentity,
   openMigratedDatabase,
   type SelectedStateRepository,
   type StartupAuditOrphanReconciliationResult,
@@ -34,6 +35,7 @@ const tempDirs: string[] = [];
 const createdAt = "2026-07-16T12:00:00.000Z";
 const checkedAt = "2026-07-16T12:30:00.000Z";
 const threadIdForNativeAdoption = "thread-native-reconcile";
+const threadIdForAutomaticEnrollment = "019f489a-1f9d-7402-ae00-eac6ea322f64";
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { force: true, recursive: true });
@@ -121,6 +123,49 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
             model: "runtime-native"
           }
         }
+      });
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("reconciles and resumes an automatically enrolled CLI-source thread through shared membership", async () => {
+    const harness = createHarness();
+    try {
+      const automatic = automaticEnrollmentCandidate();
+      harness.repository.enrollAutomatic(automatic);
+      const runtime = scriptedRuntime([
+        runtimeThread(threadIdForAutomaticEnrollment, automatic.state.mapping.cwd, {
+          source: "cli",
+          status: { type: "idle" },
+          latest: rawTurn("turn-automatic-reconcile", "completed"),
+          resume_model: "runtime-automatic",
+          resume_effort: "high"
+        })
+      ], 7);
+      const operation = testDeadline();
+      try {
+        const reconciliation = await reconcile(harness.lifecycle, runtime, operation, 7, null);
+        await resubscribe(harness.lifecycle, runtime, operation, reconciliation, 7, null);
+        await ready(harness.lifecycle, runtime, operation, reconciliation, 7, null);
+      } finally {
+        operation.dispose();
+      }
+
+      expect(
+        runtime.requests
+          .filter((request) => request.method === "thread/resume")
+          .map(threadIdFromRequest)
+      ).toEqual([threadIdForAutomaticEnrollment]);
+      expect(harness.lifecycle.snapshot()).toMatchObject({
+        recoverable_session_count: 1,
+        resumed_count: 1,
+        ready_count: 1,
+        issues: { contradictions: 0, stale: 0 }
+      });
+      expect(harness.repository.require(automatic.state.mapping.id)).toMatchObject({
+        mapping: { disposition: "selected" },
+        projection: { session: { freshness: "current", model: "runtime-automatic" } }
       });
     } finally {
       harness.close();
@@ -1422,6 +1467,63 @@ function nativeAdoptionCandidate() {
         retention_boundary_cursor: null
       }
     }
+  };
+}
+
+function automaticEnrollmentCandidate() {
+  const projectCue = "automatic-reconciliation";
+  const identity = deriveAutomaticSessionIdentity(threadIdForAutomaticEnrollment, projectCue);
+  const sessionId = identity.internal_session_id;
+  const state = stateCandidate(sessionId, threadIdForAutomaticEnrollment, {
+    updated_at: "2026-07-16T12:30:00.000Z"
+  });
+  const boundary = selectedProjectionEventSchema.parse({
+    session_id: sessionId,
+    cursor: 1,
+    captured_at: "2026-07-16T12:30:00.000Z",
+    upstream_at: null,
+    codex_event_id: null,
+    codex_event_type: null,
+    content_state: "complete",
+    content_notice: null,
+    type: "replay_boundary",
+    after: null,
+    next_cursor: 1,
+    reason: "enrollment"
+  });
+  const event = {
+    event: boundary,
+    byte_length: selectedProjectedEventByteLength(boundary)
+  };
+  return {
+    membership: {
+      session_id: sessionId,
+      native_thread_id: threadIdForAutomaticEnrollment,
+      origin: "automatic" as const,
+      enrollment_origin: "loaded_before" as const,
+      enrolled_at: "2026-07-16T12:30:00.000Z"
+    },
+    events: [event],
+    state: {
+      ...state,
+      mapping: {
+        ...state.mapping,
+        name: identity.alias
+      },
+      projection: {
+        ...state.projection,
+        session: {
+          ...state.projection.session,
+          name: identity.alias,
+          last_event_cursor: boundary.cursor
+        },
+        retained_event_count: 1,
+        retained_event_bytes: event.byte_length,
+        earliest_retained_cursor: boundary.cursor,
+        retention_boundary_cursor: null
+      }
+    },
+    project_cue: projectCue
   };
 }
 

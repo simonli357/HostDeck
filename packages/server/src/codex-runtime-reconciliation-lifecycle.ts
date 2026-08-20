@@ -1143,14 +1143,17 @@ function safeRuntimeIdentity(
 ): boolean {
   const membership =
     thread.source === "cli"
-      ? repository.getNativeMembership(state.mapping.id)
+      ? repository.getSharedMembership(state.mapping.id)
       : null;
+  const membershipThreadId = membership?.origin === "automatic"
+    ? membership.native_thread_id
+    : (membership?.codex_thread_id ?? null);
   const sourceMatches =
     isSupportedCodexThreadSource(thread.source) ||
     (thread.source === "cli" &&
       membership !== null &&
       membership.session_id === state.mapping.id &&
-      membership.codex_thread_id === state.mapping.codex_thread_id);
+      membershipThreadId === state.mapping.codex_thread_id);
   return (
     thread.id === state.mapping.codex_thread_id &&
     thread.cwd === state.mapping.cwd &&
