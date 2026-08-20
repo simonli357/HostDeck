@@ -1741,6 +1741,9 @@ async function readApiErrorResponse(
     response.body === null
   ) {
     cancelBody(response.body);
+    if (isTransientGatewayStatus(response.status)) {
+      throw new AttemptFailure("transport_unavailable", true, response.status);
+    }
     throw new AttemptFailure("invalid_response", false, response.status);
   }
   let expectedLength: number | null = null;
@@ -1834,6 +1837,10 @@ async function readApiErrorResponse(
   } finally {
     for (const chunk of chunks) zeroBytes(chunk);
   }
+}
+
+function isTransientGatewayStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
 }
 
 async function consumeEventStream(

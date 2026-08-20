@@ -897,6 +897,36 @@ describe("bounded browser SSE client", () => {
     retrying.close();
   });
 
+  it.each([502, 503, 504])(
+    "retries an unstructured %i gateway response from the private proxy",
+    async (status) => {
+      const clock = new ManualClock();
+      const reader = new ControlledReader();
+      let attempts = 0;
+      const connection = createBrowserSseClient({
+        origin,
+        clock: clock.port,
+        fetch: async () => {
+          attempts += 1;
+          return attempts === 1
+            ? textResponse(status, "Private proxy upstream is unavailable.", "text/plain")
+            : sseResponse(reader);
+        }
+      }).connect({ sessionId, onEvent() {} });
+
+      await waitFor(() => connection.snapshot().phase === "reconnecting");
+      expect(connection.snapshot().failure).toMatchObject({
+        reason: "transport_unavailable",
+        status,
+        apiError: null
+      });
+      clock.advance(defaultBrowserSseClientLimits.reconnectInitialDelayMs);
+      await waitFor(() => connection.snapshot().phase === "connected");
+      expect(attempts).toBe(2);
+      connection.close();
+    }
+  );
+
   it("rejects malformed and oversized error responses without retry", async () => {
     const cases: Array<{
       response: BrowserSseResponsePort;
