@@ -710,7 +710,10 @@ export function createHostDeckProductionApplication(
       max_loaded_reads: budget.protocol_thread_max_loaded_reads,
       max_pages: budget.protocol_thread_max_pages,
       page_size: budget.protocol_thread_page_size,
-      read_timeout_ms: budget.protocol_read_timeout_ms
+      read_timeout_ms: Math.max(
+        budget.protocol_read_timeout_ms,
+        budget.protocol_enrollment_pending_timeout_ms
+      )
     }),
     states: stateRepository,
     audit: auditRepository,

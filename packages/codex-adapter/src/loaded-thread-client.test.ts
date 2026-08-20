@@ -112,7 +112,7 @@ describe("shared Codex loaded-thread adapter", () => {
             turn({
               id: "turn-old",
               startedAt: seconds("2026-08-14T14:10:00.000Z"),
-              completedAt: seconds("2026-08-14T14:11:00.000Z"),
+              completedAt: seconds("2026-08-14T14:20:30.000Z"),
               items: [userMessage("item-old", "old request")]
             })
           ],

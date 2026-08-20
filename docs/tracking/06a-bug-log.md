@@ -1208,3 +1208,12 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: the active catalog consumer discarded the triggering session id and treated every removal as removal of the selected session.
 - Fix: carry the catalog event through state handling and mark selected detail missing only when the exact internal session id matches.
 - Current state: closed in `7406f7c`; 54 focused state tests passed, and immutable `0.0.20` removed only the archived acceptance row live in 60 ms.
+
+### BUG-100 Large Overlapping History Cannot Rejoin HostDeck
+
+- Symptom: ordinary Codex resumed the 1.53 GB ScandyControl thread on the shared broker, but HostDeck left its retained mapping stale and unavailable on the phone.
+- Impact: a valid large existing session could not complete the selected laptop/phone continuity workflow.
+- Route: critical release bugfix owned by the shared-session runtime; no public API, UI, security, or setup contract change.
+- Root cause: automatic enrollment reused the 10-second interactive read timeout even though the bounded 20-turn summary took about 32 seconds, then incorrectly treated valid turns whose lifetimes overlap as non-chronological despite nondecreasing start order.
+- Fix: use the bounded 120-second enrollment window for enrollment-only reads and validate history order by turn start while retaining per-turn timestamp, duplicate-id, item, and payload checks.
+- Current state: implementation passes 22 focused contract/adapter/composition tests and contracts, adapter, and server typechecks. Deterministic package installation and exact live ScandyControl enrollment remain pending.

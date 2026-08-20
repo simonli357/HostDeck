@@ -603,14 +603,14 @@ function parseTerminalHistoryTurn(
 function assertUniqueHistory(turns: readonly NativeCodexHistoryTurn[]): void {
   const turnIds = new Set<string>();
   const itemIds = new Set<string>();
-  let priorActivity: string | null = null;
+  let priorStartedAt: string | null = null;
   for (const turn of turns) {
     if (turnIds.has(turn.turn_id)) throw invalidPayload("Codex loaded-thread history repeats a turn id.");
     turnIds.add(turn.turn_id);
-    if (priorActivity !== null && turn.started_at < priorActivity) {
+    if (priorStartedAt !== null && turn.started_at < priorStartedAt) {
       throw invalidPayload("Codex loaded-thread history is not chronological.");
     }
-    priorActivity = turn.completed_at ?? turn.started_at;
+    priorStartedAt = turn.started_at;
     for (const message of turn.messages) {
       if (itemIds.has(message.item_id)) throw invalidPayload("Codex loaded-thread history repeats a message item id.");
       itemIds.add(message.item_id);

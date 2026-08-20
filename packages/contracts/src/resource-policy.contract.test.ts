@@ -84,7 +84,7 @@ describe("selected V1 resource budget", () => {
       protocol_enrollment_max_pending_threads: 256,
       protocol_enrollment_pending_events_per_thread: 64,
       protocol_enrollment_pending_bytes_per_thread: 1_048_576,
-      protocol_enrollment_pending_timeout_ms: 30_000,
+      protocol_enrollment_pending_timeout_ms: 120_000,
       protocol_enrollment_retry_interval_ms: 250,
       protocol_model_page_size: 100,
       protocol_model_max_pages: 10,

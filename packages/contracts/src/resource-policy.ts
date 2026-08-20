@@ -173,7 +173,7 @@ export const resourceBudgetDefinitions = Object.freeze([
     "protocol_enrollment_pending_timeout_ms",
     "milliseconds",
     1_000,
-    30_000,
+    120_000,
     120_000,
     "codex_event_pipeline",
     "operation_timeout",
