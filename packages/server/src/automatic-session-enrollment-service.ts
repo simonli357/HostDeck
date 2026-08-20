@@ -81,6 +81,7 @@ export interface AutomaticSessionEnrollmentServiceOptions {
   readonly create_record_id?: () => string;
   readonly capture_branch?: (cwd: string) => string | null;
   readonly background_unmapped_enrollment?: boolean;
+  readonly reconcile_mapped_sessions?: boolean;
   readonly on_background_outcome?: (outcome: SharedSessionEnrollment) => void;
 }
 
@@ -115,6 +116,7 @@ interface ParsedOptions {
   readonly createRecordId: () => string;
   readonly captureBranch: (cwd: string) => string | null;
   readonly backgroundUnmappedEnrollment: boolean;
+  readonly reconcileMappedSessions: boolean;
   readonly onBackgroundOutcome: ((outcome: SharedSessionEnrollment) => void) | undefined;
 }
 
@@ -225,6 +227,13 @@ class DefaultAutomaticSessionEnrollmentService {
       if (signal?.aborted === true) throw aborted(signal);
       this.terminalByThread.delete(threadId);
       const existingState = this.options.states.getByThreadId(threadId);
+      if (
+        !this.options.reconcileMappedSessions &&
+        existingState !== null &&
+        !requiresAutomaticRefresh(existingState, this.options.loaded.runtime_version)
+      ) {
+        continue;
+      }
       const pending = this.pendingByThread.get(threadId) ?? this.createPending(
         threadId,
         origin,
@@ -1307,6 +1316,7 @@ function parseOptions(options: AutomaticSessionEnrollmentServiceOptions): Parsed
     (options.create_record_id !== undefined && typeof options.create_record_id !== "function") ||
     (options.capture_branch !== undefined && typeof options.capture_branch !== "function") ||
     (options.background_unmapped_enrollment !== undefined && typeof options.background_unmapped_enrollment !== "boolean") ||
+    (options.reconcile_mapped_sessions !== undefined && typeof options.reconcile_mapped_sessions !== "boolean") ||
     (options.on_background_outcome !== undefined && typeof options.on_background_outcome !== "function")
   ) {
     throw new TypeError("Automatic enrollment requires loaded-thread, storage, and event-pipeline ports.");
@@ -1322,6 +1332,7 @@ function parseOptions(options: AutomaticSessionEnrollmentServiceOptions): Parsed
     createRecordId: options.create_record_id ?? createEnrollmentAuditRecordId,
     captureBranch: options.capture_branch ?? captureGitBranchMetadata,
     backgroundUnmappedEnrollment: options.background_unmapped_enrollment ?? false,
+    reconcileMappedSessions: options.reconcile_mapped_sessions ?? true,
     onBackgroundOutcome: options.on_background_outcome
   });
 }

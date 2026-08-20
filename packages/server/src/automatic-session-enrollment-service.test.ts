@@ -213,6 +213,47 @@ describe("automatic shared-session enrollment", () => {
     }
   });
 
+  it("leaves current mapped sessions to the production reconciliation lifecycle", async () => {
+    const harness = storageHarness();
+    try {
+      const eligible = candidate(threadA);
+      const initialLoaded = fakeLoaded({
+        ids: [threadA],
+        candidates: new Map([[threadA, eligible]]),
+        snapshot: snapshot(eligible)
+      });
+      const initialService = createService(harness, initialLoaded);
+      await initialService.reconcileLoaded("loaded_before", 1);
+      initialService.close();
+
+      const restartLoaded = fakeLoaded({
+        ids: [threadA],
+        candidates: new Map([[threadA, eligible]]),
+        snapshot: snapshot(eligible)
+      });
+      const restartService = createAutomaticSessionEnrollmentService({
+        loaded: restartLoaded,
+        states: harness.repository,
+        audit: harness.audit,
+        events: harness.pipeline,
+        now: () => new Date(enrolledAt),
+        create_operation_id: harness.createOperationId,
+        create_record_id: harness.createRecordId,
+        capture_branch: () => "main",
+        reconcile_mapped_sessions: false
+      });
+
+      await expect(restartService.reconcileLoaded("reconciliation", 2)).resolves.toMatchObject({
+        loaded_thread_count: 1,
+        outcomes: []
+      });
+      expect(restartLoaded.snapshotCalls).toEqual([]);
+      restartService.close();
+    } finally {
+      harness.close();
+    }
+  });
+
   it("buffers notification-before-mapping and replays one active turn in receive order", async () => {
     const harness = storageHarness();
     try {

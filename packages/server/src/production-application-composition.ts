@@ -722,6 +722,7 @@ export function createHostDeckProductionApplication(
     resource_budget: budget,
     now: readNow,
     background_unmapped_enrollment: true,
+    reconcile_mapped_sessions: false,
     on_background_outcome(outcome) {
       observeEnrollmentFailure(outcome);
     }
