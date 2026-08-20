@@ -740,7 +740,10 @@ export function createHostDeckProductionApplication(
           eligible_before,
           reconciled_at,
           signal: deadline.signal,
-          timeout_ms: deadline.timeoutMs()
+          timeout_ms: Math.min(
+            deadline.timeoutMs(),
+            maximumStartupMaintenanceStepTimeoutMs
+          )
         })
     }),
     continuity,
@@ -1548,7 +1551,10 @@ function createAuditShutdownPort(
         eligible_before: cutoff,
         reconciled_at: cutoff,
         signal: deadline.signal,
-        timeout_ms: deadline.timeoutMs()
+        timeout_ms: Math.min(
+          deadline.timeoutMs(),
+          maximumStartupMaintenanceStepTimeoutMs
+        )
       });
       deadline.throwIfAborted();
       if (
