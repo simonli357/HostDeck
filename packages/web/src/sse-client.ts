@@ -2025,7 +2025,6 @@ function validateEventContinuity(
   if (scope === "session" && event.type === "replay_boundary") {
     if (
       attempt.eventCount !== 0 ||
-      runtime.boundary !== null ||
       // A null boundary is the durable floor before cursor 1, equivalent to after=0.
       (current !== null && (event.after ?? 0) < current) ||
       (current === null && event.cursor < 1)
