@@ -40,7 +40,7 @@ import {
 
 const temporaryDirectories: string[] = [];
 const timestamp = "2026-07-15T18:00:00.000Z";
-const runtimeVersion = "0.147.0";
+const runtimeVersion = "0.148.0";
 const request = Object.freeze({
   operation_id: "op_session_start_route_001",
   name: "route-session",

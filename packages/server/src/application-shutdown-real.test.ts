@@ -66,7 +66,7 @@ describe("real HostDeck application shutdown", () => {
     const transport = new ShutdownCodexTransport();
     const reconnect = createCodexRuntimeReconnectController({
       transport,
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       resource_budget: defaultResourceBudget,
       lifecycle: reconnectLifecycle(),
       on_background_error: () => undefined
@@ -469,7 +469,7 @@ class ShutdownCodexTransport implements CodexTextTransport {
       this.receive({
         id: message.id,
         result: {
-          userAgent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
+          userAgent: "hostdeck/0.148.0 (Ubuntu 24.04; x86_64)",
           codexHome: "/tmp/hostdeck-shutdown-codex-home",
           platformFamily: "unix",
           platformOs: "linux"

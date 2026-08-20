@@ -158,7 +158,7 @@ describe.skipIf(!requireSmoke)("exact Codex runtime supervisor smoke", () => {
             observed_at: new Date().toISOString(),
             hostdeck_commit: commit,
             runtime: {
-              version: "0.147.0",
+              version: "0.148.0",
               exact_binding: true,
               app_server_process_count: 2
             },

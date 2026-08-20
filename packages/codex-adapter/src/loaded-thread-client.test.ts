@@ -73,7 +73,7 @@ describe("shared Codex loaded-thread adapter", () => {
       cliVersion: "0.144.0",
       source: "vscode"
     })))).toMatchObject({
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       source: "vscode",
       eligibility: { state: "eligible", reason: null }
     });
@@ -252,11 +252,11 @@ function fakePort(
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.147.0",
+    observed_version: "0.148.0",
     checked_at: "2026-08-14T15:00:00.000Z",
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.148.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]
@@ -266,7 +266,7 @@ function readyCompatibility(): RuntimeCompatibility {
 
 function disconnectedCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.147.0",
+    observed_version: "0.148.0",
     checked_at: "2026-08-14T15:00:00.000Z",
     handshake: { state: "not_attempted" }
   });
@@ -300,7 +300,7 @@ function rawThread(overrides: Record<string, unknown> = {}): Record<string, unkn
     status: { type: "idle" },
     path: null,
     cwd: "/work/side_cue_app",
-    cliVersion: "0.147.0",
+    cliVersion: "0.148.0",
     source: "cli",
     canAcceptDirectInput: true,
     threadSource: null,

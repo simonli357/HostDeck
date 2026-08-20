@@ -25,7 +25,7 @@ describe("runtime compatibility panel", () => {
     expect(region.textContent).toContain("Installed");
     expect(region.textContent).toContain("0.145.0");
     expect(region.textContent).toContain("HostDeck supports");
-    expect(region.textContent).toContain("0.147.0");
+    expect(region.textContent).toContain("0.148.0");
     expect(region.textContent).toContain("Controls");
     expect(region.textContent).toContain("Blocked");
     expect(region.textContent).toContain("Evidence");
@@ -49,8 +49,8 @@ describe("runtime compatibility panel", () => {
       detail: "Installed Codex matches HostDeck.",
       tone: "connected",
       urgent: false,
-      observedVersion: "0.147.0",
-      observedVersionLabel: "0.147.0",
+      observedVersion: "0.148.0",
+      observedVersionLabel: "0.148.0",
       capabilityState: "verified",
       capabilityLabel: "Verified",
       routeVisible: false,
@@ -147,15 +147,15 @@ function compatibilityView(
     evidence: "current",
     capabilityState: "blocked",
     title: "Codex update required",
-    detail: "This laptop has Codex 0.145.0. HostDeck supports 0.147.0.",
+    detail: "This laptop has Codex 0.145.0. HostDeck supports 0.148.0.",
     tone: "danger",
     urgent: true,
     ownerLabel: "CODEX RUNTIME",
     sourceLabel: "Current laptop check",
     observedVersion: "0.145.0",
-    supportedVersion: "0.147.0",
+    supportedVersion: "0.148.0",
     observedVersionLabel: "0.145.0",
-    supportedVersionLabel: "0.147.0",
+    supportedVersionLabel: "0.148.0",
     capabilityLabel: "Blocked",
     evidenceLabel: "Current",
     checkedAt: "2026-07-27T15:00:00.000Z",

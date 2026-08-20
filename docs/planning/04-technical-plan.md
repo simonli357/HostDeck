@@ -8,7 +8,7 @@ Owns the active-version architecture, process and trust boundaries, selected dep
 - Release state: no-go. Existing packages prove reusable foundations, not the selected production vertical.
 - Legacy state: `INT-V1-008` removed the tmux adapter and executable runtime after structured acceptance. Published migration data remains inert as `legacy_unmigrated`; tmux is test-only for exact Codex TUI evidence.
 - Remote boundary: the phone reaches HostDeck only through private Tailscale Serve HTTPS. HostDeck remains loopback-only; Codex app-server uses the standard current-user Unix control socket and is never browser-facing.
-- Compatibility baseline: exact `codex-cli 0.147.0`, reviewed binding identity, standard-socket behavior, and `DEC-031`; upgrades fail closed pending regeneration and review.
+- Compatibility baseline: exact `codex-cli 0.148.0`, reviewed binding identity, standard-socket behavior, and `DEC-034`; upgrades fail closed pending regeneration and review.
 
 ## Hard Requirements
 
@@ -124,7 +124,7 @@ The packaged CLI library generates and verifies deterministic versioned user-uni
 
 ### Deferred Windows Per-User Agent
 
-The completed authenticated-WebSocket and per-user-agent groundwork is retained for V2. It is not a V1 production topology because Codex 0.147.0 does not provide Windows implicit standard-socket reuse for ordinary TUI clients.
+The completed authenticated-WebSocket and per-user-agent groundwork is retained for V2. It is not a V1 production topology because Codex 0.148.0 does not provide Windows implicit standard-socket reuse for ordinary TUI clients.
 
 The Windows supervisor holds one current-user-secured endpoint-file lock, stages a fresh token only long enough for fixed-argv app-server startup, admits readiness only after an authenticated loopback handshake, and then removes the staging file. Each generation binds its in-memory credential source to one random port; crash or restart revokes the prior generation. Exact `koffi` bindings place the child in a kill-on-close Job Object, so explicit shutdown and abrupt owner-process death terminate the owned tree without PID-based or global process cleanup.
 
@@ -132,7 +132,7 @@ Install registers but does not silently start work. Explicit start creates a fre
 
 ### Host TUI
 
-The primary path is ordinary `codex resume <native-uuid>`. Exact Codex 0.147.0 probes the standard control socket and connects to the same broker as HostDeck. `codexdeck resume <native-uuid-or-internal-id>` may resolve an internal id and launch the same normal command as a compatibility convenience; it does not pass a private endpoint.
+The primary path is ordinary `codex resume <native-uuid>`. Exact Codex 0.148.0 probes the standard control socket and connects to the same broker as HostDeck. `codexdeck resume <native-uuid-or-internal-id>` may resolve an internal id and launch the same normal command as a compatibility convenience; it does not pass a private endpoint.
 
 The TUI and HostDeck connect to the same app-server. Multi-client correctness, plain-command socket use, and bidirectional event visibility are release-gating integration tests.
 
@@ -155,7 +155,7 @@ HostDeck never edits Codex rollout files or app-server state databases directly.
 
 ### Compatibility Handshake
 
-1. Resolve one configured canonical absolute `codex` path and run a bounded no-shell `--version` probe. Strictly parse `codex-cli <semver>`; exact 0.147.0 may proceed to runtime admission, while a valid mismatch is retained as diagnostic truth without runtime start or attachment.
+1. Resolve one configured canonical absolute `codex` path and run a bounded no-shell `--version` probe. Strictly parse `codex-cli <semver>`; exact 0.148.0 may proceed to runtime admission, while a valid mismatch is retained as diagnostic truth without runtime start or attachment.
 2. Regenerate the experimental TypeScript binding to a temporary directory and compare the reviewed whole-tree identity in build/validation paths.
 3. Validate `$CODEX_HOME/app-server-control` and its socket as current-user controlled, connect to the standard endpoint, and send one `initialize` with HostDeck client identity and `experimentalApi: true`; `/plan` requires this pinned opt-in.
 4. Require the exact expected Linux/Unix fields and validate the returned user agent against HostDeck's sent client identity. The bounded local binary probe remains authoritative for the selected topology.
@@ -368,7 +368,7 @@ No stored tmux session is silently converted to a Codex thread. Existing rows re
 | `SPK-NET-001` / `IFC-V1-070` | What exact supported Tailscale version/profile/Serve behavior, request metadata, non-root control, config coexistence, SSE behavior, and switch persistence can V1 depend on? | Redacted real-client/profile-switch/Serve/phone spike with exact commands, config diffs, header captures, failure cases, and no company-profile mutation. | Remote contracts, storage, adapter, ingress trust, CLI, UI states, and release matrix. |
 | `SPK-PLAT-001` / `INT-V1-100` | Does exact Codex 0.144.0 on Windows satisfy authenticated loopback WebSocket, required capabilities, multi-client, TUI resume, and secret-boundary requirements? | No-model Windows-native capture with auth rejection/acceptance, handshake, resume, process/listener/token inspection, and cleanup. | Windows transport, supervisor, lifecycle, package, and release evidence. |
 | `INT-V1-107` | Can exact 0.144.0 expose and resume an eligible persisted native CLI thread without changing identity/history or overlapping an independently running client? | Deterministic protocol capture plus real no-model closed-client handoff, bounded turn page, exact resume, unchanged read-back, and cleanup. | Adoption adapter, service, API/CLI, and hardening. |
-| `INT-V1-110` | Does exact Codex 0.147.0 make ordinary Unix `codex` start/resume reuse the standard app-server socket, and do loaded-list/new-thread notifications support automatic enrollment? | Source/binding review plus controlled no-model process/socket trace proving plain commands, two clients, loaded-before/created-after cases, and cleanup. | Shared broker, automatic enrollment, API/UI, package, and release evidence. |
+| `INT-V1-110` | Does exact Codex 0.148.0 make ordinary Unix `codex` start/resume reuse the standard app-server socket, and do loaded-list/new-thread notifications support automatic enrollment? | Source/binding review plus controlled no-model process/socket trace proving plain commands, two clients, loaded-before/created-after cases, and cleanup. | Shared broker, automatic enrollment, API/UI, package, and release evidence. |
 
 ## External References
 

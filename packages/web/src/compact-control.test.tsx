@@ -316,7 +316,7 @@ function skillsSnapshot() {
       session_id: sessionId,
       codex_thread_id: threadId
     },
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 4,
     observed_at: timestamp,
     state: "empty",
@@ -370,7 +370,7 @@ function context(input: Readonly<{
     codex_thread_id: threadId,
     cwd: "/private/compact-ui",
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     created_at: timestamp,
     archived_at: null,
     session_state: "active",

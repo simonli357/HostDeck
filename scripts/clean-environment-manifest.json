@@ -34,7 +34,7 @@
   "pnpm_version": "10.29.2",
   "codex": {
     "package": "@openai/codex",
-    "version": "0.147.0",
+    "version": "0.148.0",
     "integrity": "sha512-EQLEXecAG2ptxI7UpBMo2TR/ga5596/c/OsYF/0LoUDh5JANZ7IoGqlzBEWbuEVQ76JePIbtTW/ihCkp1a7Z3w=="
   },
   "tailscale": {

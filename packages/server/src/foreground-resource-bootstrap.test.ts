@@ -424,7 +424,7 @@ function fixtureLayout(label: string): FixtureLayout {
   const executable = join(root, "codex-fixture");
   writeFileSync(
     executable,
-    "#!/bin/sh\nprintf 'codex-cli 0.147.0\\n'\n",
+    "#!/bin/sh\nprintf 'codex-cli 0.148.0\\n'\n",
     { mode: 0o700 }
   );
   chmodSync(executable, 0o700);

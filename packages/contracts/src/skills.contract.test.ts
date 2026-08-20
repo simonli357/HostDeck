@@ -96,7 +96,7 @@ describe("structured skills contracts", () => {
 function contentSnapshot() {
   return {
     target,
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 3,
     observed_at: observedAt,
     state: "content",

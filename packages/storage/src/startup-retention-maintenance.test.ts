@@ -778,7 +778,7 @@ function stateCandidate(index: number) {
     codex_thread_id: threadId,
     cwd: `/home/simonli/work/retention-${suffix}`,
     runtime_source: "codex_app_server" as const,
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     disposition: "selected" as const,
     created_at: sessionCreatedAt,
     updated_at: sessionCreatedAt,

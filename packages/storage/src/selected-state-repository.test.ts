@@ -797,7 +797,7 @@ function stateCandidate(input: { readonly id?: string; readonly name?: string; r
     codex_thread_id: threadId,
     cwd: "/home/simonli/work/selected-session",
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     disposition: "selected",
     created_at: createdAt,
     updated_at: createdAt,

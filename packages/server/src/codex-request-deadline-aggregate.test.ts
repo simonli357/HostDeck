@@ -56,7 +56,7 @@ import { createHostDeckUsageRouteRegistration } from "./usage-routes.js";
 
 const timestamp = "2026-07-20T16:00:00.000Z";
 const acceptedAt = "2026-07-20T16:00:01.000Z";
-const runtimeVersion = "0.147.0";
+const runtimeVersion = "0.148.0";
 const sessionId = "sess_deadline_aggregate_001";
 const threadId = "thread-deadline-aggregate-001";
 const remoteToken = "R".repeat(43);
@@ -429,7 +429,7 @@ function respondToHandshake(text: string, transport: ScriptedCodexTransport): vo
       JSON.stringify({
         id: frame.id,
         result: {
-          userAgent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
+          userAgent: "hostdeck/0.148.0 (Ubuntu 24.04; x86_64)",
           codexHome: "/tmp/codex-home",
           platformFamily: "unix",
           platformOs: "linux"

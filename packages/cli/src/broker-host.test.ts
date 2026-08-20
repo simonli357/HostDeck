@@ -180,7 +180,7 @@ describe("IFC-V1-113 shared Codex broker service host", () => {
     await expect(
       runHostDeckBrokerHost([], {
         ...baseOptions(new AbortController().signal),
-        probeVersion: async () => "0.148.0"
+        probeVersion: async () => "0.149.0"
       })
     ).rejects.toThrow("unsupported");
     await expect(

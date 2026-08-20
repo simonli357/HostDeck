@@ -44,7 +44,7 @@ describe.skipIf(!requireSmoke)("real shared Codex broker lifecycle", () => {
           maxBuffer: 64 * 1_024
         })
       );
-      expect(version).toBe("0.147.0");
+      expect(version).toBe("0.148.0");
 
       const root = mkdtempSync(join(tmpdir(), "hostdeck-real-shared-broker-"));
       const codexHome = join(root, "codex-home");
@@ -84,7 +84,7 @@ describe.skipIf(!requireSmoke)("real shared Codex broker lifecycle", () => {
         expect(first.endpoint).toMatchObject({
           state: "ready",
           ownership: "owned",
-          observed_version: "0.147.0"
+          observed_version: "0.148.0"
         });
         expect(lstatSync(location.socket_path).mode & 0o7777).toBe(0o600);
         expect(lstatSync(ownerPath).mode & 0o7777).toBe(0o600);
@@ -109,7 +109,7 @@ describe.skipIf(!requireSmoke)("real shared Codex broker lifecycle", () => {
             }
           )
         ) as Record<string, unknown>;
-        expect(JSON.stringify(versionState)).toContain("0.147.0");
+        expect(JSON.stringify(versionState)).toContain("0.148.0");
 
         const second = await startSharedCodexBroker({
           codex_bin: codexBin,

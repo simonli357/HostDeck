@@ -45,7 +45,7 @@ import {
 const temporaryDirectories: string[] = [];
 const timestamp = "2026-07-15T20:00:00.000Z";
 const archivedAt = "2026-07-15T20:00:01.000Z";
-const runtimeVersion = "0.147.0";
+const runtimeVersion = "0.148.0";
 const sessionId = "sess_archive_route_001";
 const threadId = "thread-archive-route-001";
 const archiveRequest = Object.freeze({

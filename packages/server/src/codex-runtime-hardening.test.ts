@@ -188,7 +188,7 @@ function lifecycleEvidence() {
     observed_at: observedAt,
     hostdeck_commit: commit,
     runtime: {
-      version: "0.147.0",
+      version: "0.148.0",
       exact_binding: true,
       exact_scenario_count: 3,
       exact_app_server_lifetime_count: 6

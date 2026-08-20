@@ -49,7 +49,7 @@ import { createHostDeckSelectedWriteAuditExecutor } from "./selected-write-audit
 const temporaryDirectories: string[] = [];
 const timestamp = "2026-07-16T12:00:00.000Z";
 const acceptedAt = "2026-07-16T12:00:01.000Z";
-const runtimeVersion = "0.147.0";
+const runtimeVersion = "0.148.0";
 const sessionId = "sess_compact_route_001";
 const threadId = "thread-compact-route-001";
 const turnId = "turn-compact-route-001";

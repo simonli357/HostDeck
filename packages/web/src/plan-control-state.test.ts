@@ -852,7 +852,7 @@ function context(
     codex_thread_id: "thread-private-plan-component",
     cwd: "/private/plan-component",
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     created_at: timestamp,
     archived_at: sessionState === "archived" ? timestamp : null,
     session_state: sessionState,

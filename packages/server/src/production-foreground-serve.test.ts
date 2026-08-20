@@ -420,7 +420,7 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
           state: "ready" as const,
           ownership: "attached" as const,
           generation: 1,
-          observed_version: "0.147.0",
+          observed_version: "0.148.0",
           reason: null
         }
   );
@@ -430,7 +430,7 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
       port,
       transport: "http" as const
     }),
-    codex_version: diagnosticReady ? "0.145.0" : "0.147.0",
+    codex_version: diagnosticReady ? "0.145.0" : "0.148.0",
     resource_budget: defaultResourceBudget,
     runtime: Object.freeze({
       preparation: diagnosticReady ? "version_incompatible" : "ready",
@@ -441,7 +441,7 @@ function createHarness(options: HarnessOptions = {}): FakeServeHarness {
     snapshot: () =>
       Object.freeze({
         phase: state.resourcePhase,
-        codex_version: diagnosticReady ? "0.145.0" : "0.147.0",
+        codex_version: diagnosticReady ? "0.145.0" : "0.148.0",
         database_open: state.resourcePhase === "ready",
         lease_held: state.resourcePhase === "ready",
         runtime_preparation: diagnosticReady ? "version_incompatible" : "ready",

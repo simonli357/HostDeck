@@ -30,7 +30,7 @@ describe("Codex app-server connection handshake", () => {
     });
     const connection = createCodexAppServerConnection({
       transport,
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       now: () => checkedAt,
       handshake_timeout_ms: 1_000,
       on_notification: (message) => notifications.push(message.method)
@@ -51,7 +51,7 @@ describe("Codex app-server connection handshake", () => {
     });
     const connection = createCodexAppServerConnection({
       transport,
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       now: () => checkedAt,
       handshake_timeout_ms: 1_000,
       on_notification: (message) => notifications.push(message.method)
@@ -74,7 +74,7 @@ describe("Codex app-server connection handshake", () => {
     });
     const connection = createCodexAppServerConnection({
       transport,
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       now: () => checkedAt,
       handshake_timeout_ms: 1_000,
       on_server_request: (message) => requests.push(`${message.id}:${message.method}`)
@@ -96,7 +96,7 @@ describe("Codex app-server connection handshake", () => {
     });
     const connection = createCodexAppServerConnection({
       transport,
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       now: () => checkedAt,
       handshake_timeout_ms: 1_000,
       max_server_requests: 1
@@ -108,7 +108,7 @@ describe("Codex app-server connection handshake", () => {
   });
 
   it("rejects malformed initialize results and closes the transport", async () => {
-    const transport = respondingTransport({ initialize_result: { userAgent: "hostdeck/0.147.0" } });
+    const transport = respondingTransport({ initialize_result: { userAgent: "hostdeck/0.148.0" } });
     const connection = createConnection(transport);
 
     await expectAdapterError(connection.connect(), "handshake_failed");
@@ -121,7 +121,7 @@ describe("Codex app-server connection handshake", () => {
     const transport = respondingTransport();
     const connection = createCodexAppServerConnection({
       transport,
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       expected_codex_home: "/tmp/other-codex-home",
       now: () => checkedAt,
       handshake_timeout_ms: 1_000
@@ -141,7 +141,7 @@ describe("Codex app-server connection handshake", () => {
           JSON.stringify({
             id: message.id,
             result: {
-              userAgent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
+              userAgent: "hostdeck/0.148.0 (Ubuntu 24.04; x86_64)",
               codexHome: "/tmp/codex-home",
               platformFamily: "unix",
               platformOs: "linux"
@@ -328,7 +328,7 @@ function respondingTransport(options: RespondingTransportOptions = {}): Scripted
             result:
               options.initialize_result ??
               {
-                userAgent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
+                userAgent: "hostdeck/0.148.0 (Ubuntu 24.04; x86_64)",
                 codexHome: "/tmp/codex-home",
                 platformFamily: "unix",
                 platformOs: "linux"
@@ -352,7 +352,7 @@ function respondingTransport(options: RespondingTransportOptions = {}): Scripted
   });
 }
 
-function createConnection(transport: ScriptedCodexTransport, observedVersion = "0.147.0"): CodexAppServerConnection {
+function createConnection(transport: ScriptedCodexTransport, observedVersion = "0.148.0"): CodexAppServerConnection {
   return createCodexAppServerConnection({
     transport,
     observed_version: observedVersion,

@@ -288,7 +288,7 @@ function usageSnapshot(
       session_id: sessionId,
       codex_thread_id: threadId
     },
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 3,
     measured_at: "2026-07-15T12:05:00.000Z",
     account: {

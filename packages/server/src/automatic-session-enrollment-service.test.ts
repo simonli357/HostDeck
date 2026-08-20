@@ -88,7 +88,7 @@ describe("automatic shared-session enrollment", () => {
       });
       expect(harness.repository.getByThreadId(threadB)).toBeNull();
       expect(harness.repository.getByThreadId(threadA)).toMatchObject({
-        mapping: { runtime_version: "0.147.0", cwd: "/tmp/side-cue-app" },
+        mapping: { runtime_version: "0.148.0", cwd: "/tmp/side-cue-app" },
         projection: { session: { model: "gpt-5.5-codex", turn_state: "completed" } }
       });
       expect(harness.repository.listEvents("sess_019f489a1f9d7402ae00eac6ea322f64").events).toMatchObject([
@@ -242,12 +242,12 @@ describe("automatic shared-session enrollment", () => {
           session: {
             native_thread_id: threadA,
             internal_session_id: "sess_019f489a1f9d7402ae00eac6ea322f64",
-            runtime_version: "0.147.0"
+            runtime_version: "0.148.0"
           }
         }
       });
       expect(harness.repository.getByThreadId(threadA)).toMatchObject({
-        mapping: { disposition: "selected", runtime_version: "0.147.0" },
+        mapping: { disposition: "selected", runtime_version: "0.148.0" },
         projection: { session: { freshness: "current", session_state: "active" } }
       });
       expect(
@@ -635,7 +635,7 @@ function fakeLoaded(options: {
 }): FakeLoadedClient {
   const snapshotCalls: string[] = [];
   return {
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     snapshotCalls,
     async listLoadedThreadIds() {
       return options.ids as never;
@@ -671,7 +671,7 @@ function candidate(
     source: "cli",
     ephemeral: false,
     archived: false,
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     created_at: createdAt,
     updated_at: updatedAt,
     status: "idle",

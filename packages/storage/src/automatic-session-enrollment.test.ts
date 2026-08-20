@@ -192,7 +192,7 @@ describe("automatic session enrollment repository", () => {
         name: initial.mapping.name,
         codex_thread_id: nativeThreadId,
         disposition: "selected",
-        runtime_version: "0.147.0"
+        runtime_version: "0.148.0"
       });
       expect(result.membership).toEqual({
         session_id: initial.mapping.id,
@@ -256,7 +256,7 @@ describe("automatic session enrollment repository", () => {
             id: adoption.state.mapping.id,
             name: adoption.state.mapping.name,
             disposition: "selected",
-            runtime_version: "0.147.0"
+            runtime_version: "0.148.0"
           },
           projection: {
             session: { freshness: "current", session_state: "active" },
@@ -494,7 +494,7 @@ function automaticCandidate() {
     codex_thread_id: nativeThreadId,
     cwd: "/home/simonli/Videos/apps/side_cue_app",
     runtime_source: "codex_app_server" as const,
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     disposition: "selected" as const,
     created_at: createdAt,
     updated_at: enrolledAt,

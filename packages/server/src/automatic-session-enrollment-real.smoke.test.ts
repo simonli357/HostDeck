@@ -63,7 +63,7 @@ describe.skipIf(!requireSmoke)("real automatic shared-session enrollment", () =>
         timeout: 10_000,
         maxBuffer: 64 * 1_024
       }));
-      expect(version).toBe("0.147.0");
+      expect(version).toBe("0.148.0");
       const reportContext = resolveReportContext();
       const desktopBaseline = currentDesktopProcessIdentities();
 
@@ -345,7 +345,7 @@ describe.skipIf(!requireSmoke)("real automatic shared-session enrollment", () =>
           task: "INT-V1-114-real",
           hostdeck_commit: reportContext?.commit ?? currentCommit(false),
           runtime: {
-            runtime_version: "0.147.0",
+            runtime_version: "0.148.0",
             standard_socket: true,
             socket_mode: 0o600
           },

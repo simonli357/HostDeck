@@ -98,7 +98,7 @@ describe("managed-session start CLI command", () => {
     expect(result.stdout).toContain("Internal ID: sess_start_cli_001");
     expect(result.stdout).toContain("State: active");
     expect(result.stdout).toContain(`CWD: ${cwd}`);
-    expect(result.stdout).toContain("Runtime: codex_app_server 0.147.0");
+    expect(result.stdout).toContain("Runtime: codex_app_server 0.148.0");
     expect(result.stdout).not.toMatch(/tmux|backend/iu);
     expect(calls).toEqual([{ operation_id: operationId, name, cwd }]);
     expect(clientThis).toBeUndefined();
@@ -271,7 +271,7 @@ function response(
       codex_thread_id: "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4",
       cwd,
       runtime_source: "codex_app_server" as const,
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       created_at: "2026-07-15T18:00:00.000Z",
       archived_at: null,
       session_state: "active" as const,

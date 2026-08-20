@@ -91,17 +91,17 @@ describe("runtime compatibility state", () => {
     const drift = projectRuntimeCompatibility(snapshot({ state: "version_drift" }));
     expect(drift).toMatchObject({
       observedVersion: "0.145.0",
-      supportedVersion: "0.147.0",
+      supportedVersion: "0.148.0",
       observedVersionLabel: "0.145.0",
-      supportedVersionLabel: "0.147.0"
+      supportedVersionLabel: "0.148.0"
     });
     expect(drift.detail).toContain("This laptop has Codex 0.145.0");
-    expect(drift.detail).toContain("HostDeck supports 0.147.0");
+    expect(drift.detail).toContain("HostDeck supports 0.148.0");
 
     const incompatible = projectRuntimeCompatibility(snapshot({ state: "incompatible" }));
     expect(incompatible).toMatchObject({
-      observedVersion: "0.147.0",
-      supportedVersion: "0.147.0",
+      observedVersion: "0.148.0",
+      supportedVersion: "0.148.0",
       title: "Codex interface incompatible"
     });
     expect(incompatible.detail).toContain("required HostDeck controls");
@@ -127,7 +127,7 @@ describe("runtime compatibility state", () => {
     expect(retainedUnknown).toMatchObject({
       phase: "unknown",
       evidence: "last_known",
-      observedVersionLabel: "0.147.0",
+      observedVersionLabel: "0.148.0",
       title: "Codex compatibility unknown"
     });
 
@@ -276,7 +276,7 @@ describe("runtime compatibility state", () => {
         phase: "recovery_unconfirmed",
         state: "incompatible",
         title: "Compatibility recovery not confirmed",
-        observedVersion: "0.147.0",
+        observedVersion: "0.148.0",
         actionEnabled: true
       });
       expect(controller.snapshot().detail).toContain("newer supported laptop record");
@@ -602,7 +602,7 @@ function hostStatus(
       : state === "degraded" && evidence === "current"
         ? "limited"
         : "unverified";
-  const observedVersion = unobserved ? null : state === "version_drift" ? "0.145.0" : "0.147.0";
+  const observedVersion = unobserved ? null : state === "version_drift" ? "0.145.0" : "0.148.0";
 
   return selectedHostStatusResponseSchema.parse({
     local: {
@@ -617,7 +617,7 @@ function hostStatus(
       state,
       evidence: unobserved ? "unobserved" : evidence,
       observed_version: observedVersion,
-      supported_version: "0.147.0",
+      supported_version: "0.148.0",
       capability_state: capabilityState,
       checked_at: unobserved ? null : timestamp,
       recorded_at: unobserved ? null : timestamp

@@ -271,11 +271,11 @@ function fileRequest(id: CodexRequestId) {
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.147.0",
+    observed_version: "0.148.0",
     checked_at: checkedAt,
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.148.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]

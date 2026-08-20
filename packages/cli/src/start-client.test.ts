@@ -310,7 +310,7 @@ function response(
       codex_thread_id: "thread-start-client-001",
       cwd: request.cwd,
       runtime_source: "codex_app_server" as const,
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       created_at: "2026-07-15T18:00:00.000Z",
       archived_at: null,
       session_state: "active" as const,

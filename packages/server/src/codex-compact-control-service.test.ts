@@ -438,7 +438,7 @@ describe("Codex compact control service", () => {
 
 class FakeCompactClient implements CodexCompactClient {
   currentGeneration = 3;
-  currentVersion = "0.147.0";
+  currentVersion = "0.148.0";
   readonly calls: CodexCompactInput[] = [];
   error: Error | null = null;
   getterError: Error | null = null;
@@ -516,7 +516,7 @@ function selectedState(
     readonly turnState?: "idle" | "in_progress" | "completed" | "interrupted" | "failed";
   } = {}
 ): SelectedSessionState {
-  const runtimeVersion = options.runtimeVersion ?? "0.147.0";
+  const runtimeVersion = options.runtimeVersion ?? "0.148.0";
   const archivedAt = options.archived ? requestedAt : null;
   return {
     mapping: selectedSessionMappingRecordSchema.parse({

@@ -417,7 +417,7 @@ function expectedReleaseAssetNames(baseName) {
 }
 
 function createReleaseNotes(snapshot, archiveName) {
-  return `# HostDeck ${snapshot.manifest.packageVersion}\n\nUbuntu 24.04 x64 package.\n\nVerify before installation:\n\n\`\`\`bash\ngh attestation verify ${archiveName} --repo simonli357/HostDeck\nsha256sum -c ${archiveName}.sha256\n\`\`\`\n\nExtract with \`tar -xzf ${archiveName}\`, then run \`./hostdeck/bin/codexdeck service install\` with \`HOSTDECK_CODEX_BIN\` set to the absolute exact Codex 0.147.0 executable.\n`;
+  return `# HostDeck ${snapshot.manifest.packageVersion}\n\nUbuntu 24.04 x64 package.\n\nVerify before installation:\n\n\`\`\`bash\ngh attestation verify ${archiveName} --repo simonli357/HostDeck\nsha256sum -c ${archiveName}.sha256\n\`\`\`\n\nExtract with \`tar -xzf ${archiveName}\`, then run \`./hostdeck/bin/codexdeck service install\` with \`HOSTDECK_CODEX_BIN\` set to the absolute exact Codex 0.148.0 executable.\n`;
 }
 
 function resolveReleasePaths(options, outputMustExist) {

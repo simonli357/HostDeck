@@ -21,7 +21,7 @@ const repositoryRoot = resolve(scriptDirectory, "..");
 const requireFromAdapter = createRequire(join(repositoryRoot, "packages", "codex-adapter", "package.json"));
 const WebSocket = requireFromAdapter("ws");
 
-const expectedCodexVersion = "0.147.0";
+const expectedCodexVersion = "0.148.0";
 const requestTimeoutMs = 10_000;
 const processTimeoutMs = 15_000;
 
@@ -31,7 +31,7 @@ async function main() {
 
   const codexBin = resolveCodexBin();
   const version = run(codexBin, ["--version"]);
-  requireCondition(version.stdout.trim() === `codex-cli ${expectedCodexVersion}`, "Codex version is not exactly 0.147.0.");
+  requireCondition(version.stdout.trim() === `codex-cli ${expectedCodexVersion}`, "Codex version is not exactly 0.148.0.");
 
   const root = mkdtempSync(join(tmpdir(), "hostdeck-shared-codex-"));
   const codexHome = join(root, "codex-home");
@@ -272,7 +272,7 @@ class RpcClient {
     );
     requireCondition(
       typeof result.userAgent === "string" && result.userAgent.includes(`/${expectedCodexVersion} `),
-      `Initialize response did not corroborate Codex 0.147.0: ${JSON.stringify(result.userAgent)}`
+      `Initialize response did not corroborate Codex 0.148.0: ${JSON.stringify(result.userAgent)}`
     );
     requireCondition(resolve(result.codexHome) === resolve(codexHome), "Initialize response returned the wrong CODEX_HOME.");
     this.notify("initialized");

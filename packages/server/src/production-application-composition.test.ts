@@ -531,7 +531,7 @@ describe("IFC-V1-082 production application composition", () => {
         state: "version_drift",
         evidence: "current",
         observed_version: "0.145.0",
-        supported_version: "0.147.0",
+        supported_version: "0.148.0",
         capability_state: "blocked"
       }
     });
@@ -613,7 +613,7 @@ async function createFixture(
   const buildRoot = join(root, "build");
   writeFileSync(
     executable,
-    `#!/bin/sh\nprintf 'codex-cli ${options.codexVersion ?? "0.147.0"}\\n'\n`,
+    `#!/bin/sh\nprintf 'codex-cli ${options.codexVersion ?? "0.148.0"}\\n'\n`,
     { mode: 0o700 }
   );
   writeProductionWebTestFixture(buildRoot, {
@@ -719,7 +719,7 @@ function diagnosticRuntimeSession(): Readonly<Record<string, unknown>> {
     codex_thread_id: "thread-production-diagnostic-001",
     cwd: "/tmp/hostdeck-production-diagnostic",
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     disposition: "selected",
     created_at: createdAt,
     updated_at: createdAt,

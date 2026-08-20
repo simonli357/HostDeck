@@ -49,7 +49,7 @@ describe("normalized Codex thread client", () => {
         archived: null
       }
     });
-    expect(client.runtime_version).toBe("0.147.0");
+    expect(client.runtime_version).toBe("0.148.0");
   });
 
   it.each([
@@ -496,11 +496,11 @@ function fakePort(handler: (request: CodexRequestInput) => unknown | Promise<unk
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.147.0",
+    observed_version: "0.148.0",
     checked_at: checkedAt,
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.148.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]
@@ -509,7 +509,7 @@ function readyCompatibility(): RuntimeCompatibility {
 }
 
 function disconnectedCompatibility(): RuntimeCompatibility {
-  return assessCodexCompatibility({ observed_version: "0.147.0", checked_at: checkedAt, handshake: { state: "not_attempted" } });
+  return assessCodexCompatibility({ observed_version: "0.148.0", checked_at: checkedAt, handshake: { state: "not_attempted" } });
 }
 
 function rawThread(overrides: Record<string, unknown> = {}): Record<string, unknown> {

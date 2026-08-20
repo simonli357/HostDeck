@@ -57,7 +57,7 @@ describe("shared Codex broker lifecycle", () => {
       state: "ready",
       ownership: "attached",
       generation: 31,
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       reason: null
     });
     expect(fixture.openInputs).toEqual([
@@ -250,7 +250,7 @@ function startInput(mode: "attach_only" | "attach_or_start") {
     codex_bin: "/opt/codex/bin/codex",
     location,
     mode,
-    observed_version: "0.147.0",
+    observed_version: "0.148.0",
     startup_timeout_ms: 1_000
   } as const;
 }

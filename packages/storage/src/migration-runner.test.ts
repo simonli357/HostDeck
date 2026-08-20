@@ -130,7 +130,7 @@ describe("SQLite migration runner", () => {
           INSERT INTO selected_sessions (
             id, name, codex_thread_id, cwd, runtime_source, runtime_version,
             disposition, created_at, updated_at, archived_at
-          ) VALUES (?, ?, ?, ?, 'codex_app_server', '0.147.0', 'selected', ?, ?, NULL)
+          ) VALUES (?, ?, ?, ?, 'codex_app_server', '0.148.0', 'selected', ?, ?, NULL)
         `
       )
       .run("sess_settings_migration", "settings-migration", "thread-settings-migration", "/tmp/settings-migration", createdAt, createdAt);

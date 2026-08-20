@@ -502,7 +502,7 @@ describe("physical Android phone-driver protocol", () => {
         platform: "linux",
         pnpm: "10.29.2"
       },
-      source: { commit: "1".repeat(40), count: 665, sha256: sourceHash },
+      source: { commit: "1".repeat(40), count: 679, sha256: sourceHash },
       output: { count: 1_337, sha256: outputHash },
       content: { bytes: 162_000_000, entryCount: 6_363, sha256: contentHash },
       manifestSha256: manifestHash,
@@ -521,10 +521,10 @@ describe("physical Android phone-driver protocol", () => {
       }
     };
     const buildResult = parsePhysicalPackageBuildOutput(
-      `HostDeck package built: 665 sources, 1337 owned outputs, 6363 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      `HostDeck package built: 679 sources, 1365 owned outputs, 6391 entries, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
     );
     const verification = parsePhysicalPackageVerificationOutput(
-      `HostDeck package verified: 6363 entries, 1337 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
+      `HostDeck package verified: 6391 entries, 1365 owned outputs, 3 web files (1200000 bytes, sha256:${webHash}), package sha256:${contentHash}.\n`
     );
     const browserManifest = {
       package: {
@@ -551,7 +551,7 @@ describe("physical Android phone-driver protocol", () => {
       output_tree_sha256: outputHash,
       package_schema_version: 6,
       package_version: "0.0.0",
-      source_file_count: 665,
+      source_file_count: 679,
       source_tree_sha256: sourceHash,
       web_manifest_sha256: webManifestHash,
       web_tree_sha256: webHash
@@ -11855,7 +11855,7 @@ function createPhysicalSessionReads(
       ) VALUES (
         '${physicalUiSessionId}', '${physicalUiSessionName}',
         '${physicalUiThreadId}', '/workspace/hostdeck',
-        'codex_app_server', '0.147.0', 'selected', ?, ?, NULL
+        'codex_app_server', '0.148.0', 'selected', ?, ?, NULL
       )
     `
   ).run(createdAt, updatedAt);
@@ -11894,7 +11894,7 @@ function createPhysicalSessionReads(
           id, name, codex_thread_id, cwd, runtime_source, runtime_version,
           disposition, created_at, updated_at, archived_at
         ) VALUES (?, ?, ?, '/workspace/hostdeck', 'codex_app_server',
-          '0.147.0', 'selected', ?, ?, NULL)
+          '0.148.0', 'selected', ?, ?, NULL)
       `
     );
     const insertProjection = db.prepare(
@@ -12162,7 +12162,7 @@ function physicalStreamFailureCode(candidate: unknown): string {
 }
 
 class PhysicalPromptTurnClient implements PhysicalPromptTurnPort {
-  readonly runtime_version = "0.147.0";
+  readonly runtime_version = "0.148.0";
   readonly startCalls: PhysicalPromptStartInput[] = [];
 
   async startTurn(
@@ -12205,7 +12205,7 @@ function physicalPromptCompatibility(now: () => Date) {
     source: "codex_app_server",
     state: "ready",
     mutation_policy: "allowed",
-    observed_version: "0.147.0",
+    observed_version: "0.148.0",
     binding_id: "binding-physical-prompt-001",
     capabilities: [
       "thread_lifecycle",
@@ -28079,7 +28079,7 @@ function parsePhysicalDashboardPackageIdentity(input: Readonly<{
       (runtimeBundle.size as number) <= 256 * 1024 * 1024 &&
       typeof source.commit === "string" &&
       /^[a-f0-9]{40}$/u.test(source.commit) &&
-      source.count === 665 &&
+      source.count === 679 &&
       output.count === 1_337 &&
       Number.isSafeInteger(content.entryCount) &&
       (content.entryCount as number) >= 1_000 &&

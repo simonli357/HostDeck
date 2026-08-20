@@ -276,8 +276,8 @@ function hostStatus(
     compatibility: {
       state: "supported",
       evidence: "current",
-      observed_version: "0.147.0",
-      supported_version: "0.147.0",
+      observed_version: "0.148.0",
+      supported_version: "0.148.0",
       capability_state: "verified",
       checked_at: timestamp,
       recorded_at: timestamp
@@ -340,7 +340,7 @@ function sessionList(
           name: "admin-cli",
           recent_summary: privateSummary,
           runtime_source: "codex_app_server",
-          runtime_version: "0.147.0",
+          runtime_version: "0.148.0",
           session_state: "active",
           settings: {
             collaboration_mode: "default",

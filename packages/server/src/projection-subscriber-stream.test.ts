@@ -1353,7 +1353,7 @@ function selectedState(
       id: sessionId,
       name: sessionId,
       runtime_source: "codex_app_server",
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       updated_at: updatedAt
     }),
     projection: selectedSessionProjectionRecordSchema.parse({
@@ -1378,7 +1378,7 @@ function selectedState(
         name: sessionId,
         recent_summary: "Subscriber test projection.",
         runtime_source: "codex_app_server",
-        runtime_version: "0.147.0",
+        runtime_version: "0.148.0",
         session_state: memory.archived ? "archived" : "active",
         turn_state: "idle",
         updated_at: updatedAt
@@ -1413,7 +1413,7 @@ function committedCandidate(event: SelectedProjectionEvent) {
         name: event.session_id,
         recent_summary: `Committed cursor ${event.cursor}.`,
         runtime_source: "codex_app_server",
-        runtime_version: "0.147.0",
+        runtime_version: "0.148.0",
         session_state: "active",
         turn_state: "idle",
         updated_at: event.captured_at

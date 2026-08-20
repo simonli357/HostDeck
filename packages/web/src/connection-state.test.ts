@@ -3088,8 +3088,8 @@ function hostCompatibility(
     return {
       state: "disconnected",
       evidence: "last_known",
-      observed_version: "0.147.0",
-      supported_version: "0.147.0",
+      observed_version: "0.148.0",
+      supported_version: "0.148.0",
       capability_state: "unverified",
       checked_at: compatibilityTimestamp,
       recorded_at: compatibilityTimestamp
@@ -3099,8 +3099,8 @@ function hostCompatibility(
     return {
       state: "incompatible",
       evidence: "current",
-      observed_version: "0.147.0",
-      supported_version: "0.147.0",
+      observed_version: "0.148.0",
+      supported_version: "0.148.0",
       capability_state: "blocked",
       checked_at: compatibilityTimestamp,
       recorded_at: compatibilityTimestamp
@@ -3109,8 +3109,8 @@ function hostCompatibility(
   return {
     state: "supported",
     evidence: "current",
-    observed_version: "0.147.0",
-    supported_version: "0.147.0",
+    observed_version: "0.148.0",
+    supported_version: "0.148.0",
     capability_state: "verified",
     checked_at: compatibilityTimestamp,
     recorded_at: compatibilityTimestamp
@@ -3133,7 +3133,7 @@ function sessionItem(
     codex_thread_id: `thread-${id}`,
     cwd: `/workspace/${id}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     created_at: timestamp,
     archived_at: null,
     session_state: "active",
@@ -3577,7 +3577,7 @@ function catalogConnectionEntry(
       cwd: `/workspace/catalog-connection-${suffix}`,
       project_cue: `catalog-connection-${suffix}`,
       branch: "main",
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       runtime_source: "codex_app_server",
       enrollment_origin: "loaded_before",
       archived: false,
@@ -3591,7 +3591,7 @@ function catalogConnectionEntry(
       codex_thread_id: nativeThreadId,
       cwd: `/workspace/catalog-connection-${suffix}`,
       runtime_source: "codex_app_server",
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       created_at: timestamp,
       archived_at: null,
       session_state: "active",

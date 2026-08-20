@@ -45,7 +45,7 @@ describe("Codex usage control service", () => {
     const snapshot = await service.read(usageIntent(sessionA, threadA));
     expect(snapshot).toEqual({
       target: { type: "managed_session", session_id: sessionA, codex_thread_id: threadA },
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       connection_generation: 3,
       measured_at: measuredAt,
       account: accountSnapshot(),
@@ -366,7 +366,7 @@ class FakeUsageClient implements CodexUsageClient {
   onRead: (() => void) | null = null;
 
   get runtime_version(): string {
-    return "0.147.0";
+    return "0.148.0";
   }
 
   get connection_generation(): number {
@@ -378,7 +378,7 @@ class FakeUsageClient implements CodexUsageClient {
     this.onRead?.();
     if (this.error !== null) throw this.error;
     return {
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       connection_generation: this.currentGeneration,
       observed_at: measuredAt as CodexAccountUsageRead["observed_at"],
       account: accountSnapshot()
@@ -653,7 +653,7 @@ function stateCandidate(
   } = {}
 ): SelectedSessionState {
   const archivedAt = options.archived ? createdAt : null;
-  const runtimeVersion = options.runtimeVersion ?? "0.147.0";
+  const runtimeVersion = options.runtimeVersion ?? "0.148.0";
   const name = sessionId.replace(/^sess_/u, "");
   return {
     mapping: selectedSessionMappingRecordSchema.parse({

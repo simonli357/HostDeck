@@ -151,7 +151,7 @@ function realReport(commit: string) {
     task: "INT-V1-114-real",
     hostdeck_commit: commit,
     runtime: {
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       standard_socket: true,
       socket_mode: 0o600
     },

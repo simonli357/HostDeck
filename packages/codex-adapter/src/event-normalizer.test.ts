@@ -1278,7 +1278,7 @@ function rawThread(threadId: string, status: unknown) {
     status,
     path: "/tmp/codex-thread.jsonl",
     cwd: "/tmp/hostdeck-normalizer",
-    cliVersion: "0.147.0",
+    cliVersion: "0.148.0",
     source: "vscode",
     canAcceptDirectInput: null,
     threadSource: "hostdeck",

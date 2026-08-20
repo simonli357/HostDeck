@@ -224,7 +224,7 @@ describe("selected skills read route", () => {
     };
     const runtime: CodexSkillsClient = {
       get runtime_version() {
-        return "0.147.0";
+        return "0.148.0";
       },
       get connection_generation() {
         return 3;
@@ -793,7 +793,7 @@ function selectedState(): SelectedSessionState {
       codex_thread_id: threadId,
       cwd: selectedCwd,
       runtime_source: "codex_app_server",
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       disposition: "selected",
       created_at: createdAt,
       updated_at: createdAt,
@@ -806,7 +806,7 @@ function selectedState(): SelectedSessionState {
         codex_thread_id: threadId,
         cwd: selectedCwd,
         runtime_source: "codex_app_server",
-        runtime_version: "0.147.0",
+        runtime_version: "0.148.0",
         created_at: createdAt,
         archived_at: null,
         session_state: "active",
@@ -849,7 +849,7 @@ function skillsSnapshot() {
       session_id: sessionId,
       codex_thread_id: threadId
     },
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 3,
     observed_at: observedAt,
     state: "content",

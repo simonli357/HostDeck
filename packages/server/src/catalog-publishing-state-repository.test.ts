@@ -191,7 +191,7 @@ function automaticCandidate() {
     codex_thread_id: nativeThreadId,
     cwd: "/home/simonli/Videos/apps/side_cue_app",
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     disposition: "selected",
     created_at: createdAt,
     updated_at: enrolledAt,

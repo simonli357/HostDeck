@@ -53,7 +53,7 @@ describe("Codex skills control service", () => {
     );
     expect(snapshot).toEqual({
       target: targetA,
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       connection_generation: 3,
       observed_at: observedAt,
       state: "content",
@@ -278,7 +278,7 @@ class FakeSkillsClient implements CodexSkillsClient {
   readonly calls: CodexSkillsListInput[] = [];
   listing: CodexSkillsListing = validListing();
   currentGeneration = 3;
-  currentVersion = "0.147.0";
+  currentVersion = "0.148.0";
   error: Error | null = null;
   onList: (() => void) | null = null;
 
@@ -328,7 +328,7 @@ function skillsIntent(target: TestTarget, operationId: string) {
 
 function validListing(overrides: Partial<CodexSkillsListing> = {}): CodexSkillsListing {
   return {
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 3,
     observed_at: observedAt as CodexSkillsListing["observed_at"],
     state: "content",
@@ -352,7 +352,7 @@ function selectedState(
     readonly stale?: boolean;
   } = {}
 ): SelectedSessionState {
-  const runtimeVersion = options.runtimeVersion ?? "0.147.0";
+  const runtimeVersion = options.runtimeVersion ?? "0.148.0";
   const archivedAt = options.archived ? observedAt : null;
   const projectionCwd = options.projectionCwd ?? cwd;
   return {

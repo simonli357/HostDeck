@@ -165,8 +165,8 @@ function compatibilityRecord(
       source: "codex_app_server",
       state,
       mutation_policy: "allowed",
-      observed_version: "0.147.0",
-      binding_id: "codex-app-server-0.147.0:sha256:storage-test",
+      observed_version: "0.148.0",
+      binding_id: "codex-app-server-0.148.0:sha256:storage-test",
       capabilities: runtimeCapabilities.map((name) => {
         const capabilityState = input.overrides?.[name] ?? (name === "compact" ? "unavailable" : "available");
         return {

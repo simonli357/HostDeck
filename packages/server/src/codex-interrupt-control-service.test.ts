@@ -400,7 +400,7 @@ describe("Codex interrupt control", () => {
     expect(accessorCalls).toBe(0);
 
     let portAccessorCalls = 0;
-    const hostileTurns = Object.defineProperty({ runtime_version: "0.147.0" }, "interruptTurn", {
+    const hostileTurns = Object.defineProperty({ runtime_version: "0.148.0" }, "interruptTurn", {
       enumerable: true,
       get() {
         portAccessorCalls += 1;
@@ -531,7 +531,7 @@ function createHarness(
 ): Harness {
   const turns: FakeTurns = {
     calls: [],
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     error: null,
     gate: null,
     result: null,
@@ -609,7 +609,7 @@ function selectedState(
     codex_thread_id: target.codex_thread_id,
     cwd: "/tmp/interrupt-project",
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     disposition: "selected",
     created_at: observedAt,
     updated_at: observedAt,

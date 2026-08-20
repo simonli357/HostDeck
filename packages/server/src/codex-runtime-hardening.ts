@@ -125,7 +125,7 @@ const runtimeHardeningEvidenceSchema = z
     hostdeck_commit: fullCommitSchema,
     binding: z
       .object({
-        runtime_version: z.literal("0.147.0"),
+        runtime_version: z.literal("0.148.0"),
         binding_id: z.string().min(1).max(256),
         experimental_api: z.literal(true),
         file_count: z.literal(723),

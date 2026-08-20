@@ -163,7 +163,7 @@ describe("Codex runtime crash reconciliation lifecycle", () => {
         }
       });
       expect(harness.repository.require("sess_current")).toMatchObject({
-        mapping: { disposition: "selected", runtime_version: "0.147.0" },
+        mapping: { disposition: "selected", runtime_version: "0.148.0" },
         projection: { session: { freshness: "current", session_state: "active" } }
       });
       expect(harness.lifecycle.snapshot()).toMatchObject({
@@ -1242,7 +1242,7 @@ function rawThread(fixture: RuntimeFixture): Record<string, unknown> {
     status: fixture.status,
     path: `/tmp/${fixture.thread_id}.jsonl`,
     cwd: fixture.cwd,
-    cliVersion: "0.147.0",
+    cliVersion: "0.148.0",
     source: fixture.source,
     canAcceptDirectInput: null,
     threadSource: "hostdeck:managed",
@@ -1323,7 +1323,7 @@ function stateCandidate(
   const durableCreatedAt = overrides.created_at ?? createdAt;
   const durableUpdatedAt = overrides.updated_at ?? archivedAt ?? durableCreatedAt;
   const lastActivityAt = overrides.last_activity_at === undefined ? null : overrides.last_activity_at;
-  const runtimeVersion = overrides.runtime_version ?? "0.147.0";
+  const runtimeVersion = overrides.runtime_version ?? "0.148.0";
   const mapping = {
     id: sessionId,
     name: sessionId.replace("sess_", "session-"),
@@ -1435,11 +1435,11 @@ function settings(mode: "default" | "plan", model: string, effort: string | null
 
 function readyCompatibility(): RuntimeCompatibility {
   return assessCodexCompatibility({
-    observed_version: "0.147.0",
+    observed_version: "0.148.0",
     checked_at: checkedAt,
     handshake: {
       state: "initialized",
-      user_agent: "hostdeck/0.147.0 (Ubuntu 24.04; x86_64)",
+      user_agent: "hostdeck/0.148.0 (Ubuntu 24.04; x86_64)",
       platform_family: "unix",
       platform_os: "linux",
       collaboration_modes: ["Plan", "Default"]

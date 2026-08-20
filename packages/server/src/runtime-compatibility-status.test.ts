@@ -39,8 +39,8 @@ describe("IFC-V1-087 runtime compatibility status projection", () => {
     expect(supported).toEqual({
       state: "supported",
       evidence: "current",
-      observed_version: "0.147.0",
-      supported_version: "0.147.0",
+      observed_version: "0.148.0",
+      supported_version: "0.148.0",
       capability_state: "verified",
       checked_at: checkedAt,
       recorded_at: recordedAt
@@ -79,7 +79,7 @@ describe("IFC-V1-087 runtime compatibility status projection", () => {
     ).toMatchObject({
       state: "incompatible",
       evidence: "current",
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       capability_state: "blocked"
     });
   });
@@ -99,7 +99,7 @@ describe("IFC-V1-087 runtime compatibility status projection", () => {
       state: "disconnected",
       evidence: "last_known",
       capability_state: "unverified",
-      observed_version: "0.147.0"
+      observed_version: "0.148.0"
     });
 
     const degraded = healthWith([
@@ -133,7 +133,7 @@ describe("IFC-V1-087 runtime compatibility status projection", () => {
       state: "unknown",
       evidence: "unobserved",
       observed_version: null,
-      supported_version: "0.147.0",
+      supported_version: "0.148.0",
       capability_state: "unverified",
       checked_at: null,
       recorded_at: null

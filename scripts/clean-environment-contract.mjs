@@ -19,7 +19,7 @@ const expectedPins = Object.freeze({
     "sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54",
   codex_integrity:
     "sha512-EQLEXecAG2ptxI7UpBMo2TR/ga5596/c/OsYF/0LoUDh5JANZ7IoGqlzBEWbuEVQ76JePIbtTW/ihCkp1a7Z3w==",
-  codex_version: "0.147.0",
+  codex_version: "0.148.0",
   node_archive_sha256:
     "88fd1ce767091fd8d4a99fdb2356e98c819f93f3b1f8663853a2dee9b438068a",
   node_archive_url:

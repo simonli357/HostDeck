@@ -211,7 +211,7 @@ describe("selected usage read route", () => {
     };
     const runtime: CodexUsageClient = {
       get runtime_version() {
-        return "0.147.0";
+        return "0.148.0";
       },
       get connection_generation() {
         return 3;
@@ -656,7 +656,7 @@ function selectedState(): SelectedSessionState {
       codex_thread_id: threadId,
       cwd: "/tmp/hostdeck-usage-route",
       runtime_source: "codex_app_server",
-      runtime_version: "0.147.0",
+      runtime_version: "0.148.0",
       disposition: "selected",
       created_at: createdAt,
       updated_at: createdAt,
@@ -669,7 +669,7 @@ function selectedState(): SelectedSessionState {
         codex_thread_id: threadId,
         cwd: "/tmp/hostdeck-usage-route",
         runtime_source: "codex_app_server",
-        runtime_version: "0.147.0",
+        runtime_version: "0.148.0",
         created_at: createdAt,
         archived_at: null,
         session_state: "active",
@@ -695,7 +695,7 @@ function selectedState(): SelectedSessionState {
 
 function accountUsageRead(): CodexAccountUsageRead {
   return {
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 3,
     observed_at: measuredAt as CodexAccountUsageRead["observed_at"],
     account: usageSnapshot().account
@@ -709,7 +709,7 @@ function usageSnapshot() {
       session_id: sessionId,
       codex_thread_id: threadId
     },
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 3,
     measured_at: measuredAt,
     account: {

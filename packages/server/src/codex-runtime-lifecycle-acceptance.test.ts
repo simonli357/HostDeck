@@ -18,7 +18,7 @@ describe("selected runtime lifecycle acceptance evidence", () => {
       task: "INT-V1-032",
       hostdeck_commit: commit,
       runtime: {
-        version: "0.147.0",
+        version: "0.148.0",
         exact_scenario_count: 3,
         exact_app_server_lifetime_count: 6
       },
@@ -227,7 +227,7 @@ function supervisorReport() {
     observed_at: observedAt,
     hostdeck_commit: commit,
     runtime: {
-      version: "0.147.0",
+      version: "0.148.0",
       exact_binding: true,
       app_server_process_count: 2
     },
@@ -272,7 +272,7 @@ function restartReport() {
       hostdeck_processes_distinct: true
     },
     runtime: {
-      version: "0.147.0",
+      version: "0.148.0",
       exact_binding: true,
       service_runtime_pid_stable: true,
       service_socket_identity_stable: true,
@@ -332,7 +332,7 @@ function coexistenceReport() {
     observed_at: observedAt,
     hostdeck_commit: commit,
     runtime: {
-      version: "0.147.0",
+      version: "0.148.0",
       exact_binding: true,
       app_server_process_count: 1,
       app_server_identity_stable: true,

@@ -429,7 +429,7 @@ function skillsSnapshot() {
       session_id: sessionId,
       codex_thread_id: threadId
     },
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 4,
     observed_at: timestamp,
     state: "empty",
@@ -455,7 +455,7 @@ function usageSnapshot(
       session_id: sessionId,
       codex_thread_id: threadId
     },
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     connection_generation: 4,
     measured_at: timestamp,
     account: {
@@ -540,7 +540,7 @@ function controlContext(
     codex_thread_id: threadId,
     cwd: "/private/usage-ui",
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     created_at: timestamp,
     archived_at: null,
     session_state: freshness === "current" ? "active" : "stale",

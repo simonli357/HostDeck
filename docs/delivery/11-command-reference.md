@@ -24,7 +24,7 @@ pnpm check:codex-bindings
 ## Packaged Service Lifecycle
 
 ```bash
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" dist/hostdeck/bin/codexdeck service install --json
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" dist/hostdeck/bin/codexdeck service install --json
 dist/hostdeck/bin/codexdeck service status --json
 dist/hostdeck/bin/codexdeck service start --json
 dist/hostdeck/bin/codexdeck service restart --json
@@ -36,7 +36,7 @@ dist/hostdeck/bin/codexdeck service uninstall --json
 ## Installed User Workflow
 
 ```bash
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" /absolute/path/to/hostdeck/bin/codexdeck service install
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" /absolute/path/to/hostdeck/bin/codexdeck service install
 ~/.local/bin/codexdeck broker start
 ~/.local/bin/codexdeck broker status
 ~/.local/bin/codexdeck service start
@@ -197,29 +197,29 @@ All five device harnesses capture the original mobile-data, Wi-Fi, and USB stay-
 ## Codex Runtime Probes
 
 ```bash
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm test:codex
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-semantics
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-model
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-goal
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-plan
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-usage
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-compact
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-skills
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-prompt
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-approval
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-interrupt
-HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.147.0 pnpm smoke:codex-vertical
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:codex-shared-broker
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:codex-shared-sessions
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:codex-tui-coexistence
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm test:shared-runtime-hardening
-HOSTDECK_REQUIRE_PRODUCTION_COMPOSITION_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm exec vitest run packages/server/src/production-application-composition.smoke.test.ts --maxWorkers=1
-HOSTDECK_REQUIRE_PRODUCTION_SERVE_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm exec vitest run packages/server/src/production-foreground-serve.smoke.test.ts --maxWorkers=1
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:executable-serve
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm test:codex
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-semantics
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-model
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-goal
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-plan
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-usage
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-compact
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-skills
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-prompt
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-approval
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-interrupt
+HOSTDECK_CODEX_BIN=/absolute/path/to/codex-0.148.0 pnpm smoke:codex-vertical
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm smoke:codex-shared-broker
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm smoke:codex-shared-sessions
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm smoke:codex-tui-coexistence
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm test:shared-runtime-hardening
+HOSTDECK_REQUIRE_PRODUCTION_COMPOSITION_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm exec vitest run packages/server/src/production-application-composition.smoke.test.ts --maxWorkers=1
+HOSTDECK_REQUIRE_PRODUCTION_SERVE_SMOKE=1 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm exec vitest run packages/server/src/production-foreground-serve.smoke.test.ts --maxWorkers=1
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm smoke:executable-serve
 HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/unsupported-codex)" HOSTDECK_EXPECT_DIAGNOSTIC=1 pnpm smoke:executable-serve
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:service-host
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:systemd-user-units
-HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.147.0)" pnpm smoke:service-lifecycle
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm smoke:service-host
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm smoke:systemd-user-units
+HOSTDECK_CODEX_BIN="$(readlink -f /absolute/path/to/codex-0.148.0)" pnpm smoke:service-lifecycle
 ```
 
 `HOSTDECK_EXPECT_DIAGNOSTIC=1` is validation-only. It requires a valid Codex semver different from the reviewed version and proves the packaged listener remains read-only and reachable without app-server admission; ordinary HostDeck startup never reads this variable.

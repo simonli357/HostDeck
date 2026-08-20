@@ -28,7 +28,7 @@ import {
 const roots: string[] = [];
 const sessionId = "sess_resume_reader_001";
 const threadId = "019fc8bd-25ef-74c3-a3bf-c6e59e4122a4";
-const runtimeVersion = "0.147.0";
+const runtimeVersion = "0.148.0";
 const createdAt = "2026-07-15T12:00:00.000Z";
 const updatedAt = "2026-07-15T12:01:00.000Z";
 

@@ -1303,11 +1303,11 @@ function inferenceAndDeferrals(): readonly string[] {
   return [
     "App-server approval requests expose startedAtMs but no expiry; HostDeck must own expiry policy and connection-generation invalidation.",
     "The companion goal-activation observation proves that active goals autonomously start turns; this final probe keeps goals paused so unrelated operations remain attributable and bounded.",
-    "thread/resume.model is not a valid model-selection control for an already loaded thread in exact 0.147.0; downstream model selection must use the observed turn/start boundary and read back later thread state.",
+    "thread/resume.model is not a valid model-selection control for an already loaded thread in exact 0.148.0; downstream model selection must use the observed turn/start boundary and read back later thread state.",
     "A successful post-accept reconnect does not prove the outcome of a turn/start request disconnected before its response; broker unknown-outcome rules remain authoritative until the reconnect leaves.",
     "Account token activity and thread token usage do not expose monetary cost; HostDeck must not invent a currency estimate.",
     "The collaboration catalog is a mask; HostDeck constructs the exact mode settings from mask fields plus the selected catalog model and built-in instructions.",
-    "Current official docs can advance beyond pinned 0.147.0; generated 0.147.0 bindings and this observation remain the compatibility authority.",
+    "Current official docs can advance beyond pinned 0.148.0; generated 0.148.0 bindings and this observation remain the compatibility authority.",
     "The spike records operation semantics only; normalization, persistence, API routing, UI state, restart recovery, and approval expiry belong to their downstream leaf tasks."
   ];
 }

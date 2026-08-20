@@ -122,7 +122,7 @@ function projection() {
     codex_thread_id: "thread-start-contract-001",
     cwd: "/tmp/hostdeck-contract",
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     created_at: at,
     archived_at: null,
     session_state: "active",

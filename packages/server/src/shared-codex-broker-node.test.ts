@@ -56,7 +56,7 @@ describeLinux("node shared Codex broker lifecycle", () => {
     expect(first.endpoint).toMatchObject({
       state: "ready",
       ownership: "owned",
-      observed_version: "0.147.0"
+      observed_version: "0.148.0"
     });
     expect(mode(fixture.controlDirectory)).toBe(0o700);
     expect(mode(fixture.location.socket_path)).toBe(0o600);
@@ -267,7 +267,7 @@ async function start(
       codex_bin: fixture.executable,
       location: fixture.location,
       mode,
-      observed_version: "0.147.0",
+      observed_version: "0.148.0",
       startup_timeout_ms: 3_000
     },
     { compatibilityProbe: async () => undefined }

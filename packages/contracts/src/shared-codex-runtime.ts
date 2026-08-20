@@ -17,7 +17,7 @@ import {
 } from "./scalars.js";
 import { codexVersionSchema, managedSessionProjectionSchema } from "./selected-runtime.js";
 
-export const sharedCodexRuntimeVersion = "0.147.0" as const;
+export const sharedCodexRuntimeVersion = "0.148.0" as const;
 
 export const sharedCodexRuntimeContractLimits = Object.freeze({
   pathLength: 4_096,

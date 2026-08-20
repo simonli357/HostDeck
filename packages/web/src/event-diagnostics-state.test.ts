@@ -773,7 +773,7 @@ function context(
     codex_thread_id: input.projectedThreadId ?? threadId,
     cwd: "/private/event-diagnostics",
     runtime_source: "codex_app_server",
-    runtime_version: input.runtimeVersion ?? "0.147.0",
+    runtime_version: input.runtimeVersion ?? "0.148.0",
     created_at: timestamp,
     archived_at: null,
     session_state: "active",

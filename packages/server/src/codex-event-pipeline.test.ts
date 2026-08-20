@@ -625,7 +625,7 @@ function stateCandidate(id: string, threadId: string, archivedAt: string | null 
     codex_thread_id: threadId,
     cwd: `/tmp/${id}`,
     runtime_source: "codex_app_server",
-    runtime_version: "0.147.0",
+    runtime_version: "0.148.0",
     disposition: "selected",
     created_at: createdAt,
     updated_at: createdAt,
