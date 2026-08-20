@@ -276,6 +276,7 @@ const inputKeys = [
 const runtimeStartKeys = ["deadline", "resourceBudget"] as const;
 const issueCodePattern = /^[a-z][a-z0-9_]{0,119}$/u;
 const maximumCounter = Number.MAX_SAFE_INTEGER;
+const maximumStartupMaintenanceStepTimeoutMs = 60_000;
 
 export function createHostDeckProductionApplication(
   input: CreateHostDeckProductionApplicationInput
@@ -942,7 +943,10 @@ export function createHostDeckProductionApplication(
         eligible_before,
         reconciled_at,
         signal,
-        timeout_ms: budget.lifecycle_startup_timeout_ms
+        timeout_ms: Math.min(
+          budget.lifecycle_startup_timeout_ms,
+          maximumStartupMaintenanceStepTimeoutMs
+        )
       }),
     runRetention: ({ cutoff_at, signal }) =>
       runStartupRetentionMaintenance({
@@ -950,7 +954,10 @@ export function createHostDeckProductionApplication(
         now: () => new Date(cutoff_at),
         retention: settings.retention,
         signal,
-        timeout_ms: budget.lifecycle_startup_timeout_ms
+        timeout_ms: Math.min(
+          budget.lifecycle_startup_timeout_ms,
+          maximumStartupMaintenanceStepTimeoutMs
+        )
       })
   });
   const writeShutdown = createHostDeckSelectedWriteShutdownPort({ admission });

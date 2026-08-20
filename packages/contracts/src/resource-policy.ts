@@ -206,7 +206,7 @@ export const resourceBudgetDefinitions = Object.freeze([
   defineResource("control_compact_max_tracked_operations", "count", 1, 128, 4_096, "turn_control", "service_overloaded", "reject_operation"),
   defineResource("control_approval_expiry_ms", "milliseconds", 1_000, 300_000, 1_800_000, "turn_control", "approval_not_pending", "reject_operation"),
 
-  defineResource("lifecycle_startup_timeout_ms", "milliseconds", 1_000, 60_000, 300_000, "runtime_supervisor", "operation_timeout", "abort_operation"),
+  defineResource("lifecycle_startup_timeout_ms", "milliseconds", 1_000, 300_000, 300_000, "runtime_supervisor", "operation_timeout", "abort_operation"),
   defineResource("lifecycle_shutdown_timeout_ms", "milliseconds", 1_000, 10_000, 60_000, "host_service", "operation_timeout", "terminate_resource"),
   defineResource("lifecycle_cleanup_step_timeout_ms", "milliseconds", 50, 2_000, 10_000, "host_service", "operation_timeout", "continue_cleanup"),
 

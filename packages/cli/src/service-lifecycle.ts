@@ -20,7 +20,10 @@ import {
   writeFileSync
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
-import type { SelectedHostStatusResponse } from "@hostdeck/contracts";
+import {
+  defaultResourceBudget,
+  type SelectedHostStatusResponse
+} from "@hostdeck/contracts";
 import { probeCodexVersion } from "@hostdeck/server";
 import {
   assertHostDeckServiceManifestMatchesLayout,
@@ -2231,7 +2234,9 @@ function validateOptions(
   ) {
     throw new TypeError("HostDeck service base URL must be canonical loopback HTTP.");
   }
-  const readinessTimeoutMs = options.readiness_timeout_ms ?? 90_000;
+  const readinessTimeoutMs =
+    options.readiness_timeout_ms ??
+    defaultResourceBudget.lifecycle_startup_timeout_ms;
   if (
     !Number.isSafeInteger(readinessTimeoutMs) ||
     readinessTimeoutMs < 1 ||

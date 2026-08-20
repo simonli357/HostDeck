@@ -102,7 +102,7 @@ describe("selected V1 resource budget", () => {
       control_usage_max_tracked_threads: 128,
       control_compact_max_tracked_operations: 128,
       control_approval_expiry_ms: 300_000,
-      lifecycle_startup_timeout_ms: 60_000,
+      lifecycle_startup_timeout_ms: 300_000,
       lifecycle_shutdown_timeout_ms: 10_000,
       lifecycle_cleanup_step_timeout_ms: 2_000,
       remote_observer_command_timeout_ms: 3_000,
