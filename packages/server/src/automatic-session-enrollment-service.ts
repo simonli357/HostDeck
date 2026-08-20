@@ -97,6 +97,8 @@ export interface AutomaticSessionEnrollmentService {
   readonly retryPending: (
     threadId: NativeCodexThreadId | string
   ) => Promise<SharedSessionEnrollment>;
+  readonly suspendBackgroundEnrollment: () => void;
+  readonly startPendingBackgroundEnrollment: () => number;
   readonly close: () => readonly SharedSessionEnrollment[];
   readonly pending: readonly PendingEnrollmentSnapshot[];
   readonly background_failure: Error | null;
@@ -175,6 +177,8 @@ export function createAutomaticSessionEnrollmentService(
     observeNotification: (notification: CodexConnectionNotification, endpointGeneration: number) =>
       service.observeNotification(notification, endpointGeneration),
     retryPending: (threadId: NativeCodexThreadId | string) => service.retryPending(threadId),
+    suspendBackgroundEnrollment: () => service.suspendBackgroundEnrollment(),
+    startPendingBackgroundEnrollment: () => service.startPendingBackgroundEnrollment(),
     close: () => service.close(),
     get pending() {
       return service.pending;
@@ -190,6 +194,7 @@ class DefaultAutomaticSessionEnrollmentService {
   private readonly terminalByThread = new Map<string, SharedSessionEnrollment>();
   private readonly inFlight = new Map<string, Promise<SharedSessionEnrollment>>();
   private closed = false;
+  private backgroundEnrollmentActive = false;
   private backgroundFailure: Error | null = null;
 
   constructor(private readonly options: ParsedOptions) {}
@@ -236,7 +241,7 @@ class DefaultAutomaticSessionEnrollmentService {
         continue;
       }
       if (pending.background) {
-        outcomes.push(this.beginBackgroundEnrollment(pending));
+        outcomes.push(this.backgroundEnrollmentOutcome(pending));
         continue;
       }
       outcomes.push(await settleWithAbort(this.ensureEnrollment(pending), signal));
@@ -271,7 +276,7 @@ class DefaultAutomaticSessionEnrollmentService {
       const overflow = this.bufferNotification(pending, notification, generation);
       if (overflow !== null) return { kind: "enrollment", enrollment: overflow };
       if (pending.background) {
-        return { kind: "enrollment", enrollment: this.beginBackgroundEnrollment(pending) };
+        return { kind: "enrollment", enrollment: this.backgroundEnrollmentOutcome(pending) };
       }
       return { kind: "enrollment", enrollment: await this.ensureEnrollment(pending) };
     }
@@ -311,7 +316,7 @@ class DefaultAutomaticSessionEnrollmentService {
     const overflow = this.bufferNotification(created, notification, generation);
     if (overflow !== null) return { kind: "enrollment", enrollment: overflow };
     if (created.background) {
-      return { kind: "enrollment", enrollment: this.beginBackgroundEnrollment(created) };
+      return { kind: "enrollment", enrollment: this.backgroundEnrollmentOutcome(created) };
     }
     return { kind: "enrollment", enrollment: await this.ensureEnrollment(created) };
   }
@@ -327,6 +332,22 @@ class DefaultAutomaticSessionEnrollmentService {
     }
     this.clearTimer(pending);
     return this.ensureEnrollment(pending);
+  }
+
+  suspendBackgroundEnrollment(): void {
+    this.backgroundEnrollmentActive = false;
+  }
+
+  startPendingBackgroundEnrollment(): number {
+    this.requireOpen();
+    this.backgroundEnrollmentActive = true;
+    let started = 0;
+    for (const pending of this.pendingByThread.values()) {
+      if (!pending.background || this.inFlight.has(String(pending.snapshot.native_thread_id))) continue;
+      this.beginBackgroundEnrollment(pending);
+      started += 1;
+    }
+    return started;
   }
 
   close(): readonly SharedSessionEnrollment[] {
@@ -349,7 +370,12 @@ class DefaultAutomaticSessionEnrollmentService {
     return operation;
   }
 
-  private beginBackgroundEnrollment(pending: PendingEnrollment): SharedSessionEnrollment {
+  private backgroundEnrollmentOutcome(pending: PendingEnrollment): SharedSessionEnrollment {
+    if (this.backgroundEnrollmentActive) this.beginBackgroundEnrollment(pending);
+    return deepFreeze(sharedSessionEnrollmentSchema.parse({ state: "pending", pending: pending.snapshot }));
+  }
+
+  private beginBackgroundEnrollment(pending: PendingEnrollment): void {
     const threadId = String(pending.snapshot.native_thread_id);
     if (!this.inFlight.has(threadId)) {
       void this.ensureEnrollment(pending)
@@ -358,7 +384,6 @@ class DefaultAutomaticSessionEnrollmentService {
           if (this.backgroundFailure === null) this.backgroundFailure = asError(error);
         });
     }
-    return deepFreeze(sharedSessionEnrollmentSchema.parse({ state: "pending", pending: pending.snapshot }));
   }
 
   private async attemptEnrollment(pending: PendingEnrollment): Promise<SharedSessionEnrollment> {

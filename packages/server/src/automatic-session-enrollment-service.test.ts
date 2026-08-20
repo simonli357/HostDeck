@@ -152,7 +152,6 @@ describe("automatic shared-session enrollment", () => {
       });
 
       const reconciliation = service.reconcileLoaded("loaded_before", 1);
-      await waitFor(() => loaded.snapshotCalls.length === 1);
       await expect(reconciliation).resolves.toMatchObject({
         outcomes: [{ state: "pending", pending: { native_thread_id: threadA } }]
       });
@@ -163,6 +162,9 @@ describe("automatic shared-session enrollment", () => {
         kind: "enrollment",
         enrollment: { state: "pending" }
       });
+      expect(loaded.snapshotCalls).toEqual([]);
+      expect(service.startPendingBackgroundEnrollment()).toBe(1);
+      await waitFor(() => loaded.snapshotCalls.length === 1);
 
       gate.resolve(snapshot(eligible));
       await waitFor(() => outcomes.length === 1);

@@ -774,7 +774,12 @@ export function createHostDeckProductionApplication(
     report
   });
   lifecycleRelay.bind(Object.freeze({
-    disconnected: healthAwareReconciliation.disconnected,
+    async disconnected(
+      input: Parameters<CodexReconnectLifecyclePort["disconnected"]>[0]
+    ) {
+      enrollment.suspendBackgroundEnrollment();
+      return healthAwareReconciliation.disconnected(input);
+    },
     async reconcile(
       input: Parameters<CodexReconnectLifecyclePort["reconcile"]>[0]
     ) {
@@ -812,7 +817,11 @@ export function createHostDeckProductionApplication(
         enrollmentRuntime = null;
       }
     },
-    ready: healthAwareReconciliation.ready,
+    async ready(input: Parameters<CodexReconnectLifecyclePort["ready"]>[0]) {
+      const result = await healthAwareReconciliation.ready(input);
+      enrollment.startPendingBackgroundEnrollment();
+      return result;
+    },
     resubscribe: healthAwareReconciliation.resubscribe
   }));
 
