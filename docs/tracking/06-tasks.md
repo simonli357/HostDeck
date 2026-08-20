@@ -16,16 +16,15 @@ Current execution queue only. Detailed cards and historical evidence live in `do
 
 | Order | Task | Status | Blocked by | Why next |
 | --- | --- | --- | --- | --- |
-| 1 | `FE-V1-108` shared-session phone acceptance | blocked | Connected unlocked Android phone | Exercise installed candidate `edfde8bb4d51983e2e8cc4d3794477b594a03c477d143bdfd1905c85d6dcab62` over unrelated-network Tailscale HTTPS. |
+| 1 | `REL-V1-110` Ubuntu shared-session release acceptance | ready | none | Run the clean Ubuntu aggregate and install-to-uninstall acceptance, then freeze the candidate for human go/no-go. |
 
-`REL-V1-109` records the approved shared-session/Ubuntu rebaseline. The dependency chain then proceeds through contracts, binding/state, broker, automatic enrollment, selected API/CLI, live catalog UI, hardening, Ubuntu packaging, physical phone acceptance, and clean release acceptance. Completed adoption and Windows work remains historical; unfinished Windows and superseded aggregate tasks are deferred rather than release blockers.
+`FE-V1-108` passed the immutable `0.0.20` ordinary-TUI/phone/Tailscale workflow. Completed adoption and Windows work remains historical; unfinished Windows and superseded aggregate tasks are deferred rather than release blockers.
 
 ## Intentional Blockers
 
 | Gate | Owner | Blocker | Unblocks |
 | --- | --- | --- | --- |
 | Release | `REL-V1-010` | `REL-V1-110` Ubuntu candidate evidence and human acceptance | V1 release and V2 planning. |
-| Physical device | `FE-V1-108` | Connected unlocked Android phone after the installed candidate exists | Clean Ubuntu release acceptance. |
 
 ## Status Vocabulary
 

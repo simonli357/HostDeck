@@ -1187,3 +1187,24 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Root cause: a notification passed managed-thread classification before archive persistence, waited behind the archive, then projected after the mapping became archived and treated that valid membership transition as fatal scope drift.
 - Fix: serialize archive inside the existing projection membership queue and forget the native thread only after durable archive succeeds; queued trailing notifications are then classified as unmanaged instead of poisoning projection.
 - Current state: closed in installed `0.0.14`. Typecheck and formatting pass; a fresh ordinary Codex session auto-enrolled, completed, detached, archived once, disappeared from the public catalog, and left HostDeck `ready` with broker PID `801536` unchanged.
+
+### BUG-097 Delayed First Turn Never Enrolls
+
+- Symptom: an ordinary Codex TUI that waited more than 30 seconds before its first turn never appeared in HostDeck.
+- Root cause: the terminal pending timeout was cached permanently, so later eligible notifications could not rearm enrollment.
+- Fix: rearm terminal pending candidates on later notifications while retaining bounded attempts and explicit failures.
+- Current state: closed in `c22cdbb`; focused regressions passed and a fresh delayed ordinary session auto-enrolled on installed `0.0.20`.
+
+### BUG-098 Repeated HostDeck Restart Stops The Phone Stream
+
+- Symptom: service restart could stop updates or blank Session Detail while the shared broker and ordinary TUI remained healthy.
+- Root cause: transient Tailscale gateway errors were terminal, replay-boundary admission was scoped to the whole browser lifetime instead of each connection attempt, and two UI consumers accepted only one restart boundary.
+- Fix: retry only bounded unstructured 502/503/504 transport failures, admit one boundary per stream attempt, and strictly parse multiple forward restart boundaries.
+- Current state: closed in `f78b1f8`, `504111a`, and `c3fda55`; focused stream/UI regressions passed, and installed `0.0.20` stayed rendered and completed a phone turn after HostDeck restart with the broker/TUI unchanged.
+
+### BUG-099 Unrelated Catalog Removal Hides Selected Session
+
+- Symptom: replay of an old unrelated `session_remove` event could mark the currently selected Session Detail unavailable.
+- Root cause: the active catalog consumer discarded the triggering session id and treated every removal as removal of the selected session.
+- Fix: carry the catalog event through state handling and mark selected detail missing only when the exact internal session id matches.
+- Current state: closed in `7406f7c`; 54 focused state tests passed, and immutable `0.0.20` removed only the archived acceptance row live in 60 ms.
