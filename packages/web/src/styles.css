@@ -1276,7 +1276,7 @@ textarea:focus-visible {
   max-height: calc(100dvh - 56px);
   min-width: 0;
   margin: 0 auto;
-  overflow-y: auto;
+  overflow-y: visible;
   border-top: 1px solid var(--hostdeck-divider);
   background: var(--hostdeck-surface);
   box-shadow: 0 -8px 20px rgb(0 0 0 / 32%);
@@ -1406,6 +1406,7 @@ textarea:focus-visible {
   line-height: 20px;
   field-sizing: content;
   resize: none;
+  touch-action: manipulation;
 }
 
 .hostdeck-prompt-composer textarea::placeholder {

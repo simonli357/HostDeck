@@ -9,7 +9,7 @@ import {
   selectedSessionReadItemSchema
 } from "@hostdeck/contracts";
 import type { SessionId } from "@hostdeck/core";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -35,6 +35,17 @@ afterEach(() => {
 });
 
 describe("PromptComposer", () => {
+  it("focuses an enabled prompt on touch-down before Android tap completion", () => {
+    const controller = readyController(vi.fn(), () => "op_prompt_component_touch_focus");
+    render(<PromptComposer controller={controller} />);
+    const textarea = screen.getByRole("textbox", { name: "Prompt for android-release" });
+
+    expect(document.activeElement).not.toBe(textarea);
+    fireEvent.pointerDown(textarea, { pointerType: "touch" });
+
+    expect(document.activeElement).toBe(textarea);
+  });
+
   it("renders the exact target and sends one multiline prompt through the controller", async () => {
     const user = userEvent.setup();
     const dispatch = vi.fn(async ({ request }: PromptComposerDispatchInput) =>

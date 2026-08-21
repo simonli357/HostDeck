@@ -4,6 +4,7 @@ import { expect, type Page, type Request, test } from "@playwright/test";
 import { promptSessionRequestSchema } from "../../packages/contracts/src/index.js";
 import {
   installSessionDetailApi,
+  liveActivityEvent,
   promptTurnEvent,
   sessionDetailBrowserSessionId
 } from "./session-detail-fixture.js";
@@ -20,6 +21,37 @@ test.beforeAll(async () => {
 
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(visualReviewTime);
+});
+
+test("keeps the mobile prompt field touch-focusable across a live rerender", async ({ page }) => {
+  const diagnostics = observePage(page);
+  const api = await installSessionDetailApi(page, "writable");
+  await page.goto(detailPath);
+  const textarea = page.getByRole("textbox", { name: "Prompt for android-release" });
+  await expect(textarea).toBeEditable();
+
+  const tapTextarea = async () => {
+    const bounds = await textarea.boundingBox();
+    if (bounds === null) throw new TypeError("Prompt touch target is unavailable.");
+    await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await expect(textarea).toBeFocused();
+  };
+
+  await tapTextarea();
+  await api.pushEvent(liveActivityEvent(4));
+  await expect(page.getByText("Device validation completed", { exact: true })).toBeVisible();
+  await expect(textarea).toBeFocused();
+  await textarea.evaluate((element) => element.blur());
+  await tapTextarea();
+
+  const touchGeometry = await textarea.evaluate((element) => ({
+    touchAction: getComputedStyle(element).touchAction,
+    controlsOverflowY: getComputedStyle(
+      element.closest(".hostdeck-session-controls") as HTMLElement
+    ).overflowY
+  }));
+  expect(touchGeometry).toEqual({ touchAction: "manipulation", controlsOverflowY: "visible" });
+  await expectCleanBrowser(diagnostics);
 });
 
 test("dispatches exact start and steer requests and advances only from matching events", async ({

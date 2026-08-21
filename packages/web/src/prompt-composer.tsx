@@ -11,6 +11,7 @@ import {
 import {
   type FormEvent,
   type KeyboardEvent,
+  type PointerEvent,
   useEffect,
   useId,
   useLayoutEffect,
@@ -146,6 +147,10 @@ export function PromptComposer({ controller, onReload = reloadCurrentPage }: Pro
     event.preventDefault();
     submit();
   };
+  const handlePointerDown = (event: PointerEvent<HTMLTextAreaElement>) => {
+    if (event.pointerType !== "touch" || document.activeElement === event.currentTarget) return;
+    event.currentTarget.focus({ preventScroll: true });
+  };
 
   return (
     <footer
@@ -181,6 +186,7 @@ export function PromptComposer({ controller, onReload = reloadCurrentPage }: Pro
           spellCheck="true"
           onChange={(event) => controller.setDraft(event.currentTarget.value)}
           onKeyDown={handleKeyDown}
+          onPointerDown={handlePointerDown}
         />
         <button
           className="hostdeck-icon-button hostdeck-prompt-composer__send"

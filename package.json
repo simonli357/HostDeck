@@ -1,6 +1,6 @@
 {
   "name": "hostdeck",
-  "version": "0.0.31",
+  "version": "0.0.32",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.29.2",
