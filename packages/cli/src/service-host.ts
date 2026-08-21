@@ -24,6 +24,7 @@ export interface HostDeckServiceHostOptions {
     input: StartHostDeckProductionServiceServeInput
   ) => Promise<HostDeckProductionServiceServe>;
   readonly writeReady?: (output: string) => void;
+  readonly writeIssue?: (output: string) => void;
 }
 
 const serviceHostModulePackageRoot = resolve(
@@ -60,7 +61,13 @@ export async function runHostDeckServiceHost(
     config_dir: config.configDir,
     database_path: config.databasePath,
     loopback_port: Number(config.baseUrl.port),
-    observe_issue: () => undefined,
+    observe_issue: (issue) => {
+      const output = formatServiceIssue(issue.source, issue.code);
+      const writeResult: unknown = options.writeIssue?.(output);
+      if (isPromiseLike(writeResult)) {
+        throw new TypeError("HostDeck service issue writer must be synchronous.");
+      }
+    },
     resource_budget: defaultResourceBudget,
     runtime_dir: resolveServiceRuntimeDirectory(
       env.RUNTIME_DIRECTORY,
@@ -131,6 +138,11 @@ export async function mainHostDeckServiceHost(
         options.writeReady ??
         ((output) => {
           process.stdout.write(output);
+        }),
+      writeIssue:
+        options.writeIssue ??
+        ((output) => {
+          process.stderr.write(output);
         })
     });
     process.exitCode = 0;
@@ -203,6 +215,18 @@ function assertServiceOutput(output: string): void {
   ) {
     throw new TypeError("HostDeck service output is invalid.");
   }
+}
+
+function formatServiceIssue(source: string, code: string): string {
+  const safeSource = serviceIssueToken(source) ? source : "unknown";
+  const safeCode = serviceIssueToken(code) ? code : "internal_error";
+  const output = `HostDeck issue: source=${safeSource} code=${safeCode}.\n`;
+  assertServiceOutput(output);
+  return output;
+}
+
+function serviceIssueToken(value: string): boolean {
+  return /^[a-z][a-z0-9_]{0,79}$/u.test(value);
 }
 
 function containsInvalidOutputControl(value: string): boolean {

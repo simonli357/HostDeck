@@ -74,6 +74,7 @@ describe("IFC-V1-086 packaged service-host process", () => {
     const owner = fakeServiceOwner(layout.origin);
     const observedInputs: StartHostDeckProductionServiceServeInput[] = [];
     const ready: string[] = [];
+    const issues: string[] = [];
     const running = runHostDeckServiceHost([], {
       env: layout.env,
       packageRoot: layout.packageRoot,
@@ -81,7 +82,8 @@ describe("IFC-V1-086 packaged service-host process", () => {
         observedInputs.push(input);
         return owner.service;
       },
-      writeReady: (output) => ready.push(output)
+      writeReady: (output) => ready.push(output),
+      writeIssue: (output) => issues.push(output)
     });
 
     await vi.waitFor(() => expect(observedInputs).toHaveLength(1));
@@ -98,6 +100,13 @@ describe("IFC-V1-086 packaged service-host process", () => {
     });
     expect(Object.isFrozen(observedInput?.browser_routes)).toBe(true);
     expect(ready).toEqual([`HostDeck service ready at ${layout.origin}.\n`]);
+    observedInput?.observe_issue({
+      source: "projection",
+      code: "event_out_of_order"
+    });
+    expect(issues).toEqual([
+      "HostDeck issue: source=projection code=event_out_of_order.\n"
+    ]);
 
     owner.finishClosed();
     await expect(running).resolves.toBe("");

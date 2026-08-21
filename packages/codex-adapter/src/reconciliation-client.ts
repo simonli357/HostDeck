@@ -192,8 +192,9 @@ export function createCodexReconciliationReadClient(
 ): CodexReconciliationReadClient {
   const generation = parseGeneration(port);
   const options = codexResourceOptionsFromBudget(resourceBudget);
-  const readTimeoutMs = Math.max(
-    options.thread.read_timeout_ms,
+  const readTimeoutMs = options.thread.read_timeout_ms;
+  const terminalHistoryReadTimeoutMs = Math.max(
+    readTimeoutMs,
     resourceBudget.protocol_enrollment_pending_timeout_ms
   );
   const guarded = createGuardedPort(port, readMethods);
@@ -401,7 +402,7 @@ export function createCodexReconciliationReadClient(
         method: "thread/turns/list",
         params,
         kind: "read",
-        timeout_ms: readTimeoutMs,
+        timeout_ms: terminalHistoryReadTimeoutMs,
         ...(signal === undefined ? {} : { signal })
       }),
       "Codex reconciliation terminal-turn result must be an object."

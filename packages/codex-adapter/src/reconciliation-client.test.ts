@@ -159,7 +159,7 @@ describe("Codex reconnect-only reconciliation clients", () => {
         expect(request).toMatchObject({
           method: "thread/turns/list",
           kind: "read",
-          timeout_ms: 120_000,
+          timeout_ms: 10_000,
           params: {
             threadId: threadA,
             cursor: null,
@@ -192,6 +192,7 @@ describe("Codex reconnect-only reconciliation clients", () => {
       expect(request).toMatchObject({
         method: "thread/turns/list",
         kind: "read",
+        timeout_ms: 120_000,
         params: {
           threadId: threadA,
           cursor: null,
