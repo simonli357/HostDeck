@@ -35,15 +35,24 @@ afterEach(() => {
 });
 
 describe("PromptComposer", () => {
-  it("focuses an enabled prompt on touch-down before Android tap completion", () => {
+  it("focuses the enabled editor surface on touch-down without stealing send focus", () => {
     const controller = readyController(vi.fn(), () => "op_prompt_component_touch_focus");
     render(<PromptComposer controller={controller} />);
     const textarea = screen.getByRole("textbox", { name: "Prompt for android-release" });
+    const form = screen.getByRole("form", { name: "Prompt composer" });
+    const send = screen.getByRole("button", { name: "Send prompt to android-release" });
 
     expect(document.activeElement).not.toBe(textarea);
     fireEvent.pointerDown(textarea, { pointerType: "touch" });
-
     expect(document.activeElement).toBe(textarea);
+
+    textarea.blur();
+    fireEvent.pointerDown(form, { pointerType: "touch" });
+    expect(document.activeElement).toBe(textarea);
+
+    textarea.blur();
+    fireEvent.pointerDown(send, { pointerType: "touch" });
+    expect(document.activeElement).not.toBe(textarea);
   });
 
   it("renders the exact target and sends one multiline prompt through the controller", async () => {

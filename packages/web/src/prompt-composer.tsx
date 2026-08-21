@@ -147,9 +147,19 @@ export function PromptComposer({ controller, onReload = reloadCurrentPage }: Pro
     event.preventDefault();
     submit();
   };
-  const handlePointerDown = (event: PointerEvent<HTMLTextAreaElement>) => {
-    if (event.pointerType !== "touch" || document.activeElement === event.currentTarget) return;
-    event.currentTarget.focus({ preventScroll: true });
+  const handleFormPointerDown = (event: PointerEvent<HTMLFormElement>) => {
+    if (event.pointerType !== "touch") return;
+    const textarea = textareaRef.current;
+    if (
+      textarea === null ||
+      textarea.disabled ||
+      textarea.readOnly ||
+      document.activeElement === textarea
+    ) {
+      return;
+    }
+    if (event.target instanceof Element && event.target.closest("button") !== null) return;
+    textarea.focus({ preventScroll: true });
   };
 
   return (
@@ -165,6 +175,7 @@ export function PromptComposer({ controller, onReload = reloadCurrentPage }: Pro
         className="hostdeck-prompt-composer__form"
         aria-label="Prompt composer"
         onSubmit={handleSubmit}
+        onPointerDownCapture={handleFormPointerDown}
       >
         <label className="hostdeck-visually-hidden" htmlFor={inputId}>
           Prompt for {view.targetLabel}
@@ -186,7 +197,6 @@ export function PromptComposer({ controller, onReload = reloadCurrentPage }: Pro
           spellCheck="true"
           onChange={(event) => controller.setDraft(event.currentTarget.value)}
           onKeyDown={handleKeyDown}
-          onPointerDown={handlePointerDown}
         />
         <button
           className="hostdeck-icon-button hostdeck-prompt-composer__send"

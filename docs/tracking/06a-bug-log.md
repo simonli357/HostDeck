@@ -1231,7 +1231,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Reopened: installed `0.0.33` reached ready, then one valid current Codex item stopped projection and closed mutation admission during active-session traffic.
 - Root cause: the strict projector schema had drifted from generated Codex 0.148 `ThreadItem`: MCP `readOnlyHint`, audio inputs, dynamic audio, web-search results, and image-generation metadata were missing, while arbitrary projection-size limits still rejected valid transport-bounded content that HostDeck truncates or discards.
 - Required correction: compile-check each item schema against the generated union, validate all current fields strictly, bound only retained projection output, retain no private tool/reasoning/path content, and keep the installed service ready and writable under real activity.
-- Current state: in progress; 23 focused normalizer tests and adapter typecheck pass, installed-runtime validation pending.
+- Current state: closed in `65e5fd0` and installed `0.0.34`; real prompt and command turns reached terminal projected truth while health stayed ready, mutation admission stayed open, and the shared broker process was preserved.
 
 ### BUG-102 Mobile Prompt Field Intermittently Ignores Taps
 
@@ -1240,7 +1240,7 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Route: critical release blocker owned by the mobile composer and physical-phone acceptance; no product, API, security, or setup contract change.
 - Reproduction: on the connected Xiaomi Chrome page, the native enabled/focusable textarea remained unfocused and empty after a physical-coordinate tap and text input, while direct DOM focus and entry succeeded.
 - Required fix: remove the mobile hit-testing or focus-lifecycle failure at its root, preserve the sticky Focus Rail layout and explicit disabled/read-only states, add focused browser coverage, and pass repeated physical tap, keyboard-open, dismiss, live-update, and re-tap validation.
-- Current state: in progress.
+- Current state: in progress; the editor-side form now captures touch focus before Android click/scroll arbitration while excluding send and preserving disabled/read-only states. Twenty-two focused component/state checks and all seven compiled composer browser workflows pass, including eight consecutive live-update/re-tap cycles. Installed Xiaomi proof remains required.
 
 ### BUG-103 Runtime Upgrade Prevents HostDeck Startup
 
@@ -1249,3 +1249,12 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Route: critical release blocker in automatic enrollment lifecycle; no product or security contract change.
 - Required fix: admit the listener after bounded mapped-session reconciliation, refresh stale-version session histories through the existing audited background pipeline, keep each stale session non-writable until refreshed, and fail health explicitly if refresh fails.
 - Current state: in progress; focused enrollment and production-composition validation pass, installed-runtime validation pending.
+
+### BUG-104 Managed Start Races Automatic Enrollment
+
+- Symptom: `codexdeck start` can return `operation_conflict` even though the new native thread appears in HostDeck under an automatically generated identity.
+- Impact: explicit names are lost, a recovery row remains, and later managed starts are blocked.
+- Route: critical runtime bugfix in managed start and automatic enrollment; no session workflow or public command change.
+- Root cause: the shared-runtime `thread/started` notification reaches automatic enrollment before managed start records ownership of the same native thread.
+- Harsh success criteria: a marked managed start cannot be auto-enrolled; the requested identity is returned once; ordinary native threads still auto-enroll; no recovery residue remains; and an installed-package start, prompt, terminal projection, and archive pass.
+- Current state: in progress; installed `0.0.34` reproduced the race exactly during live validation.

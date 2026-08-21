@@ -37,11 +37,19 @@ test("keeps the mobile prompt field touch-focusable across a live rerender", asy
     await expect(textarea).toBeFocused();
   };
 
-  await tapTextarea();
-  await api.pushEvent(liveActivityEvent(4));
-  await expect(page.getByText("Device validation completed", { exact: true })).toBeVisible();
-  await expect(textarea).toBeFocused();
-  await textarea.evaluate((element) => element.blur());
+  for (let cursor = 4; cursor <= 11; cursor += 1) {
+    await tapTextarea();
+    await api.pushEvent({
+      ...liveActivityEvent(cursor),
+      title: `Device validation ${cursor} completed`
+    });
+    await expect(
+      page.getByText(`Device validation ${cursor} completed`, { exact: true })
+    ).toBeVisible();
+    await expect(textarea).toBeFocused();
+    await textarea.evaluate((element) => element.blur());
+    await expect(textarea).not.toBeFocused();
+  }
   await tapTextarea();
 
   const touchGeometry = await textarea.evaluate((element) => ({
