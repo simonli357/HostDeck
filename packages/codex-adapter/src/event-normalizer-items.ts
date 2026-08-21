@@ -10,18 +10,42 @@ import {
   boundCodexContent,
   boundedCodexText,
   boundedNonemptyStringSchema,
-  boundedStringSchema,
   codexNormalizationError,
   maximumCollectionLength,
   maximumTextLength,
   nonnegativeSafeIntegerSchema,
-  parseCodexParams,
-  requiredValueSchema
+  parseCodexParams
 } from "./event-normalizer-support.js";
+import type { JsonValue } from "./generated/serde_json/JsonValue.js";
 import type { ThreadItem } from "./generated/v2/ThreadItem.js";
 import type { UserInput } from "./generated/v2/UserInput.js";
 
 const imageDetailSchema = z.enum(["auto", "low", "high", "original"]);
+const jsonValueSchema = z.custom<JsonValue>((value) => value !== undefined, {
+  message: "Required JSON value is missing."
+});
+
+type ZodCompatibleGeneratedType<Value> = Value extends string | number | boolean | null | undefined
+  ? Value
+  : Value extends readonly (infer Item)[]
+    ? Array<ZodCompatibleGeneratedType<Item>>
+    : Value extends object
+      ? {
+          [Key in keyof Value]: Record<never, never> extends Pick<Value, Key>
+            ? ZodCompatibleGeneratedType<Value[Key]> | undefined
+            : ZodCompatibleGeneratedType<Value[Key]>;
+        }
+      : Value;
+
+function threadItemSchema<Schema extends z.ZodType>(
+  schema: Schema &
+    (z.output<Schema> extends ZodCompatibleGeneratedType<ThreadItem> ? unknown : never)
+): Schema {
+  return schema;
+}
+
+// Transport and collection budgets bound input. Projection text limits are
+// applied only to content HostDeck retains.
 
 const textElementSchema = z
   .object({
@@ -29,27 +53,29 @@ const textElementSchema = z
       .object({ start: nonnegativeSafeIntegerSchema, end: nonnegativeSafeIntegerSchema })
       .strict()
       .refine((range) => range.end >= range.start, { message: "Text element byte range is reversed." }),
-    placeholder: boundedStringSchema(maximumTextLength).nullable()
+    placeholder: z.string().nullable()
   })
   .strict();
 
-const userInputSchema = z.discriminatedUnion("type", [
+const userInputSchema: z.ZodType<ZodCompatibleGeneratedType<UserInput>> = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("text"),
-      text: boundedStringSchema(maximumTextLength * 4),
+      text: z.string(),
       text_elements: z.array(textElementSchema).max(maximumCollectionLength)
     })
     .strict(),
-  z.object({ type: z.literal("image"), detail: imageDetailSchema.optional(), url: boundedNonemptyStringSchema(maximumTextLength) }).strict(),
+  z.object({ type: z.literal("image"), detail: imageDetailSchema.optional(), url: z.string() }).strict(),
   z
-    .object({ type: z.literal("localImage"), detail: imageDetailSchema.optional(), path: boundedNonemptyStringSchema(maximumTextLength) })
+    .object({ type: z.literal("localImage"), detail: imageDetailSchema.optional(), path: z.string() })
+    .strict(),
+  z.object({ type: z.literal("audio"), url: z.string() }).strict(),
+  z.object({ type: z.literal("localAudio"), path: z.string() }).strict(),
+  z
+    .object({ type: z.literal("skill"), name: z.string(), path: z.string() })
     .strict(),
   z
-    .object({ type: z.literal("skill"), name: boundedNonemptyStringSchema(240), path: boundedNonemptyStringSchema(maximumTextLength) })
-    .strict(),
-  z
-    .object({ type: z.literal("mention"), name: boundedNonemptyStringSchema(240), path: boundedNonemptyStringSchema(maximumTextLength) })
+    .object({ type: z.literal("mention"), name: z.string(), path: z.string() })
     .strict()
 ]);
 
@@ -61,15 +87,15 @@ const memoryCitationSchema = z
       .array(
         z
           .object({
-            path: boundedStringSchema(maximumTextLength),
+            path: z.string(),
             lineStart: nonnegativeSafeIntegerSchema,
             lineEnd: nonnegativeSafeIntegerSchema,
-            note: boundedStringSchema(maximumTextLength)
+            note: z.string()
           })
           .strict()
       )
       .max(maximumCollectionLength),
-    threadIds: z.array(codexThreadIdSchema).max(maximumCollectionLength)
+    threadIds: z.array(z.string()).max(maximumCollectionLength)
   })
   .strict();
 
@@ -77,52 +103,98 @@ const commandActionSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("read"),
-      command: boundedStringSchema(maximumTextLength * 4),
-      name: boundedStringSchema(240),
-      path: boundedStringSchema(maximumTextLength)
+      command: z.string(),
+      name: z.string(),
+      path: z.string()
     })
     .strict(),
   z
     .object({
       type: z.literal("listFiles"),
-      command: boundedStringSchema(maximumTextLength * 4),
-      path: boundedStringSchema(maximumTextLength).nullable()
+      command: z.string(),
+      path: z.string().nullable()
     })
     .strict(),
   z
     .object({
       type: z.literal("search"),
-      command: boundedStringSchema(maximumTextLength * 4),
-      query: boundedStringSchema(maximumTextLength).nullable(),
-      path: boundedStringSchema(maximumTextLength).nullable()
+      command: z.string(),
+      query: z.string().nullable(),
+      path: z.string().nullable()
     })
     .strict(),
-  z.object({ type: z.literal("unknown"), command: boundedStringSchema(maximumTextLength * 4) }).strict()
+  z.object({ type: z.literal("unknown"), command: z.string() }).strict()
 ]);
 
 const patchChangeKindSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("add") }).strict(),
   z.object({ type: z.literal("delete") }).strict(),
-  z.object({ type: z.literal("update"), move_path: boundedStringSchema(maximumTextLength).nullable() }).strict()
+  z.object({ type: z.literal("update"), move_path: z.string().nullable() }).strict()
 ]);
 
 const fileUpdateChangeSchema = z
   .object({
-    path: boundedStringSchema(maximumTextLength),
+    path: z.string(),
     kind: patchChangeKindSchema,
-    diff: boundedStringSchema(maximumTextLength * 4)
+    diff: z.string()
   })
   .strict();
 
 const dynamicToolContentSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("inputText"), text: boundedStringSchema(maximumTextLength * 4) }).strict(),
-  z.object({ type: z.literal("inputImage"), imageUrl: boundedStringSchema(maximumTextLength * 4) }).strict()
+  z.object({ type: z.literal("inputText"), text: z.string() }).strict(),
+  z.object({ type: z.literal("inputImage"), imageUrl: z.string() }).strict(),
+  z.object({ type: z.literal("inputAudio"), audioUrl: z.string() }).strict()
 ]);
+
+const mcpToolCallAppContextSchema = z
+  .object({
+    connectorId: z.string(),
+    linkId: z.string().nullable(),
+    resourceUri: z.string().nullable(),
+    appName: z.string().nullable(),
+    actionName: z.string().nullable()
+  })
+  .strict();
+
+const mcpToolCallResultSchema = z
+  .object({
+    content: z.array(jsonValueSchema).max(maximumCollectionLength),
+    structuredContent: jsonValueSchema,
+    _meta: jsonValueSchema
+  })
+  .strict();
+
+const webSearchActionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("search"),
+      query: z.string().nullable(),
+      queries: z.array(z.string()).max(maximumCollectionLength).nullable()
+    })
+    .strict(),
+  z.object({ type: z.literal("openPage"), url: z.string().nullable() }).strict(),
+  z
+    .object({
+      type: z.literal("findInPage"),
+      url: z.string().nullable(),
+      pattern: z.string().nullable()
+    })
+    .strict(),
+  z.object({ type: z.literal("other") }).strict()
+]);
+
+const imageGenerationFailureSchema = z
+  .object({
+    type: z.literal("usageLimitExceeded"),
+    limitId: z.string(),
+    resetsAt: z.number().nullable()
+  })
+  .strict();
 
 const collabAgentStateSchema = z
   .object({
     status: z.enum(["pendingInit", "running", "interrupted", "completed", "errored", "shutdown", "notFound"]),
-    message: boundedStringSchema(maximumTextLength).nullable()
+    message: z.string().nullable()
   })
   .strict();
 
@@ -156,10 +228,6 @@ const nativeHistoryUserInputPolicy = Object.freeze({
   skill: "omit",
   mention: "omit"
 } as const satisfies Record<UserInput["type"], "omit" | "retain">);
-
-const nativeHistoryUserInputEnvelopeSchema = z
-  .object({ type: boundedNonemptyStringSchema(80) })
-  .passthrough();
 
 export interface NormalizedCodexHistoryItem {
   readonly id: CodexItemId;
@@ -200,15 +268,17 @@ function normalizeCodexHistoryMessage(
 ): NormalizedCodexItem {
   if (type === "agentMessage") {
     const parsed = parseCodexParams(
-      z
-        .object({
-          type: z.literal("agentMessage"),
-          id: codexItemIdSchema,
-          text: boundedStringSchema(maximumTextLength * 4),
-          phase: z.enum(["commentary", "final_answer"]).nullable(),
-          memoryCitation: requiredValueSchema
-        })
-        .strict(),
+      threadItemSchema(
+        z
+          .object({
+            type: z.literal("agentMessage"),
+            id: codexItemIdSchema,
+            text: z.string(),
+            phase: z.enum(["commentary", "final_answer"]).nullable(),
+            memoryCitation: memoryCitationSchema.nullable()
+          })
+          .strict()
+      ),
       candidate,
       method
     );
@@ -222,45 +292,35 @@ function normalizeCodexHistoryMessage(
   }
 
   const parsed = parseCodexParams(
-    z
-      .object({
-        type: z.literal("userMessage"),
-        id: codexItemIdSchema,
-        clientId: z.string().max(128).nullable(),
-        content: z.array(requiredValueSchema).max(maximumCollectionLength)
-      })
-      .strict(),
+    threadItemSchema(
+      z
+        .object({
+          type: z.literal("userMessage"),
+          id: codexItemIdSchema,
+          clientId: z.string().nullable(),
+          content: z.array(userInputSchema).max(maximumCollectionLength)
+        })
+        .strict()
+    ),
     candidate,
     method
   );
   const textInputs: string[] = [];
   let hasOmitted = false;
   for (const input of parsed.content) {
-    const envelope = parseCodexParams(nativeHistoryUserInputEnvelopeSchema, input, method);
-    const policy = nativeHistoryUserInputPolicy[envelope.type as UserInput["type"]];
-    if (policy === undefined) {
-      throw codexNormalizationError(
-        "unsupported_item_type",
-        `Codex user input type ${boundedCodexText(envelope.type, 80)} is unsupported.`,
-        method
-      );
-    }
+    const policy = nativeHistoryUserInputPolicy[input.type];
     if (policy === "omit") {
       hasOmitted = true;
       continue;
     }
-    const textInput = parseCodexParams(
-      z
-        .object({
-          type: z.literal("text"),
-          text: boundedStringSchema(maximumTextLength * 4),
-          text_elements: z.array(requiredValueSchema).max(maximumCollectionLength)
-        })
-        .strict(),
-      input,
-      method
-    );
-    textInputs.push(textInput.text);
+    if (input.type !== "text") {
+      throw codexNormalizationError(
+        "unsupported_item_type",
+        `Codex user input type ${boundedCodexText(input.type, 80)} has an invalid retention policy.`,
+        method
+      );
+    }
+    textInputs.push(input.text);
   }
   const content = boundCodexContent(
     textInputs.join("\n"),
@@ -280,14 +340,16 @@ export function normalizeCodexItem(
   switch (envelope.type) {
     case "userMessage": {
       const parsed = parseCodexParams(
-        z
-          .object({
-            type: z.literal("userMessage"),
-            id: codexItemIdSchema,
-            clientId: z.string().max(128).nullable(),
-            content: z.array(userInputSchema).max(maximumCollectionLength)
-          })
-          .strict(),
+        threadItemSchema(
+          z
+            .object({
+              type: z.literal("userMessage"),
+              id: codexItemIdSchema,
+              clientId: z.string().nullable(),
+              content: z.array(userInputSchema).max(maximumCollectionLength)
+            })
+            .strict()
+        ),
         candidate,
         method
       );
@@ -306,15 +368,17 @@ export function normalizeCodexItem(
     }
     case "agentMessage": {
       const parsed = parseCodexParams(
-        z
-          .object({
-            type: z.literal("agentMessage"),
-            id: codexItemIdSchema,
-            text: boundedStringSchema(maximumTextLength * 4),
-            phase: z.enum(["commentary", "final_answer"]).nullable(),
-            memoryCitation: memoryCitationSchema.nullable()
-          })
-          .strict(),
+        threadItemSchema(
+          z
+            .object({
+              type: z.literal("agentMessage"),
+              id: codexItemIdSchema,
+              text: z.string(),
+              phase: z.enum(["commentary", "final_answer"]).nullable(),
+              memoryCitation: memoryCitationSchema.nullable()
+            })
+            .strict()
+        ),
         candidate,
         method
       );
@@ -328,7 +392,9 @@ export function normalizeCodexItem(
     }
     case "plan": {
       const parsed = parseCodexParams(
-        z.object({ type: z.literal("plan"), id: codexItemIdSchema, text: boundedStringSchema(maximumTextLength * 4) }).strict(),
+        threadItemSchema(
+          z.object({ type: z.literal("plan"), id: codexItemIdSchema, text: z.string() }).strict()
+        ),
         candidate,
         method
       );
@@ -342,14 +408,16 @@ export function normalizeCodexItem(
     }
     case "reasoning": {
       const parsed = parseCodexParams(
-        z
-          .object({
-            type: z.literal("reasoning"),
-            id: codexItemIdSchema,
-            summary: z.array(boundedStringSchema(maximumTextLength)).max(maximumCollectionLength),
-            content: z.array(boundedStringSchema(maximumTextLength)).max(maximumCollectionLength)
-          })
-          .strict(),
+        threadItemSchema(
+          z
+            .object({
+              type: z.literal("reasoning"),
+              id: codexItemIdSchema,
+              summary: z.array(z.string()).max(maximumCollectionLength),
+              content: z.array(z.string()).max(maximumCollectionLength)
+            })
+            .strict()
+        ),
         candidate,
         method
       );
@@ -357,15 +425,15 @@ export function normalizeCodexItem(
     }
     case "commandExecution": {
       const parsed = parseCodexParams(
-        z
-          .object({
+        threadItemSchema(
+          z.object({
             type: z.literal("commandExecution"),
             id: codexItemIdSchema,
-            pluginId: boundedStringSchema(240).nullable(),
-            scriptPath: boundedStringSchema(maximumTextLength).nullable(),
-            command: boundedStringSchema(maximumTextLength * 4),
-            cwd: boundedStringSchema(maximumTextLength),
-            processId: z.string().max(240).nullable(),
+            pluginId: z.string().nullable(),
+            scriptPath: z.string().nullable(),
+            command: z.string(),
+            cwd: z.string(),
+            processId: z.string().nullable(),
             source: z.enum(["agent", "userShell", "unifiedExecStartup", "unifiedExecInteraction"]),
             status: z.enum(["inProgress", "completed", "failed", "declined"]),
             commandActions: z.array(commandActionSchema).max(maximumCollectionLength),
@@ -375,8 +443,8 @@ export function normalizeCodexItem(
             aggregatedOutput: z.string().nullable(),
             exitCode: z.number().int().nullable(),
             durationMs: nonnegativeSafeIntegerSchema.nullable()
-          })
-          .strict(),
+          }).strict()
+        ),
         candidate,
         method
       );
@@ -392,14 +460,16 @@ export function normalizeCodexItem(
     }
     case "fileChange": {
       const parsed = parseCodexParams(
-        z
-          .object({
-            type: z.literal("fileChange"),
-            id: codexItemIdSchema,
-            changes: z.array(fileUpdateChangeSchema).max(maximumCollectionLength),
-            status: z.enum(["inProgress", "completed", "failed", "declined"])
-          })
-          .strict(),
+        threadItemSchema(
+          z
+            .object({
+              type: z.literal("fileChange"),
+              id: codexItemIdSchema,
+              changes: z.array(fileUpdateChangeSchema).max(maximumCollectionLength),
+              status: z.enum(["inProgress", "completed", "failed", "declined"])
+            })
+            .strict()
+        ),
         candidate,
         method
       );
@@ -432,7 +502,13 @@ export function normalizeCodexItem(
       );
     }
     case "contextCompaction": {
-      parseCodexParams(z.object({ type: z.literal("contextCompaction"), id: codexItemIdSchema }).strict(), candidate, method);
+      parseCodexParams(
+        threadItemSchema(
+          z.object({ type: z.literal("contextCompaction"), id: codexItemIdSchema }).strict()
+        ),
+        candidate,
+        method
+      );
       return normalizedItem(envelope.id, "compaction", lifecycle === "started" ? "started" : "completed", "Context compaction", {
         text: null,
         content_state: "complete",
@@ -471,22 +547,23 @@ function validateToolItem(
   switch (type) {
     case "mcpToolCall": {
       const parsed = parseCodexParams(
-        z
-          .object({
+        threadItemSchema(
+          z.object({
             type: z.literal("mcpToolCall"),
             id: codexItemIdSchema,
-            server: boundedNonemptyStringSchema(240),
-            tool: boundedNonemptyStringSchema(240),
+            server: z.string(),
+            tool: z.string(),
             status: z.enum(["inProgress", "completed", "failed"]),
-            arguments: requiredValueSchema,
-            appContext: requiredValueSchema,
-            mcpAppResourceUri: boundedStringSchema(maximumTextLength).optional(),
-            pluginId: boundedStringSchema(240).nullable(),
-            result: requiredValueSchema,
-            error: requiredValueSchema,
+            arguments: jsonValueSchema,
+            appContext: mcpToolCallAppContextSchema.nullable(),
+            mcpAppResourceUri: z.string().optional(),
+            pluginId: z.string().nullable(),
+            readOnlyHint: z.boolean().nullable(),
+            result: mcpToolCallResultSchema.nullable(),
+            error: z.object({ message: z.string() }).strict().nullable(),
             durationMs: nonnegativeSafeIntegerSchema.nullable()
-          })
-          .strict(),
+          }).strict()
+        ),
         candidate,
         method
       );
@@ -495,19 +572,19 @@ function validateToolItem(
     }
     case "dynamicToolCall": {
       const parsed = parseCodexParams(
-        z
-          .object({
+        threadItemSchema(
+          z.object({
             type: z.literal("dynamicToolCall"),
             id: codexItemIdSchema,
-            namespace: boundedStringSchema(240).nullable(),
-            tool: boundedNonemptyStringSchema(240),
-            arguments: requiredValueSchema,
+            namespace: z.string().nullable(),
+            tool: z.string(),
+            arguments: jsonValueSchema,
             status: z.enum(["inProgress", "completed", "failed"]),
             contentItems: z.array(dynamicToolContentSchema).max(maximumCollectionLength).nullable(),
             success: z.boolean().nullable(),
             durationMs: nonnegativeSafeIntegerSchema.nullable()
-          })
-          .strict(),
+          }).strict()
+        ),
         candidate,
         method
       );
@@ -516,20 +593,20 @@ function validateToolItem(
     }
     case "collabAgentToolCall": {
       const parsed = parseCodexParams(
-        z
-          .object({
+        threadItemSchema(
+          z.object({
             type: z.literal("collabAgentToolCall"),
             id: codexItemIdSchema,
             tool: z.enum(["spawnAgent", "sendInput", "resumeAgent", "wait", "closeAgent"]),
             status: z.enum(["inProgress", "completed", "failed"]),
             senderThreadId: codexThreadIdSchema,
             receiverThreadIds: z.array(codexThreadIdSchema).max(maximumCollectionLength),
-            prompt: boundedStringSchema(maximumTextLength * 4).nullable(),
-            model: boundedStringSchema(120).nullable(),
-            reasoningEffort: boundedStringSchema(64).nullable(),
+            prompt: z.string().nullable(),
+            model: z.string().nullable(),
+            reasoningEffort: z.string().nullable(),
             agentsStates: z.record(z.string(), collabAgentStateSchema)
-          })
-          .strict(),
+          }).strict()
+        ),
         candidate,
         method
       );
@@ -538,59 +615,72 @@ function validateToolItem(
     }
     case "webSearch":
       parseCodexParams(
-        z
-          .object({
-            type: z.literal("webSearch"),
-            id: codexItemIdSchema,
-            query: boundedStringSchema(maximumTextLength * 4),
-            action: requiredValueSchema
-          })
-          .strict(),
+        threadItemSchema(
+          z
+            .object({
+              type: z.literal("webSearch"),
+              id: codexItemIdSchema,
+              query: z.string(),
+              action: webSearchActionSchema.nullable(),
+              results: z.array(jsonValueSchema).max(maximumCollectionLength).nullable()
+            })
+            .strict()
+        ),
         candidate,
         method
       );
       return false;
     case "imageGeneration":
       parseCodexParams(
-        z
-          .object({
-            type: z.literal("imageGeneration"),
-            id: codexItemIdSchema,
-            status: boundedStringSchema(120),
-            revisedPrompt: boundedStringSchema(maximumTextLength * 4).nullable(),
-            result: boundedStringSchema(maximumTextLength * 4),
-            savedPath: boundedStringSchema(maximumTextLength).optional()
-          })
-          .strict(),
+        threadItemSchema(
+          z
+            .object({
+              type: z.literal("imageGeneration"),
+              id: codexItemIdSchema,
+              status: z.string(),
+              revisedPrompt: z.string().nullable(),
+              result: z.string(),
+              transparentBackground: z.boolean().optional(),
+              failure: imageGenerationFailureSchema.nullable(),
+              savedPath: z.string().optional()
+            })
+            .strict()
+        ),
         candidate,
         method
       );
       return false;
     case "imageView":
       parseCodexParams(
-        z.object({ type: z.literal("imageView"), id: codexItemIdSchema, path: boundedStringSchema(maximumTextLength) }).strict(),
+        threadItemSchema(
+          z.object({ type: z.literal("imageView"), id: codexItemIdSchema, path: z.string() }).strict()
+        ),
         candidate,
         method
       );
       return false;
     case "sleep":
       parseCodexParams(
-        z.object({ type: z.literal("sleep"), id: codexItemIdSchema, durationMs: nonnegativeSafeIntegerSchema }).strict(),
+        threadItemSchema(
+          z.object({ type: z.literal("sleep"), id: codexItemIdSchema, durationMs: nonnegativeSafeIntegerSchema }).strict()
+        ),
         candidate,
         method
       );
       return false;
     case "subAgentActivity":
       parseCodexParams(
-        z
-          .object({
-            type: z.literal("subAgentActivity"),
-            id: codexItemIdSchema,
-            kind: z.enum(["started", "interacted", "interrupted"]),
-            agentThreadId: codexThreadIdSchema,
-            agentPath: boundedStringSchema(maximumTextLength)
-          })
-          .strict(),
+        threadItemSchema(
+          z
+            .object({
+              type: z.literal("subAgentActivity"),
+              id: codexItemIdSchema,
+              kind: z.enum(["started", "interacted", "interrupted"]),
+              agentThreadId: codexThreadIdSchema,
+              agentPath: z.string()
+            })
+            .strict()
+        ),
         candidate,
         method
       );
@@ -607,22 +697,24 @@ function validateToolItem(
 function validateOtherItem(candidate: unknown, type: string, method: string): void {
   if (type === "hookPrompt") {
     parseCodexParams(
-      z
-        .object({
-          type: z.literal("hookPrompt"),
-          id: codexItemIdSchema,
-          fragments: z
-            .array(
-              z
-                .object({
-                  text: boundedStringSchema(maximumTextLength * 4),
-                  hookRunId: boundedNonemptyStringSchema(240)
-                })
-                .strict()
-            )
-            .max(maximumCollectionLength)
-        })
-        .strict(),
+      threadItemSchema(
+        z
+          .object({
+            type: z.literal("hookPrompt"),
+            id: codexItemIdSchema,
+            fragments: z
+              .array(
+                z
+                  .object({
+                    text: z.string(),
+                    hookRunId: z.string()
+                  })
+                  .strict()
+              )
+              .max(maximumCollectionLength)
+          })
+          .strict()
+      ),
       candidate,
       method
     );
@@ -630,13 +722,25 @@ function validateOtherItem(candidate: unknown, type: string, method: string): vo
   }
   if (type === "enteredReviewMode" || type === "exitedReviewMode") {
     parseCodexParams(
-      z
-        .object({
-          type: z.literal(type),
-          id: codexItemIdSchema,
-          review: boundedStringSchema(maximumTextLength * 4)
-        })
-        .strict(),
+      type === "enteredReviewMode"
+        ? threadItemSchema(
+            z
+              .object({
+                type: z.literal("enteredReviewMode"),
+                id: codexItemIdSchema,
+                review: z.string()
+              })
+              .strict()
+          )
+        : threadItemSchema(
+            z
+              .object({
+                type: z.literal("exitedReviewMode"),
+                id: codexItemIdSchema,
+                review: z.string()
+              })
+              .strict()
+          ),
       candidate,
       method
     );

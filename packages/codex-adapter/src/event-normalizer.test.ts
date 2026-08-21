@@ -345,6 +345,29 @@ describe("exact Codex event normalizer", () => {
     expect(JSON.stringify(reasoning)).not.toContain("secret summary");
     expect(JSON.stringify(reasoning)).not.toContain("secret content");
 
+    const completedReasoning = normalizeEvent(
+      normalizer.normalize(
+        selected(
+          "item/completed",
+          itemParams(
+            threadA,
+            turnA,
+            {
+              type: "reasoning",
+              id: "item-secret-reasoning",
+              summary: ["oversized-secret-summary".repeat(8_000)],
+              content: ["oversized-secret-content".repeat(8_000)]
+            },
+            "completed"
+          )
+        )
+      )
+    );
+    expect(completedReasoning).toMatchObject({
+      item: { category: "reasoning", content_state: "redacted", state: "completed", text: null }
+    });
+    expect(JSON.stringify(completedReasoning)).not.toContain("oversized-secret");
+
     const completed = normalizeEvent(
       normalizer.normalize(
         selected(
@@ -752,6 +775,7 @@ describe("exact Codex event normalizer", () => {
               arguments: { secret: "not-retained" },
               appContext: null,
               pluginId: null,
+              readOnlyHint: true,
               result: null,
               error: null,
               durationMs: null
@@ -763,6 +787,45 @@ describe("exact Codex event normalizer", () => {
     );
     expect(tool).toMatchObject({ item: { category: "tool", content_state: "redacted", text: null } });
     expect(JSON.stringify(tool)).not.toContain("not-retained");
+
+    const completedTool = normalizeEvent(
+      valid.normalize(
+        selected(
+          "item/completed",
+          itemParams(
+            threadA,
+            turnA,
+            {
+              type: "mcpToolCall",
+              id: "item-mcp-valid",
+              server: "docs",
+              tool: "search",
+              status: "completed",
+              arguments: { secret: "not-retained" },
+              appContext: {
+                connectorId: "connector-private",
+                linkId: null,
+                resourceUri: null,
+                appName: "private-app",
+                actionName: "private-action"
+              },
+              pluginId: null,
+              readOnlyHint: false,
+              result: {
+                content: [{ private: "tool-result" }],
+                structuredContent: null,
+                _meta: null
+              },
+              error: null,
+              durationMs: 12
+            },
+            "completed"
+          )
+        )
+      )
+    );
+    expect(completedTool).toMatchObject({ item: { category: "tool", state: "completed", text: null } });
+    expect(JSON.stringify(completedTool)).not.toMatch(/connector-private|private-app|tool-result/u);
 
     const malformed = activeTurnNormalizer(threadB, turnB);
     expectNormalizationError(
@@ -798,6 +861,7 @@ describe("exact Codex event normalizer", () => {
                 status: "inProgress",
                 appContext: null,
                 pluginId: null,
+                readOnlyHint: null,
                 result: null,
                 error: null,
                 durationMs: null
@@ -808,6 +872,174 @@ describe("exact Codex event normalizer", () => {
         ),
       "malformed_required_event"
     );
+
+    const extraField = activeTurnNormalizer("thread-mcp-extra", "turn-mcp-extra");
+    expectNormalizationError(
+      () =>
+        extraField.normalize(
+          selected(
+            "item/started",
+            itemParams(
+              "thread-mcp-extra",
+              "turn-mcp-extra",
+              {
+                type: "mcpToolCall",
+                id: "item-mcp-extra",
+                server: "docs",
+                tool: "search",
+                status: "inProgress",
+                arguments: {},
+                appContext: null,
+                pluginId: null,
+                readOnlyHint: null,
+                result: null,
+                error: null,
+                durationMs: null,
+                unknownField: true
+              },
+              "started"
+            )
+          )
+        ),
+      "malformed_required_event"
+    );
+  });
+
+  it("accepts current audio, search, image, and oversized redacted item fields", () => {
+    const normalizer = activeTurnNormalizer(threadA, turnA);
+    const userMessage = {
+      type: "userMessage",
+      id: "item-current-user-inputs",
+      clientId: null,
+      content: [
+        { type: "text", text: "Visible prompt", text_elements: [] },
+        { type: "audio", url: "private-audio-url" },
+        { type: "localAudio", path: "/private/audio.wav" }
+      ]
+    } as const;
+    const startedUser = normalizeEvent(
+      normalizer.normalize(
+        selected("item/started", itemParams(threadA, turnA, userMessage, "started"))
+      )
+    );
+    normalizeEvent(
+      normalizer.normalize(
+        selected("item/completed", itemParams(threadA, turnA, userMessage, "completed"))
+      )
+    );
+    expect(startedUser).toMatchObject({
+      item: { category: "user_message", content_state: "redacted", text: "Visible prompt" }
+    });
+    expect(JSON.stringify(startedUser)).not.toMatch(/private-audio-url|audio\.wav/u);
+
+    const fileChange = {
+      type: "fileChange",
+      id: "item-oversized-file-change",
+      changes: [
+        {
+          path: "/private/file.ts",
+          kind: { type: "update", move_path: null },
+          diff: "oversized-private-diff".repeat(8_000)
+        }
+      ],
+      status: "inProgress"
+    } as const;
+    const startedFile = normalizeEvent(
+      normalizer.normalize(
+        selected("item/started", itemParams(threadA, turnA, fileChange, "started"))
+      )
+    );
+    normalizeEvent(
+      normalizer.normalize(
+        selected(
+          "item/completed",
+          itemParams(threadA, turnA, { ...fileChange, status: "completed" }, "completed")
+        )
+      )
+    );
+    expect(startedFile).toMatchObject({ item: { category: "file_change", text: null } });
+    expect(JSON.stringify(startedFile)).not.toContain("oversized-private-diff");
+
+    const dynamicStarted = {
+      type: "dynamicToolCall",
+      id: "item-dynamic-audio",
+      namespace: null,
+      tool: "transcribe",
+      arguments: { secret: "dynamic-argument" },
+      status: "inProgress",
+      contentItems: null,
+      success: null,
+      durationMs: null
+    } as const;
+    normalizeEvent(
+      normalizer.normalize(
+        selected("item/started", itemParams(threadA, turnA, dynamicStarted, "started"))
+      )
+    );
+    const dynamicCompleted = normalizeEvent(
+      normalizer.normalize(
+        selected(
+          "item/completed",
+          itemParams(
+            threadA,
+            turnA,
+            {
+              ...dynamicStarted,
+              status: "completed",
+              contentItems: [
+                { type: "inputAudio", audioUrl: "private-dynamic-audio".repeat(8_000) }
+              ],
+              success: true,
+              durationMs: 5
+            },
+            "completed"
+          )
+        )
+      )
+    );
+    expect(dynamicCompleted).toMatchObject({ item: { category: "tool", state: "completed", text: null } });
+    expect(JSON.stringify(dynamicCompleted)).not.toContain("private-dynamic-audio");
+
+    const webSearch = {
+      type: "webSearch",
+      id: "item-web-search-results",
+      query: "private query",
+      action: { type: "search", query: "private query", queries: ["private query"] },
+      results: [{ secret: "private-result" }]
+    } as const;
+    normalizeEvent(
+      normalizer.normalize(
+        selected("item/started", itemParams(threadA, turnA, webSearch, "started"))
+      )
+    );
+    const completedSearch = normalizeEvent(
+      normalizer.normalize(
+        selected("item/completed", itemParams(threadA, turnA, webSearch, "completed"))
+      )
+    );
+    expect(JSON.stringify(completedSearch)).not.toMatch(/private query|private-result/u);
+
+    const imageGeneration = {
+      type: "imageGeneration",
+      id: "item-image-generation-current",
+      status: "completed",
+      revisedPrompt: "private revised prompt",
+      result: "private-image-result".repeat(8_000),
+      transparentBackground: true,
+      failure: null,
+      savedPath: "/private/generated.png"
+    } as const;
+    normalizeEvent(
+      normalizer.normalize(
+        selected("item/started", itemParams(threadA, turnA, imageGeneration, "started"))
+      )
+    );
+    const completedImage = normalizeEvent(
+      normalizer.normalize(
+        selected("item/completed", itemParams(threadA, turnA, imageGeneration, "completed"))
+      )
+    );
+    expect(JSON.stringify(completedImage)).not.toMatch(/private revised prompt|private-image-result|generated\.png/u);
   });
 
   it("rejects item deltas outside lifecycle and cumulative usage regression", () => {
