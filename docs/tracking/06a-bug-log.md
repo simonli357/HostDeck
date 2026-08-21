@@ -1237,3 +1237,11 @@ Humans can report bugs in any format. The agent should extract the useful detail
 - Reproduction: on the connected Xiaomi Chrome page, the native enabled/focusable textarea remained unfocused and empty after a physical-coordinate tap and text input, while direct DOM focus and entry succeeded.
 - Required fix: remove the mobile hit-testing or focus-lifecycle failure at its root, preserve the sticky Focus Rail layout and explicit disabled/read-only states, add focused browser coverage, and pass repeated physical tap, keyboard-open, dismiss, live-update, and re-tap validation.
 - Current state: in progress.
+
+### BUG-103 Runtime Upgrade Prevents HostDeck Startup
+
+- Symptom: after the shared Codex runtime version changed, HostDeck spent its entire startup deadline serially refreshing large managed-session histories, never bound the local API, and entered a systemd restart loop.
+- Impact: the phone UI and all HostDeck writes were unavailable even though the shared Codex process and laptop sessions remained healthy.
+- Route: critical release blocker in automatic enrollment lifecycle; no product or security contract change.
+- Required fix: admit the listener after bounded mapped-session reconciliation, refresh stale-version session histories through the existing audited background pipeline, keep each stale session non-writable until refreshed, and fail health explicitly if refresh fails.
+- Current state: in progress; focused enrollment and production-composition validation pass, installed-runtime validation pending.

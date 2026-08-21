@@ -80,6 +80,7 @@ export interface AutomaticSessionEnrollmentServiceOptions {
   readonly create_operation_id?: () => string;
   readonly create_record_id?: () => string;
   readonly capture_branch?: (cwd: string) => string | null;
+  readonly background_mapped_refresh?: boolean;
   readonly background_unmapped_enrollment?: boolean;
   readonly reconcile_mapped_sessions?: boolean;
   readonly on_background_outcome?: (outcome: SharedSessionEnrollment) => void;
@@ -115,6 +116,7 @@ interface ParsedOptions {
   readonly createOperationId: () => string;
   readonly createRecordId: () => string;
   readonly captureBranch: (cwd: string) => string | null;
+  readonly backgroundMappedRefresh: boolean;
   readonly backgroundUnmappedEnrollment: boolean;
   readonly reconcileMappedSessions: boolean;
   readonly onBackgroundOutcome: ((outcome: SharedSessionEnrollment) => void) | undefined;
@@ -239,7 +241,9 @@ class DefaultAutomaticSessionEnrollmentService {
         origin,
         generation,
         null,
-        this.options.backgroundUnmappedEnrollment && existingState === null
+        existingState === null
+          ? this.options.backgroundUnmappedEnrollment
+          : this.options.backgroundMappedRefresh
       );
       if (pending === null) {
         outcomes.push(this.requireTerminal(threadId));
@@ -1315,6 +1319,7 @@ function parseOptions(options: AutomaticSessionEnrollmentServiceOptions): Parsed
     (options.create_operation_id !== undefined && typeof options.create_operation_id !== "function") ||
     (options.create_record_id !== undefined && typeof options.create_record_id !== "function") ||
     (options.capture_branch !== undefined && typeof options.capture_branch !== "function") ||
+    (options.background_mapped_refresh !== undefined && typeof options.background_mapped_refresh !== "boolean") ||
     (options.background_unmapped_enrollment !== undefined && typeof options.background_unmapped_enrollment !== "boolean") ||
     (options.reconcile_mapped_sessions !== undefined && typeof options.reconcile_mapped_sessions !== "boolean") ||
     (options.on_background_outcome !== undefined && typeof options.on_background_outcome !== "function")
@@ -1331,6 +1336,7 @@ function parseOptions(options: AutomaticSessionEnrollmentServiceOptions): Parsed
     createOperationId: options.create_operation_id ?? createEnrollmentOperationId,
     createRecordId: options.create_record_id ?? createEnrollmentAuditRecordId,
     captureBranch: options.capture_branch ?? captureGitBranchMetadata,
+    backgroundMappedRefresh: options.background_mapped_refresh ?? false,
     backgroundUnmappedEnrollment: options.background_unmapped_enrollment ?? false,
     reconcileMappedSessions: options.reconcile_mapped_sessions ?? true,
     onBackgroundOutcome: options.on_background_outcome

@@ -721,6 +721,7 @@ export function createHostDeckProductionApplication(
     events: pipeline,
     resource_budget: budget,
     now: readNow,
+    background_mapped_refresh: true,
     background_unmapped_enrollment: true,
     reconcile_mapped_sessions: false,
     on_background_outcome(outcome) {

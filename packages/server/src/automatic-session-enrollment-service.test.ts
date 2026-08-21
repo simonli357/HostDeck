@@ -21,7 +21,8 @@ import {
   createProductionProjectionAppendPort,
   createSelectedAuditRepository,
   createSelectedStateRepository,
-  openMigratedDatabase
+  openMigratedDatabase,
+  selectedStateRevision
 } from "@hostdeck/storage";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -171,6 +172,83 @@ describe("automatic shared-session enrollment", () => {
       expect(outcomes).toMatchObject([{ state: "enrolled", session: { native_thread_id: threadA } }]);
       expect(harness.repository.getByThreadId(threadA)).not.toBeNull();
       expect(service.pending).toEqual([]);
+      service.close();
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("refreshes a mapped session for a newer runtime behind startup readiness", async () => {
+    const harness = storageHarness();
+    try {
+      const initial = candidate(threadA);
+      const initialLoaded = fakeLoaded({
+        ids: [threadA],
+        candidates: new Map([[threadA, initial]]),
+        snapshot: snapshot(initial)
+      });
+      const initialService = createService(harness, initialLoaded);
+      await initialService.reconcileLoaded("loaded_before", 1);
+      initialService.close();
+      const stale = harness.repository.require(
+        "sess_019f489a1f9d7402ae00eac6ea322f64"
+      );
+      const staleAt = "2026-08-14T16:00:01.000Z";
+      harness.repository.replace(
+        {
+          ...stale,
+          mapping: {
+            ...stale.mapping,
+            runtime_version: "0.147.0",
+            updated_at: staleAt
+          },
+          projection: {
+            ...stale.projection,
+            session: {
+              ...stale.projection.session,
+              runtime_version: "0.147.0",
+              updated_at: staleAt
+            }
+          }
+        },
+        selectedStateRevision(stale)
+      );
+
+      const upgraded = candidate(threadA);
+      const gate = deferred<CodexLoadedThreadSnapshot>();
+      const outcomes: SharedSessionEnrollment[] = [];
+      const upgradedLoaded = fakeLoaded({
+        ids: [threadA],
+        candidates: new Map([[threadA, upgraded]]),
+        snapshot: () => gate.promise
+      });
+      const service = createAutomaticSessionEnrollmentService({
+        loaded: upgradedLoaded,
+        states: harness.repository,
+        audit: harness.audit,
+        events: harness.pipeline,
+        now: () => new Date("2026-08-14T16:00:02.000Z"),
+        create_operation_id: harness.createOperationId,
+        create_record_id: harness.createRecordId,
+        capture_branch: () => "main",
+        background_mapped_refresh: true,
+        reconcile_mapped_sessions: false,
+        on_background_outcome: (outcome) => outcomes.push(outcome)
+      });
+
+      await expect(service.reconcileLoaded("reconciliation", 2)).resolves.toMatchObject({
+        outcomes: [{ state: "pending", pending: { native_thread_id: threadA } }]
+      });
+      expect(upgradedLoaded.snapshotCalls).toEqual([]);
+      expect(service.startPendingBackgroundEnrollment()).toBe(1);
+      await waitFor(() => upgradedLoaded.snapshotCalls.length === 1);
+
+      gate.resolve(snapshot(upgraded));
+      await waitFor(() => outcomes.length === 1);
+      expect(outcomes).toMatchObject([{ state: "enrolled", session: { native_thread_id: threadA } }]);
+      expect(harness.repository.getByThreadId(threadA)).toMatchObject({
+        mapping: { runtime_version: "0.148.0" }
+      });
       service.close();
     } finally {
       harness.close();
