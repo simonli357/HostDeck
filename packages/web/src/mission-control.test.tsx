@@ -135,6 +135,9 @@ describe("Mission Control projection", () => {
 
   it("classifies every valid selected session-state combination", () => {
     const observedLabels = new Set<string>();
+    const groups = new Set(["act_now", "in_progress", "quiet"]);
+    const tones = new Set(["attention", "connected", "danger", "muted"]);
+    const mismatches: string[] = [];
     let validCombinationCount = 0;
 
     for (const freshness of projectionFreshnessStates) {
@@ -159,11 +162,11 @@ describe("Mission Control projection", () => {
               nowMs
             );
 
-            expect(["act_now", "in_progress", "quiet"]).toContain(row.group);
-            expect(row.stateLabel.length).toBeGreaterThan(0);
-            expect(["attention", "connected", "danger", "muted"]).toContain(
-              row.tone
-            );
+            if (!groups.has(row.group) || row.stateLabel.length === 0 || !tones.has(row.tone)) {
+              mismatches.push(
+                `${freshness}|${sessionState}|${turnState}|${attention} -> group=${row.group} tone=${row.tone} stateLabel=${JSON.stringify(row.stateLabel)}`
+              );
+            }
             observedLabels.add(row.stateLabel);
             validCombinationCount += 1;
           }
@@ -171,6 +174,8 @@ describe("Mission Control projection", () => {
       }
     }
 
+    expect(mismatches.slice(0, 10)).toStrictEqual([]);
+    expect(mismatches).toHaveLength(0);
     expect(validCombinationCount).toBe(1_260);
     expect([...observedLabels].sort()).toEqual(
       [

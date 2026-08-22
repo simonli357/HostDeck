@@ -98,6 +98,8 @@ describe("remote ingress availability", () => {
   it("keeps the complete finite input product fail-closed except for the one exact ready tuple", () => {
     const serves = [...remoteServeStates, null] as const;
     const failures = [...remoteIngressOperationFailureReasons, null] as const;
+    const unavailableReasons = new Set<string>(remoteIngressUnavailableReasons);
+    const mismatches: string[] = [];
     let examined = 0;
     let open = 0;
 
@@ -128,11 +130,15 @@ describe("remote ingress availability", () => {
 
                   examined += 1;
                   if (decision.admission === "open") open += 1;
-                  expect(decision.admission === "open").toBe(exactReadyTuple);
-                  expect(decision.availability === "ready").toBe(exactReadyTuple);
-                  if (decision.availability === "unavailable") {
-                    expect(decision.reason).not.toBeNull();
-                    expect(remoteIngressUnavailableReasons).toContain(decision.reason);
+                  if (
+                    (decision.admission === "open") !== exactReadyTuple ||
+                    (decision.availability === "ready") !== exactReadyTuple ||
+                    (decision.availability === "unavailable" &&
+                      (decision.reason === null || !unavailableReasons.has(decision.reason)))
+                  ) {
+                    mismatches.push(
+                      `${intent}/${observation}/${client}/${profile}/${String(serve)}/${String(externalOriginValid)}/${String(operationFailure)} -> admission=${decision.admission} availability=${decision.availability} reason=${String(decision.reason)}`
+                    );
                   }
                 }
               }
@@ -142,7 +148,9 @@ describe("remote ingress availability", () => {
       }
     }
 
+    expect(mismatches.slice(0, 10)).toStrictEqual([]);
+    expect(mismatches).toHaveLength(0);
     expect(examined).toBe(18_144);
     expect(open).toBe(1);
-  }, 10_000);
+  });
 });

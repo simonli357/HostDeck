@@ -2,7 +2,11 @@
 
 Date: 2026-08-11
 
-Status: criteria frozen; implementation and native evidence pending.
+Status: complete and validated.
+
+Implementation: `c7a50f3`.
+
+Accepted native run: `31518677087`.
 
 ## Scope
 
@@ -28,9 +32,17 @@ This gate hardens the completed cross-platform state slice: migration catalog ha
 - Recovery paths are internal state-root paths, not arbitrary user-selected backup locations.
 - Passing this gate does not complete native package install, upgrade, rollback, uninstall, signing, remote-phone, or clean-host release acceptance.
 
-## Planned Evidence
+## Outcome
 
-- Focused migration/recovery/lease tests plus one native state-hardening matrix.
-- Existing native storage process-death tests retained and strengthened to use real lease and secure-state authority.
-- Native Linux UID/mode/link inspection and native Windows owner/DACL/reparse/ADS/link inspection.
-- Full storage, typecheck, lint/export, runtime-boundary, package, planning, and native CI gates.
+- Recovery now requires a genuine live daemon lease, binds it to one secure state root, revalidates the still-open lease descriptor across asynchronous transfer/publication, and rejects forged, released, mismatched, contended, or substituted authority.
+- Source, backup, partial, and destination files use the selected secure-path adapters and descriptor identity guards. Linux proves UID/`0700`/`0600`/single-link truth; Windows proves native current-user owner/DACL, NTFS, no reparse point/ADS, and single-link truth.
+- Migration catalogs are immutable bounded snapshots with canonical ordered versions and bounded SQL. Stored history has a bounded exact table/timestamp/checksum contract with no trigger, and database-controlled values or private paths are not reflected in public messages.
+- Existing process-death migration/restore, prior-release restore/re-upgrade, corruption, abort, contention, repair, tamper, privacy, and residue cases remain green. Repeated removal of a separate native release tree preserves database and retained-backup bytes on both hosts; installer/lifecycle behavior remains downstream. No fallback, dependency, setup, or command was added.
+
+## Evidence
+
+- Native run `31518677087` binds commit `c7a50f37237ed6074b36fcc5d40fadfee1277002` and lockfile SHA-256 `18ff003698c457578ba3e041074e522cd4fcfdf73e1e7d60ece7354cb43b7458` on both hosts.
+- Ubuntu 24.04: 18/18 checks; `native_storage` 2,016 ms, `state_hardening` 1,049 ms, `windows_paths` contract 902 ms; evidence SHA-256 `273104beae3637647f09c4bd55a0786c7aa3d7dcc8956e213771bf9551541d5c`.
+- Windows Server 2022: 17/17 checks; `native_storage` 6,222 ms, `state_hardening` 2,111 ms, native `windows_paths` 1,561 ms; evidence SHA-256 `3a930e04b56cdf809449d0520c7af70b5b7c91f4babf45a743d4521e4733d27c`.
+- Local: storage 34 files/277 tests, contract 41/279, integration 21/36, and bounded-worker unit 277 passed files/3,162 tests with 27 files/29 intentional skips. The initial unconstrained unit run hit eight unrelated five-second scheduler timeouts; all six affected files passed 50/50 in isolation before the bounded aggregate passed.
+- Typecheck, lint/export (881 files/eight packages), runtime boundary (633 production/23 external modules), planning (268 tasks/91 requirements/757 dependencies), native-CI policy 8/8, supply-chain 6/6, and package 43 tests plus two deterministic 6,293-entry builds pass.

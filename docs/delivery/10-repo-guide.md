@@ -17,9 +17,9 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | `packages/test-fixtures/` | Selected mobile, remote-ingress, and structured-runtime fixtures |
 | `packages/storage/` | Selected local-state repositories plus exact bounded historical migration/session-reset compatibility |
 | `packages/codex-adapter/` | Generated Codex binding, compatibility, private IPC, normalized thread lifecycle, and TUI resume command |
-| `packages/server/` | Selected application services, accepted Fastify route composition/lifecycle, Codex integration, and Tailscale ingress boundaries; compiled startup remains downstream |
-| `packages/cli/` | `codexdeck` source command contracts, selected loopback clients, local legacy administration, config loading, and error rendering; the compiled library package exists, while executable dispatch remains downstream |
-| `packages/web/` | Headless pairing bootstrap boundary; production dashboard implementation remains downstream |
+| `packages/server/` | Selected application services, accepted Fastify route composition/lifecycle, Codex integration, Tailscale ingress boundaries, and the production foreground/service startup composition |
+| `packages/cli/` | `codexdeck` command contracts and executable dispatch, selected loopback clients, service lifecycle/install, local legacy administration, config loading, and error rendering |
+| `packages/web/` | Production Focus Rail dashboard: Mission Control, Session Detail, pairing/host access, operation controls, and the shared bounded JSON/SSE/CSRF browser clients |
 | `docs/` | Planning, tracking, delivery docs |
 | `assets/` | UI concepts and product assets |
 | `artifacts/` | Task evidence and validation notes |
@@ -46,11 +46,11 @@ Owns repo structure, module boundaries, and behavior-to-code mapping.
 | Inert legacy-session status/reset | `packages/storage/src/legacy-session-repository.ts`, `packages/cli/src/legacy-session-admin.ts` | Repository/admin tests plus `pnpm check:runtime-boundary` |
 | Legacy production-interface isolation | `scripts/check-selected-runtime-boundary.mjs` | Mutation tests plus `pnpm check:runtime-boundary` |
 | Deterministic production package | `scripts/build-production-package.mjs`, `scripts/verify-production-package.mjs` | `pnpm build`, `pnpm test:package`, relocated `dist/hostdeck/verify.mjs` |
-| Remaining later validation layers | `scripts/not-implemented.mjs` placeholders | E2E and local release-smoke placeholders fail loudly with owning task IDs |
+| Remaining later validation layers | `scripts/not-implemented.mjs` placeholder | `pnpm smoke:local` fails loudly with owning task `REL-V1-006`; `pnpm test:e2e` is implemented by the supported-browser matrix |
 
 ## Boundaries
 
 - Domain/core: `packages/core` must stay free of HTTP, React, tmux, filesystem, SQLite, and process-spawn imports.
 - Adapters: `packages/storage` and `packages/codex-adapter` own local-state and Codex external boundaries; generated Codex types remain private to the Codex adapter. No production tmux adapter exists.
-- UI: `packages/web` consumes API/contracts later and must not import storage, tmux, or Codex process control.
+- UI: `packages/web` consumes API/contracts only and must not import storage, tmux, or Codex process control.
 - Generated artifacts: keep bulky command logs, screenshots, and smoke notes under `artifacts/`.
