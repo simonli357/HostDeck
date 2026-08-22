@@ -4,6 +4,7 @@ import {
   type ResourceBudget
 } from "@hostdeck/contracts";
 import type { CodexRuntimeProcessExitObservation } from "./codex-runtime-supervisor.js";
+import { type HostDeckFastifyResourceSnapshot, hostDeckFastifyResourceSnapshot } from "./fastify-app.js";
 import type { HostDeckInternalErrorObservation } from "./fastify-error-policy.js";
 import {
   type HostDeckFastifyLifecycle,
@@ -144,6 +145,8 @@ export interface HostDeckProductionForegroundServeSnapshot {
   readonly observer_failure_count: number;
   readonly last_issue: HostDeckProductionForegroundServeIssue | null;
   readonly recent_diagnostics: readonly HostDeckProductionForegroundServeDiagnostic[];
+  /** Live resource-breach counters. `null` only if the listener is not owned by the app factory. */
+  readonly resources: HostDeckFastifyResourceSnapshot | null;
 }
 
 export interface HostDeckProductionForegroundServe {
@@ -673,7 +676,8 @@ function createForegroundServeOwner(input: {
         reported_issue_count: input.issues.count,
         observer_failure_count: input.issues.observerFailures,
         last_issue: input.issues.last,
-        recent_diagnostics: Object.freeze([...input.issues.recent])
+        recent_diagnostics: Object.freeze([...input.issues.recent]),
+        resources: readResourceSnapshot(input.lifecycle)
       });
     })();
   const close = (): Promise<void> => {
@@ -1102,6 +1106,26 @@ export function hostDeckDiagnosticErrorClass(error: unknown): string | null {
  * identifier characters may be attacker-influenced. That is bounded and charset-limited, so
  * it cannot break the output contract or smuggle a path, but it is not immunity.
  */
+/**
+ * Read the live resource-breach counters off the owning Fastify instance.
+ *
+ * `hostDeckFastifyResourceSnapshot` already tracked aborted, in-flight, header-count-rejected,
+ * overload-rejected and timed-out requests, but nothing in production ever called it, so those
+ * counters were unreachable. Surfacing them here is what makes the resource budget observable
+ * at all; see `IFC-V1-112` for what remains unemitted.
+ *
+ * Never throws: the counters are diagnostic, and a snapshot must not fail because of them.
+ */
+function readResourceSnapshot(
+  lifecycle: HostDeckFastifyLifecycle<HostDeckProductionApplication>
+): HostDeckFastifyResourceSnapshot | null {
+  try {
+    return hostDeckFastifyResourceSnapshot(lifecycle.app);
+  } catch {
+    return null;
+  }
+}
+
 function errorClassName(error: unknown): string | null {
   try {
     if (error === null || typeof error !== "object") return null;

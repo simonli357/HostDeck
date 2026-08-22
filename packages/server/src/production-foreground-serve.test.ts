@@ -203,6 +203,27 @@ describe("IFC-V1-083 production foreground serve owner", () => {
     expect(harness.signalUnsubscribeCalls).toBe(1);
   });
 
+  it("surfaces the live resource-breach counters on the snapshot", async () => {
+    const harness = createHarness();
+    const service = await harness.start({});
+    const snapshot = service.snapshot();
+    // hostDeckFastifyResourceSnapshot tracked these counters all along, but nothing in
+    // production called it, so they were unreachable. A harness listener is not owned by the
+    // app factory, so null is the truthful answer here rather than a fabricated zero.
+    expect(snapshot).toHaveProperty("resources");
+    if (snapshot.resources !== null) {
+      expect(Object.keys(snapshot.resources).sort()).toStrictEqual([
+        "aborted_requests",
+        "in_flight_requests",
+        "max_in_flight_requests",
+        "rejected_header_count_requests",
+        "rejected_overload_requests",
+        "timed_out_requests"
+      ]);
+    }
+    await service.close();
+  });
+
   it("bounds the diagnostic ring and keeps the newest records", () => {
     const recent: Parameters<typeof appendBoundedDiagnostic>[0] = [];
     const total = hostDeckProductionForegroundServeDiagnosticCapacity * 3 + 7;
