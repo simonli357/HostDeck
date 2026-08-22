@@ -231,6 +231,45 @@ describe("packaged executable dispatch", () => {
         stdout: ""
       });
       expect(failed.stderr).toContain("terminated in a failed state");
+
+      // A snapshot without the field must still produce the bare message, never a
+      // rendering error that replaces the operator's real failure.
+      const legacy = await runCli(["serve"], {
+        env: fixture.env,
+        packageRoot: fixture.packageRoot,
+        startForegroundServe: async () =>
+          createOwner(3777, {
+            terminated: Promise.resolve({
+              phase: "failed",
+              listener_health: "failed",
+              listener: { listening: false }
+            } as unknown as HostDeckProductionForegroundServeSnapshot)
+          })
+      });
+      expect(legacy.stderr).toContain("terminated in a failed state");
+      expect(legacy.stderr).not.toContain("Recent diagnostics");
+
+      const diagnosed = await runCli(["serve"], {
+        env: fixture.env,
+        packageRoot: fixture.packageRoot,
+        startForegroundServe: async () =>
+          createOwner(3777, {
+            terminated: Promise.resolve(
+              failedSnapshot([
+                {
+                  sequence: 9,
+                  source: "http",
+                  code: "internal_error",
+                  error_class: "TypeError",
+                  framework_code: null,
+                  request_id: "req_8f2c1d90"
+                }
+              ])
+            )
+          })
+      });
+      expect(diagnosed.stderr).toContain("Recent diagnostics: #9 http/internal_error TypeError req_8f2c1d90");
+      expect(diagnosed.stderr).not.toContain(fixture.root);
     } finally {
       fixture.cleanup();
     }
@@ -420,11 +459,14 @@ function closedSnapshot(): HostDeckProductionForegroundServeSnapshot {
   } as unknown as HostDeckProductionForegroundServeSnapshot;
 }
 
-function failedSnapshot(): HostDeckProductionForegroundServeSnapshot {
+function failedSnapshot(
+  recentDiagnostics: readonly unknown[] = []
+): HostDeckProductionForegroundServeSnapshot {
   return {
     phase: "failed",
     listener_health: "failed",
-    listener: { listening: false }
+    listener: { listening: false },
+    recent_diagnostics: recentDiagnostics
   } as unknown as HostDeckProductionForegroundServeSnapshot;
 }
 

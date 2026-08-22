@@ -12,12 +12,15 @@ import type {
   HostDeckProductionApplicationSnapshot
 } from "./production-application-composition.js";
 import {
+  appendBoundedDiagnostic,
   assertHostDeckProductionForegroundServe,
   assertHostDeckProductionServiceServe,
   type HostDeckProcessTerminationSignal,
   type HostDeckProductionForegroundServeDependencies,
   HostDeckProductionForegroundServeError,
   type HostDeckProductionServiceServeDependencies,
+  hostDeckDiagnosticErrorClass,
+  hostDeckProductionForegroundServeDiagnosticCapacity, 
   type StartHostDeckProductionForegroundServeInput,
   startHostDeckProductionForegroundServe,
   startHostDeckProductionServiceServe,
@@ -198,6 +201,80 @@ describe("IFC-V1-083 production foreground serve owner", () => {
     expect(issues).toEqual([{ source: "serve", code: "runtime_exit" }]);
     expect(harness.resourceCloseCalls).toBe(1);
     expect(harness.signalUnsubscribeCalls).toBe(1);
+  });
+
+  it("bounds the diagnostic ring and keeps the newest records", () => {
+    const recent: Parameters<typeof appendBoundedDiagnostic>[0] = [];
+    const total = hostDeckProductionForegroundServeDiagnosticCapacity * 3 + 7;
+    for (let index = 1; index <= total; index += 1) {
+      appendBoundedDiagnostic(recent, {
+        sequence: index,
+        source: "http",
+        code: "internal_error",
+        error_class: "TypeError",
+        framework_code: null,
+        request_id: `req_${index}`
+      });
+    }
+    expect(recent).toHaveLength(hostDeckProductionForegroundServeDiagnosticCapacity);
+    expect(recent.at(-1)?.sequence).toBe(total);
+    expect(recent[0]?.sequence).toBe(total - hostDeckProductionForegroundServeDiagnosticCapacity + 1);
+    expect(recent.every((entry) => Object.isFrozen(entry))).toBe(true);
+  });
+
+  it("accepts only identifier-shaped error class names", () => {
+    expect(hostDeckDiagnosticErrorClass(new TypeError("private /home/user/secret"))).toBe("TypeError");
+    class HostDeckHttpError extends Error {}
+    expect(hostDeckDiagnosticErrorClass(new HostDeckHttpError("x"))).toBe("HostDeckHttpError");
+    expect(hostDeckDiagnosticErrorClass(null)).toBeNull();
+    expect(hostDeckDiagnosticErrorClass(undefined)).toBeNull();
+    // A hostile prototype must not smuggle text into the record.
+    const hostile = Object.create({ constructor: { name: "/home/simonli/private path" } });
+    expect(hostDeckDiagnosticErrorClass(hostile)).toBeNull();
+    const oversized = Object.create({ constructor: { name: "A".repeat(200) } });
+    expect(hostDeckDiagnosticErrorClass(oversized)).toBeNull();
+    expect(hostDeckDiagnosticErrorClass(Object.create({ constructor: { name: "Evil Name" } }))).toBeNull();
+    expect(hostDeckDiagnosticErrorClass(Object.create(null))).toBeNull();
+    expect(hostDeckDiagnosticErrorClass("not an error")).toBe("String");
+    // A Proxy whose constructor getter returns attacker-chosen text must not smuggle it.
+    const proxy = new Proxy(
+      {},
+      { get: (_target, property) => (property === "constructor" ? { name: "/etc/passwd leak" } : undefined) }
+    );
+    expect(hostDeckDiagnosticErrorClass(proxy)).toBeNull();
+    // An error whose message carries a private path must contribute only its class name.
+    const withPath = new TypeError("ENOENT open '/home/simonli/private/secret'");
+    expect(hostDeckDiagnosticErrorClass(withPath)).toBe("TypeError");
+  });
+
+  it("records a bounded non-reflecting diagnostic for every reported issue", async () => {
+    const harness = createHarness();
+    const service = await harness.start({});
+    harness.resolveProcessExit({ kind: "exited", expected: false, code: 17, signal: null });
+
+    const terminated = await service.terminated;
+    expect(terminated.recent_diagnostics).toHaveLength(1);
+    const record = terminated.recent_diagnostics[0];
+    if (record === undefined) throw new Error("expected one diagnostic record");
+    expect(record).toMatchObject({ sequence: 1, source: "serve", code: "runtime_exit" });
+
+    // The record must carry only the fields the privacy contract permits.
+    expect(Object.keys(record).sort()).toStrictEqual([
+      "code",
+      "error_class",
+      "framework_code",
+      "request_id",
+      "sequence",
+      "source"
+    ]);
+    for (const value of Object.values(record)) {
+      expect(typeof value === "string" || typeof value === "number" || value === null).toBe(true);
+    }
+    // No message, stack, path, origin or transcript field may ever appear.
+    const serialized = JSON.stringify(record);
+    for (const banned of ["message", "stack", "cwd", "path", "origin", "prompt", "transcript"]) {
+      expect(serialized).not.toContain(banned);
+    }
   });
 
   it("cancels startup on child exit and fails closed on rejected exit observation", async () => {

@@ -2056,7 +2056,7 @@ async function runForegroundServeCommand(
   if (terminal.phase === "failed") {
     throw clientOperationFailure(
       "runtime_unavailable",
-      "HostDeck foreground service terminated in a failed state."
+      `HostDeck foreground service terminated in a failed state.${formatServeDiagnostics(terminal.recent_diagnostics)}`
     );
   }
   if (
@@ -2164,6 +2164,44 @@ function failure(error: ReturnType<typeof toCliFailure>): CliRunResult {
     stdout: "",
     stderr
   };
+}
+
+/**
+ * Render the most recent host diagnostics onto the failure the operator actually sees.
+ *
+ * Recording diagnostics that nothing surfaces is barely better than the bare counter this
+ * replaced, so the failure message carries them. Every field is non-reflecting by
+ * construction - an error class name, a framework code, and the server-generated request id
+ * - so nothing here can leak a message, stack, path, origin, prompt or transcript. Bounded
+ * to the newest few so a burst cannot inflate CLI output.
+ */
+function formatServeDiagnostics(
+  diagnostics: readonly {
+    readonly sequence: number;
+    readonly source: string;
+    readonly code: string;
+    readonly error_class: string | null;
+    readonly framework_code: string | null;
+    readonly request_id: string | null;
+  }[]
+): string {
+  // Defensive on purpose. This renders onto an already-failing path, so a malformed or
+  // absent snapshot field must degrade to the previous bare message rather than throw and
+  // replace the operator's real failure with a rendering error.
+  if (!Array.isArray(diagnostics) || diagnostics.length === 0) return "";
+  const shown = diagnostics.slice(-5);
+  const rendered = shown
+    .map((entry) => {
+      const parts = [`#${entry.sequence}`, `${entry.source}/${entry.code}`];
+      if (entry.error_class !== null) parts.push(entry.error_class);
+      if (entry.framework_code !== null) parts.push(entry.framework_code);
+      if (entry.request_id !== null) parts.push(entry.request_id);
+      return parts.join(" ");
+    })
+    .join("; ");
+  const omitted = diagnostics.length - shown.length;
+  const suffix = omitted > 0 ? ` (+${omitted} earlier)` : "";
+  return ` Recent diagnostics: ${rendered}${suffix}.`;
 }
 
 function assertCliOutput(output: string, stream: "stderr" | "stdout"): void {

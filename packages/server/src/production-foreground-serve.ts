@@ -95,6 +95,32 @@ export interface HostDeckProductionForegroundServeIssue {
   readonly code: string;
 }
 
+/**
+ * One bounded, non-reflecting record of a failure the host could not otherwise account for.
+ *
+ * Before this existed an internal 500 produced a counter and nothing else: the Error, its
+ * message and its stack were discarded at `reportHttpIssue`, so a production failure left
+ * no way to tell what had happened. This records only values that are already safe to keep:
+ * an error CLASS name, a framework error code, and the server-generated request id.
+ *
+ * Deliberately absent, because `SFR-006` and `REL-V1-005` criterion `SPR-17` forbid
+ * retaining them: `error.message` (Node errno messages embed absolute paths, and
+ * `branch-metadata.ts` interpolates `cwd`), stack frames, prompts, transcripts, raw output,
+ * origins, and any private path. Held in memory only, so nothing survives the process and
+ * there is no file for uninstall to miss.
+ */
+export interface HostDeckProductionForegroundServeDiagnostic {
+  readonly sequence: number;
+  readonly source: HostDeckProductionForegroundServeIssueSource;
+  readonly code: string;
+  readonly error_class: string | null;
+  readonly framework_code: string | null;
+  readonly request_id: string | null;
+}
+
+/** Bounded ring depth. Enough to see a burst, small enough to never matter for memory. */
+export const hostDeckProductionForegroundServeDiagnosticCapacity = 32;
+
 export interface StartHostDeckProductionForegroundServeInput
   extends StartHostDeckForegroundResourcesInput {
   readonly browser_routes: readonly `/${string}`[];
@@ -117,6 +143,7 @@ export interface HostDeckProductionForegroundServeSnapshot {
   readonly reported_issue_count: number;
   readonly observer_failure_count: number;
   readonly last_issue: HostDeckProductionForegroundServeIssue | null;
+  readonly recent_diagnostics: readonly HostDeckProductionForegroundServeDiagnostic[];
 }
 
 export interface HostDeckProductionForegroundServe {
@@ -211,6 +238,7 @@ interface ServeIssueRuntime {
   count: number;
   observerFailures: number;
   last: HostDeckProductionForegroundServeIssue | null;
+  recent: HostDeckProductionForegroundServeDiagnostic[];
 }
 
 const acceptedForegroundServeOwners = new WeakSet<object>();
@@ -311,7 +339,8 @@ async function startHostDeckProductionServe(
   const issues: ServeIssueRuntime = {
     count: 0,
     observerFailures: 0,
-    last: null
+    last: null,
+    recent: []
   };
   const report = createIssueReporter(parsed.observeIssue, issues);
   const startupController = new AbortController();
@@ -643,7 +672,8 @@ function createForegroundServeOwner(input: {
         remote_reason: remoteHealth.reason,
         reported_issue_count: input.issues.count,
         observer_failure_count: input.issues.observerFailures,
-        last_issue: input.issues.last
+        last_issue: input.issues.last,
+        recent_diagnostics: Object.freeze([...input.issues.recent])
       });
     })();
   const close = (): Promise<void> => {
@@ -957,15 +987,28 @@ function createIssueReporter(
   runtime: ServeIssueRuntime
 ): (
   source: HostDeckProductionForegroundServeIssueSource,
-  code: string
+  code: string,
+  detail?: {
+    readonly error_class: string | null;
+    readonly framework_code: string | null;
+    readonly request_id: string | null;
+  }
 ) => void {
-  return (source, code) => {
+  return (source, code, detail) => {
     const issue = Object.freeze({
       source,
       code: issueCodePattern.test(code) ? code : "internal_error"
     });
     runtime.count = increment(runtime.count);
     runtime.last = issue;
+    appendBoundedDiagnostic(runtime.recent, {
+      sequence: runtime.count,
+      source: issue.source,
+      code: issue.code,
+      error_class: detail?.error_class ?? null,
+      framework_code: detail?.framework_code ?? null,
+      request_id: detail?.request_id ?? null
+    });
     try {
       const result: unknown = observer(issue);
       if (isPromiseLike(result)) {
@@ -982,15 +1025,55 @@ function reportHttpIssue(
   observation: HostDeckInternalErrorObservation,
   report: (
     source: HostDeckProductionForegroundServeIssueSource,
-    code: string
+    code: string,
+    detail?: {
+      readonly error_class: string | null;
+      readonly framework_code: string | null;
+      readonly request_id: string | null;
+    }
   ) => void
 ): void {
   report(
     "http",
     observation.framework_code === undefined
       ? "internal_error"
-      : "framework_error"
+      : "framework_error",
+    {
+      // A constructor name is an identifier from our own or Node's type space, never
+      // caller data. `message` and `stack` are deliberately not read here.
+      error_class: errorClassName(observation.error),
+      framework_code: observation.framework_code ?? null,
+      // Server-generated `req_<uuid>`; `requestIdHeader: false` means a caller cannot
+      // forge or influence it.
+      request_id: typeof observation.request_id === "string" ? observation.request_id : null
+    }
   );
+}
+
+/**
+ * Append one record, discarding the oldest beyond the capacity. Exported for direct test:
+ * a ring that silently grows is a memory leak on a long-lived host process, and that is not
+ * observable through the serve harness, which reports one issue per run.
+ */
+export function appendBoundedDiagnostic(
+  recent: HostDeckProductionForegroundServeDiagnostic[],
+  record: HostDeckProductionForegroundServeDiagnostic
+): void {
+  recent.push(Object.freeze(record));
+  const overflow = recent.length - hostDeckProductionForegroundServeDiagnosticCapacity;
+  if (overflow > 0) recent.splice(0, overflow);
+}
+
+/** Exported for direct test; see `reportHttpIssue` for why only the class name is read. */
+export function hostDeckDiagnosticErrorClass(error: unknown): string | null {
+  return errorClassName(error);
+}
+
+function errorClassName(error: unknown): string | null {
+  if (error === null || error === undefined) return null;
+  const name: unknown = (error as { constructor?: { name?: unknown } })?.constructor?.name;
+  if (typeof name !== "string" || name.length === 0 || name.length > 64) return null;
+  return /^[A-Za-z0-9_$]+$/u.test(name) ? name : null;
 }
 
 function requireProcessExitObservation(
