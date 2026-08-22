@@ -88,13 +88,38 @@ type DetailsValidationResult =
   | ErrorEnvelopeIssue;
 
 const detailKeyPattern = /^[a-zA-Z0-9_.-]+$/u;
-const sensitiveDetailKeyPattern = /(authorization|cookie|password|secret|token)/iu;
+// Fail-closed guard on error-detail KEY NAMES. A value named like a credential never
+// crosses the envelope boundary. Short ambiguous terms are anchored to the final `_`
+// segment so ordinary identifiers stay usable: `key_count_total`, `pinned` and `author`
+// are accepted while `api_key`, `device_pin` and `auth` are not. Non-secret product
+// vocabulary is deliberately NOT matched - `session_id`, `device_id` and `operation_id`
+// are public in this API, and blocking them would make truthful errors unexpressible.
+const sensitiveDetailKeyPattern =
+  /(authorization|authentication|bearer|cookie|credential|csrf|nonce|passphrase|password|pairing|secret|signature|token|(?:^|_)auth(?:$|_)|(?:^|_)(?:keys?|pins?|otp)$)/iu;
+
+/**
+ * Which side of the boundary an envelope came from.
+ *
+ * `produced` is an envelope HostDeck is about to emit. A credential-shaped detail key is a
+ * defect in our own code and is rejected outright.
+ *
+ * `received` is an envelope HostDeck is reading back from a peer. Rejecting the whole
+ * envelope there would discard a correctly typed failure because of a field we are going
+ * to drop anyway, turning an actionable `validation_error` into `internal_error`. Such
+ * keys are stripped instead, which is strictly safer than the previous behaviour of
+ * letting them through unexamined.
+ */
+export const errorEnvelopeOrigins = ["produced", "received"] as const;
+export type ErrorEnvelopeOrigin = (typeof errorEnvelopeOrigins)[number];
 
 export function isErrorCode(value: string): value is ErrorCode {
   return (errorCodes as readonly string[]).includes(value);
 }
 
-export function parseErrorEnvelope(input: ErrorEnvelopeInput): ErrorEnvelopeResult {
+export function parseErrorEnvelope(
+  input: ErrorEnvelopeInput,
+  origin: ErrorEnvelopeOrigin = "produced"
+): ErrorEnvelopeResult {
   const message = input.message.trim();
 
   if (message.length === 0) {
@@ -109,7 +134,7 @@ export function parseErrorEnvelope(input: ErrorEnvelopeInput): ErrorEnvelopeResu
     return invalid("field_too_long", `Error field must be ${errorEnvelopeLimits.fieldLength} characters or fewer.`);
   }
 
-  const detailsResult = validateDetails(input.details);
+  const detailsResult = validateDetails(input.details, origin);
 
   if (!detailsResult.ok) {
     return detailsResult;
@@ -136,8 +161,11 @@ export function parseErrorEnvelope(input: ErrorEnvelopeInput): ErrorEnvelopeResu
   return { ok: true, value: envelope };
 }
 
-export function createErrorEnvelope(input: ErrorEnvelopeInput): ErrorEnvelope {
-  const result = parseErrorEnvelope(input);
+export function createErrorEnvelope(
+  input: ErrorEnvelopeInput,
+  origin: ErrorEnvelopeOrigin = "produced"
+): ErrorEnvelope {
+  const result = parseErrorEnvelope(input, origin);
 
   if (!result.ok) {
     throw new TypeError(result.message);
@@ -146,7 +174,10 @@ export function createErrorEnvelope(input: ErrorEnvelopeInput): ErrorEnvelope {
   return result.value;
 }
 
-function validateDetails(details: Readonly<Record<string, unknown>> | undefined): DetailsValidationResult {
+function validateDetails(
+  details: Readonly<Record<string, unknown>> | undefined,
+  origin: ErrorEnvelopeOrigin
+): DetailsValidationResult {
   if (details === undefined) {
     return { ok: true };
   }
@@ -167,6 +198,7 @@ function validateDetails(details: Readonly<Record<string, unknown>> | undefined)
     const keyIssue = validateDetailKey(key);
 
     if (keyIssue !== null) {
+      if (origin === "received" && keyIssue.code === "sensitive_detail_key") continue;
       return keyIssue;
     }
 

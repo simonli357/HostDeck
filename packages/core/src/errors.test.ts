@@ -93,6 +93,54 @@ describe("error envelope", () => {
     ).toMatchObject({ ok: false, code: "message_too_long" });
   });
 
+  it("rejects every credential-shaped detail key on the produced side", () => {
+    const credentialKeys = [
+      "auth_token", "authorization", "authentication", "auth", "bearer", "cookie",
+      "credential", "csrf", "csrf_hash", "nonce", "otp", "pairing_code", "passphrase",
+      "password", "pin", "device_pin", "signature", "key", "keys", "api_key", "node_key",
+      "private_key", "refresh_token"
+    ];
+    const accepted = credentialKeys.filter(
+      (key) => parseErrorEnvelope({ code: "internal_error", message: "No secrets.", details: { [key]: "x" } }).ok
+    );
+    expect(accepted).toStrictEqual([]);
+  });
+
+  it("keeps public product vocabulary usable as detail keys", () => {
+    const publicKeys = [
+      "session_id", "device_id", "operation_id", "thread_id", "turn_id", "request_id",
+      "reason", "cursor", "limit", "key_count_total", "pin_count"
+    ];
+    const rejected = publicKeys.filter(
+      (key) => !parseErrorEnvelope({ code: "internal_error", message: "Fine.", details: { [key]: "x" } }).ok
+    );
+    expect(rejected).toStrictEqual([]);
+  });
+
+  it("strips rather than rejects credential-shaped keys on the received side", () => {
+    const result = parseErrorEnvelope(
+      {
+        code: "validation_error",
+        message: "Requested model is absent from the live catalog.",
+        details: { private_key: "leaked", session_id: "sess_1", csrf: "leaked" }
+      },
+      "received"
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.code).toBe("validation_error");
+    expect(result.value.message).toBe("Requested model is absent from the live catalog.");
+    expect(result.value.details).toStrictEqual({ session_id: "sess_1" });
+  });
+
+  it("still rejects malformed received details rather than silently dropping them", () => {
+    const result = parseErrorEnvelope(
+      { code: "internal_error", message: "Bad.", details: { reason: { nested: true } as never } },
+      "received"
+    );
+    expect(result).toMatchObject({ ok: false, code: "invalid_detail_value" });
+  });
+
   it("rejects sensitive or unbounded details", () => {
     expect(
       parseErrorEnvelope({

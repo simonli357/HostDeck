@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { apiErrorEnvelopeSchema, apiRouteErrorBodySchema } from "./api-error.js";
+import {
+  apiErrorEnvelopeSchema,
+  apiRouteErrorBodySchema,
+  receivedApiRouteErrorBodySchema
+} from "./api-error.js";
 
 describe("selected API error envelopes", () => {
   it("accepts bounded errors and defaults retryability", () => {
@@ -35,5 +39,38 @@ describe("selected API error envelopes", () => {
         fallback: true
       })
     ).toThrow();
+  });
+
+  it("rejects a credential-shaped detail key on the produced side", () => {
+    expect(
+      apiErrorEnvelopeSchema.safeParse({
+        code: "internal_error",
+        message: "No secrets.",
+        details: { private_key: "leaked" }
+      }).success
+    ).toBe(false);
+  });
+
+  it("surfaces a typed received failure while stripping its credential-shaped details", () => {
+    const parsed = receivedApiRouteErrorBodySchema.safeParse({
+      error: {
+        code: "validation_error",
+        message: "Requested model is absent from the live catalog.",
+        retryable: false,
+        details: { private_key: "leaked", session_id: "sess_contract_02" }
+      }
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.error.code).toBe("validation_error");
+    expect(parsed.data.error.details).toMatchObject({ session_id: "sess_contract_02" });
+  });
+
+  it("keeps the produced route body strict about the same envelope", () => {
+    expect(
+      apiRouteErrorBodySchema.safeParse({
+        error: { code: "validation_error", message: "x", retryable: false, details: { csrf: "leaked" } }
+      }).success
+    ).toBe(false);
   });
 });

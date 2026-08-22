@@ -1,9 +1,10 @@
-import type { ErrorEnvelopeInput } from "@hostdeck/core";
+import type { ErrorEnvelopeInput, ErrorEnvelopeOrigin } from "@hostdeck/core";
 import { createErrorEnvelope, errorCodes, errorEnvelopeLimits } from "@hostdeck/core";
 import { z } from "zod";
 import { detailValueSchema, sessionIdSchema } from "./scalars.js";
 
-export const apiErrorEnvelopeSchema = z
+function apiErrorEnvelopeSchemaFor(origin: ErrorEnvelopeOrigin) {
+  return z
   .object({
     code: z.enum(errorCodes),
     message: z.string().trim().min(1).max(errorEnvelopeLimits.messageLength),
@@ -14,13 +15,30 @@ export const apiErrorEnvelopeSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const result = createEnvelopeResult(value);
+    const result = createEnvelopeResult(value, origin);
     if (!result.ok) context.addIssue({ code: "custom", message: result.message });
   });
+}
+
+/** Envelope HostDeck is about to emit. A credential-shaped detail key is our own defect. */
+export const apiErrorEnvelopeSchema = apiErrorEnvelopeSchemaFor("produced");
+
+/**
+ * Envelope HostDeck is reading back from a peer. Credential-shaped detail keys are stripped
+ * rather than rejected, so a correctly typed failure is still surfaced instead of collapsing
+ * to `internal_error` over a field the caller discards anyway.
+ */
+export const receivedApiErrorEnvelopeSchema = apiErrorEnvelopeSchemaFor("received");
 
 export const apiRouteErrorBodySchema = z
   .object({
     error: apiErrorEnvelopeSchema
+  })
+  .strict();
+
+export const receivedApiRouteErrorBodySchema = z
+  .object({
+    error: receivedApiErrorEnvelopeSchema
   })
   .strict();
 
@@ -36,7 +54,7 @@ interface ApiErrorEnvelopeCandidate {
   details?: Readonly<Record<string, string | number | boolean | null>> | undefined;
 }
 
-function createEnvelopeResult(value: ApiErrorEnvelopeCandidate) {
+function createEnvelopeResult(value: ApiErrorEnvelopeCandidate, origin: ErrorEnvelopeOrigin) {
   try {
     const input: ErrorEnvelopeInput = {
       code: value.code,
@@ -46,7 +64,7 @@ function createEnvelopeResult(value: ApiErrorEnvelopeCandidate) {
       ...(value.session_id !== undefined ? { sessionId: value.session_id } : {}),
       ...(value.details !== undefined ? { details: value.details } : {})
     };
-    createErrorEnvelope(input);
+    createErrorEnvelope(input, origin);
     return { ok: true as const };
   } catch (error) {
     return {

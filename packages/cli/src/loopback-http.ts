@@ -10,10 +10,10 @@ import { TextDecoder } from "node:util";
 import {
   type ApiErrorEnvelope,
   apiErrorEnvelopeSchema,
-  apiRouteErrorBodySchema,
   assertResolvedResourceBudget,
   defaultResourceBudget,
   type ResourceBudget,
+  receivedApiRouteErrorBodySchema,
 } from "@hostdeck/contracts";
 import type { HttpFetch, HttpRequestInit, HttpResponse } from "./api-client.js";
 import {
@@ -156,9 +156,9 @@ export function throwCliApiFailure(input: {
   readonly sanitize: (error: ApiErrorEnvelope) => ApiErrorEnvelope;
   readonly status: number;
 }): never {
-  let parsed: ReturnType<typeof apiRouteErrorBodySchema.safeParse>;
+  let parsed: ReturnType<typeof receivedApiRouteErrorBodySchema.safeParse>;
   try {
-    parsed = apiRouteErrorBodySchema.safeParse(input.payload);
+    parsed = receivedApiRouteErrorBodySchema.safeParse(input.payload);
   } catch {
     throw untypedApiFailure(input.status, input.context);
   }
