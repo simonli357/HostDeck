@@ -4,6 +4,7 @@ import {
   type CompactStartRequest,
   compactProgressResponseSchema,
   compactStartRequestSchema,
+  deepFreezeExactData, 
   sessionIdParamsSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
@@ -121,8 +122,8 @@ async function requestCompact(
   const progress = parsed.data.progress;
   if (progress !== null && progress.target.session_id !== sessionId) throw invalidResponse();
   if (request !== null) assertStartCorrelation(parsed.data, request);
-  if (progress === null || progress.error === null) return deepFreeze(parsed.data);
-  return deepFreeze(
+  if (progress === null || progress.error === null) return deepFreezeExactData(parsed.data);
+  return deepFreezeExactData(
     compactProgressResponseSchema.parse({
       progress: {
         ...progress,
@@ -218,12 +219,6 @@ function compactProgressErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session compact data.");
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(candidate: unknown): Readonly<Record<(typeof optionKeys)[number], unknown>> {

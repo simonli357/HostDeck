@@ -2,6 +2,7 @@ import {
   type ApiErrorEnvelope,
   type ArchiveSessionRequest,
   archiveSessionRequestSchema,
+  deepFreezeExactData, 
   selectedOperationDispatchSchema,
   sessionIdSchema
 } from "@hostdeck/contracts";
@@ -189,7 +190,7 @@ export function createArchiveControlController(
       sheetOpen
     });
 
-    return deepFreeze({
+    return deepFreezeExactData({
       visible: availability.visible,
       sheetOpen,
       phase: statusValue.phase,
@@ -532,7 +533,7 @@ function validateSuccess(
   ) {
     throw new TypeError("HostDeck archive response target is invalid.");
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "succeeded" as const,
     source: "api" as const,
     label: "Session archived",
@@ -572,7 +573,7 @@ function blockedResult(code: string | null): ArchiveResultView {
     : code === "host_locked"
       ? `${hostLockWriteReason("host_locked")} HostDeck sent no retry.`
       : "Current secure archive access was rejected. HostDeck sent no retry.";
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "blocked" as const,
     source: "browser" as const,
     label: "Archive blocked",
@@ -588,7 +589,7 @@ function notCompletedResult(code: string): ArchiveResultView {
     : code === "incompatible_runtime"
       ? "The selected runtime could not archive this managed session."
       : "The managed session was no longer current and idle for archive.";
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "not_completed" as const,
     source: "api" as const,
     label: "Archive not completed",
@@ -599,7 +600,7 @@ function notCompletedResult(code: string): ArchiveResultView {
 }
 
 function outcomeUnknownResult(): ArchiveResultView {
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "outcome_unknown" as const,
     source: "browser" as const,
     label: "Archive outcome not confirmed",
@@ -610,7 +611,7 @@ function outcomeUnknownResult(): ArchiveResultView {
 }
 
 function inconsistentResult(): ArchiveResultView {
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "inconsistent" as const,
     source: "browser" as const,
     label: "Archive state inconsistent",
@@ -621,7 +622,7 @@ function inconsistentResult(): ArchiveResultView {
 }
 
 function setupFailureResult(): ArchiveResultView {
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "blocked" as const,
     source: "browser" as const,
     label: "Secure archive setup unavailable",
@@ -908,7 +909,7 @@ function readExactObject<const Keys extends readonly string[]>(
 }
 
 function hiddenView(): ArchiveControlView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     sheetOpen: false,
     phase: "hidden" as const,
@@ -929,8 +930,3 @@ function hiddenView(): ArchiveControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   replayBoundaryReasonSchema,
   type SelectedProjectionEvent,
   selectedEventDiagnosticsSchema,
@@ -250,7 +251,7 @@ export function createEventDiagnosticsController(
         ? "retained" as const
         : "stale" as const;
     const status = deriveStatus(phase, operation, availability.readEnabled, localOnly);
-    return deepFreeze({
+    return deepFreezeExactData({
       visible: true,
       sheetOpen: true,
       phase,
@@ -538,7 +539,7 @@ function projectSelection(selection: EventDiagnosticsSelection): Readonly<{
   if (selection.kind === "continuity_boundary") {
     const boundary = projectBoundary(selection.boundary, "stream_continuity");
     const reason = "Only retained stream continuity evidence is available for this boundary.";
-    return deepFreeze({
+    return deepFreezeExactData({
       title: "Replay boundary",
       identity: {
         cursor: selection.cursor,
@@ -576,7 +577,7 @@ function projectSelection(selection: EventDiagnosticsSelection): Readonly<{
       }, "persisted_event")
     : null;
   const diagnostics = diagnosticsForEvent(event);
-  return deepFreeze({
+  return deepFreezeExactData({
     title: eventTypeLabel(event.type),
     identity: {
       cursor: event.cursor,
@@ -854,10 +855,10 @@ function resolveSelection(
 ): EventDiagnosticsSelection | null {
   const event = context.events.find((candidate) => candidate.cursor === cursor);
   if (event !== undefined) {
-    return deepFreeze({ kind: "retained_event" as const, cursor, event });
+    return deepFreezeExactData({ kind: "retained_event" as const, cursor, event });
   }
   if (context.boundary?.cursor === cursor) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "continuity_boundary" as const,
       cursor,
       boundary: context.boundary
@@ -1018,7 +1019,7 @@ function parseContext(
     throw new TypeError("HostDeck event-diagnostics context is invalid.");
   }
   const events = value.events.map((candidateEvent) =>
-    deepFreeze(selectedProjectionEventSchema.parse(candidateEvent))
+    deepFreezeExactData(selectedProjectionEventSchema.parse(candidateEvent))
   );
   let previousCursor = -1;
   let boundaryEventIndex = -1;
@@ -1133,7 +1134,7 @@ function readExactObject<const Keys extends readonly string[]>(
 }
 
 function hiddenView(): EventDiagnosticsView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     sheetOpen: false,
     phase: "hidden" as const,
@@ -1156,7 +1157,7 @@ function hiddenView(): EventDiagnosticsView {
 }
 
 function closedView(targetLabel: string | null): EventDiagnosticsView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: true,
     sheetOpen: false,
     phase: "closed" as const,
@@ -1228,7 +1229,7 @@ function loadingOperation(): EventDiagnosticsOperation {
 }
 
 function failureOperation(failureValue: EventDiagnosticsFailure): EventDiagnosticsOperation {
-  return deepFreeze({ phase: "failure" as const, failure: failureValue });
+  return deepFreezeExactData({ phase: "failure" as const, failure: failureValue });
 }
 
 function failure(
@@ -1262,8 +1263,3 @@ function equalExactData(left: unknown, right: unknown): boolean {
   );
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

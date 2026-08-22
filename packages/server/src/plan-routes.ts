@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type ManagedSessionTarget,
   managedSessionTargetSchema,
   type PlanControlSnapshot,
@@ -433,7 +434,7 @@ function resolveManagedTarget(
       throw planHttpError(409, "stale_session", "Managed session is not current for Plan control.", false);
     }
     return Object.freeze({
-      target: deepFreeze(
+      target: deepFreezeExactData(
         managedSessionTargetSchema.parse({
           type: "managed_session",
           session_id: mapping.id,
@@ -576,7 +577,7 @@ function parsePlanSnapshot(candidate: unknown): PlanControlSnapshot {
   const parsed = planControlSnapshotSchema.safeParse(candidate);
   if (!parsed.success) throw new TypeError("Plan snapshot is invalid.");
   const pending = parsed.data.pending;
-  return deepFreeze(
+  return deepFreezeExactData(
     planControlSnapshotSchema.parse({
       ...parsed.data,
       pending:
@@ -710,10 +711,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

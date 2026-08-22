@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type SkillsSnapshot,
   sessionIdParamsSchema,
   skillsSnapshotSchema
@@ -105,7 +106,7 @@ async function requestSkills(
       "HostDeck daemon returned invalid managed-session skills data."
     );
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function sanitizeSkillsApiError(error: ApiErrorEnvelope): ApiErrorEnvelope {
@@ -145,14 +146,6 @@ function skillsErrorMessage(code: ApiErrorEnvelope["code"]): string {
     default:
       return "Skills request failed.";
   }
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(

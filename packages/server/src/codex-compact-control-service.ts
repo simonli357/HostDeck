@@ -6,6 +6,7 @@ import {
 } from "@hostdeck/codex-adapter";
 import {
   compactOperationIntentSchema,
+  deepFreezeExactData, 
   defaultResourceBudget,
   isoTimestampSchema,
   type ManagedSessionTarget,
@@ -528,7 +529,7 @@ class DefaultCodexCompactControlService implements CodexCompactControlService {
         parsed.error
       );
     }
-    return deepFreeze(parsed.data);
+    return deepFreezeExactData(parsed.data);
   }
 
   private synchronizeGeneration(generation: number, at: IsoTimestamp): void {
@@ -1071,8 +1072,3 @@ function bounded(message: string): string {
   return normalized.length <= 240 ? normalized : `${normalized.slice(0, 237)}...`;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

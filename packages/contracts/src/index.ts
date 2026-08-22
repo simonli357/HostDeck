@@ -2,6 +2,7 @@ export * from "./api-error.js";
 export * from "./csrf.js";
 export * from "./device-listing.js";
 export * from "./device-revocation.js";
+export * from "./exact-data-object.js";
 export * from "./host-health.js";
 export * from "./host-lock.js";
 export * from "./host-platform.js";

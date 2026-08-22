@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type PlanControlSnapshot,
   type PlanSelectionRequest,
   planControlSnapshotSchema,
@@ -123,7 +124,7 @@ async function requestPlan(
   }
   if (!parsed.success) throw invalidResponse();
   if (request !== null) assertSelectionCorrelation(parsed.data, request);
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function assertSelectionCorrelation(snapshot: PlanControlSnapshot, request: PlanSelectionRequest): void {
@@ -203,12 +204,6 @@ function planErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session Plan data.");
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(candidate: unknown): Readonly<Record<(typeof optionKeys)[number], unknown>> {

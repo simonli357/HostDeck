@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type ModelControlSnapshot,
   type ModelSelectionRequest,
   modelControlSnapshotSchema,
@@ -124,7 +125,7 @@ async function requestModel(
   }
   if (!parsed.success) throw invalidResponse();
   if (request !== null) assertSelectionCorrelation(parsed.data, request);
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function assertSelectionCorrelation(snapshot: ModelControlSnapshot, request: ModelSelectionRequest): void {
@@ -212,12 +213,6 @@ function modelErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session model data.");
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(candidate: unknown): Readonly<Record<(typeof optionKeys)[number], unknown>> {

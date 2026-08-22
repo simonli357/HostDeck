@@ -1,6 +1,6 @@
 import { attentionLevels, mobileAttentionPriority } from "@hostdeck/core";
 import { z } from "zod";
-import { exactDataTree } from "./exact-data-object.js";
+import { deepFreezeExactData, exactDataTree } from "./exact-data-object.js";
 import { selectedHostAccessModes } from "./host-health.js";
 import { selectedRequestNetworkModes } from "./request-authentication.js";
 import {
@@ -409,7 +409,7 @@ export function decodeSelectedSessionListCursor(cursor: string): SelectedSession
   if (!parsed.success || encodeSelectedSessionListCursor(parsed.data) !== cursor) {
     throw new TypeError("Selected session-list cursor is invalid.");
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function validateSelectedSessionList(
@@ -498,12 +498,6 @@ function decodeCursorForRefinement(cursor: string): SelectedSessionListCursorVal
   }
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}
-
 function frozenExactData<const Schema extends z.ZodType>(schema: Schema) {
-  return exactDataTree(schema).transform((value) => deepFreeze(value));
+  return exactDataTree(schema).transform((value) => deepFreezeExactData(value));
 }

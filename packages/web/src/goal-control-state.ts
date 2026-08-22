@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type GoalControlSnapshot,
   type GoalControlValue,
   type GoalMutationRequest,
@@ -275,7 +276,7 @@ export function projectGoalControl(input: Readonly<{
         ), data, availability.turnState)
       );
 
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: availability.visible,
     actionEnabled: availability.readEnabled,
     actionDisabledReason: availability.readReason,
@@ -428,7 +429,7 @@ export function createGoalControlController(
     const requestSequence = sequence;
     activeRequest = Object.freeze({ sequence: requestSequence, controller: requestController });
     confirmation = null;
-    operation = deepFreeze({
+    operation = deepFreezeExactData({
       phase: "submitting" as const,
       operationId,
       action,
@@ -452,7 +453,7 @@ export function createGoalControlController(
         return publish();
       }
       installSnapshot(parsed.data);
-      operation = deepFreeze({ phase: "result" as const, result });
+      operation = deepFreezeExactData({ phase: "result" as const, result });
       return publish();
     } catch (error) {
       if (closed || requestSequence !== sequence || !sheetOpen) return currentView;
@@ -731,7 +732,7 @@ function deriveStatus(
 
 function projectCurrent(goal: GoalControlValue): GoalControlCurrentView {
   const current = goalStatus(goal.status);
-  return deepFreeze({
+  return deepFreezeExactData({
     objective: goal.objective,
     status: goal.status,
     statusLabel: current.label,
@@ -746,7 +747,7 @@ function projectCurrent(goal: GoalControlValue): GoalControlCurrentView {
 
 function projectUncertainty(uncertain: UncertainGoalMutation): GoalControlUncertaintyView {
   const conflict = uncertain.phase === "conflict";
-  return deepFreeze({
+  return deepFreezeExactData({
     action: uncertain.action,
     actionLabel: actionLabel(uncertain.action),
     phase: uncertain.phase,
@@ -766,7 +767,7 @@ function projectConfirmation(
   disabledReason: string | null
 ): GoalControlConfirmationView {
   const content = confirmationContent(action);
-  return deepFreeze({
+  return deepFreezeExactData({
     action,
     title: content.title,
     detail: content.detail,
@@ -1263,7 +1264,7 @@ function status(
 function failure(input: Omit<GoalControlFailure, "action"> & Readonly<{
   action?: GoalControlAction | null;
 }>): GoalControlFailure {
-  return deepFreeze({ ...input, action: input.action ?? null });
+  return deepFreezeExactData({ ...input, action: input.action ?? null });
 }
 
 function idleOperation(): GoalControlOperation {
@@ -1275,7 +1276,7 @@ function loadingOperation(): GoalControlOperation {
 }
 
 function failureOperation(failureValue: GoalControlFailure): GoalControlOperation {
-  return deepFreeze({ phase: "failure" as const, failure: failureValue });
+  return deepFreezeExactData({ phase: "failure" as const, failure: failureValue });
 }
 
 function clearRetryableFailure(operation: GoalControlOperation): GoalControlOperation {
@@ -1285,7 +1286,7 @@ function clearRetryableFailure(operation: GoalControlOperation): GoalControlOper
 }
 
 function freezeSnapshot(candidate: unknown): GoalControlSnapshot {
-  return deepFreeze(goalControlSnapshotSchema.parse(candidate));
+  return deepFreezeExactData(goalControlSnapshotSchema.parse(candidate));
 }
 
 function parseSessionId(candidate: unknown): SessionId {
@@ -1356,7 +1357,7 @@ function isConfirmedAction(candidate: unknown): candidate is GoalControlConfirme
 
 function hiddenView(sessionId: SessionId): GoalControlView {
   const unavailable = actionView("Session details are not available.");
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     actionEnabled: false,
     actionDisabledReason: "Session details are not available.",
@@ -1390,8 +1391,3 @@ function hiddenView(sessionId: SessionId): GoalControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

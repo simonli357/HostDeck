@@ -11,6 +11,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
+import { deepFreezeExactData } from "@hostdeck/contracts";
 
 export const hostDeckRestartWorkerModes = [
   "service_initial",
@@ -508,7 +509,7 @@ function parseReadyReport(
   ) {
     throw new TypeError("HostDeck restart worker turn budget is inconsistent.");
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     schema_version: 1,
     phase: "ready",
     mode,
@@ -574,7 +575,7 @@ function parseResultReport(
   ) {
     throw new TypeError("HostDeck restart worker result constants are invalid.");
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     schema_version: 1,
     phase: "completed",
     mode: requireMode(record.mode),
@@ -749,10 +750,3 @@ function isErrno(error: unknown, code: string): boolean {
   );
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object") {
-    Object.freeze(value);
-    for (const nested of Object.values(value)) deepFreeze(nested);
-  }
-  return value;
-}

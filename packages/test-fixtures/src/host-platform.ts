@@ -1,5 +1,5 @@
 import type { HostPlatformCapability, SupportedHostTarget } from "@hostdeck/contracts";
-import { resolveHostPlatformCapability } from "@hostdeck/contracts";
+import { deepFreezeExactData, resolveHostPlatformCapability } from "@hostdeck/contracts";
 
 export const hostPlatformFixtureSurfaces = Object.freeze([
   "configuration",
@@ -79,7 +79,7 @@ const runtime = Object.freeze({
   node_abi: "127"
 } as const);
 
-export const hostPlatformFixtureProfiles: readonly HostPlatformFixtureProfile[] = deepFreeze([
+export const hostPlatformFixtureProfiles: readonly HostPlatformFixtureProfile[] = deepFreezeExactData([
   {
     target: "linux-x64",
     capability: resolveHostPlatformCapability({
@@ -162,7 +162,7 @@ export const requiredHostPlatformFixtureIds: readonly HostPlatformFixtureId[] = 
   )
 );
 
-export const hostPlatformBoundaryFixtures: readonly HostPlatformBoundaryFixture[] = deepFreeze(
+export const hostPlatformBoundaryFixtures: readonly HostPlatformBoundaryFixture[] = deepFreezeExactData(
   hostPlatformFixtureProfiles.flatMap((profile) => {
     const opposite = hostPlatformFixtureProfiles.find((candidate) => candidate.target !== profile.target);
     if (opposite === undefined) throw new TypeError("Host platform fixture matrix is incomplete.");
@@ -336,9 +336,3 @@ function rejectionReason(
   }
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  Object.freeze(value);
-  for (const child of Object.values(value)) deepFreeze(child);
-  return value;
-}

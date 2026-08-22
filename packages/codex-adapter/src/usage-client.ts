@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   defaultResourceBudget,
   isoTimestampSchema,
   type RuntimeCompatibility,
@@ -128,7 +129,7 @@ class DefaultCodexUsageClient implements CodexUsageClient {
       );
     }
     const observedAt = parseClock(this.options.now());
-    return deepFreeze({
+    return deepFreezeExactData({
       runtime_version: runtimeVersion,
       connection_generation: generation,
       observed_at: observedAt,
@@ -183,7 +184,7 @@ function parseAccountUsage(candidate: unknown, maximumBuckets: number): UsageAcc
     daily_buckets: dailyBuckets
   });
   if (!parsed.success) throw invalidPayload("Codex account usage values are internally inconsistent.", parsed.error);
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function parsePort(candidate: unknown): CodexUsageRequestPort {
@@ -300,8 +301,3 @@ function adapterError(
   return new HostDeckCodexAdapterError(code, message, { outcome, retry_safe: retrySafe, cause });
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

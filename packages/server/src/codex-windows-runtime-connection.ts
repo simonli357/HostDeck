@@ -13,6 +13,7 @@ import {
 } from "@hostdeck/codex-adapter";
 import {
   assertResolvedResourceBudget,
+  deepFreezeExactData, 
   type ResourceBudget
 } from "@hostdeck/contracts";
 import {
@@ -204,7 +205,7 @@ class DefaultCodexWindowsRuntimeConnection {
 
   snapshot(): CodexWindowsRuntimeConnectionSnapshot {
     const supervisor = this.readSupervisorSnapshot();
-    return deepFreeze({
+    return deepFreezeExactData({
       phase: this.phase,
       runtime_generation: this.runtime?.generation ?? 0,
       transport_generation: this.transport.generation,
@@ -571,10 +572,3 @@ function connectionError(
   return new HostDeckCodexWindowsRuntimeConnectionError(code, message);
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const nested of Object.values(value)) deepFreeze(nested);
-  }
-  return value;
-}

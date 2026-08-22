@@ -6,6 +6,31 @@ const invalidDataTree = Symbol("invalid-data-tree");
 const maximumDataTreeDepth = 64;
 const maximumDataTreeNodes = 8_192;
 
+/**
+ * Recursively freeze a plain data value in place.
+ *
+ * This replaced 92 near-identical local copies across seven packages. They fell into 26
+ * textual variants and five behaviour classes, and the differences were accidental rather
+ * than intended: 79 froze the parent AFTER recursing, 8 before, 3 carried an explicit
+ * `Set` cycle guard, 1 threw on a primitive, and 1 omitted the `isFrozen` short circuit.
+ *
+ * Freezing the parent BEFORE its children is deliberate. For acyclic data the result is
+ * identical to every previous variant, so no call site changes meaning. For cyclic data the
+ * post-order majority recursed forever, because the cycle re-entered a parent that was not
+ * frozen yet; freezing first makes `Object.isFrozen` terminate the walk. The consolidation
+ * therefore removes a latent hang rather than introducing one.
+ *
+ * `Map` and `Set` contents are not frozen, matching every prior variant: `Object.values`
+ * reports own enumerable properties, and `Object.freeze` does not stop `set`, `add`, `delete`
+ * or `clear` on those containers anyway.
+ */
+export function deepFreezeExactData<T>(value: T): T {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const child of Object.values(value as Record<string, unknown>)) deepFreezeExactData(child);
+  return value;
+}
+
 export function exactDataObject<const Schema extends z.ZodType>(schema: Schema) {
   return z.preprocess((input) => copyExactDataObject(input), schema);
 }

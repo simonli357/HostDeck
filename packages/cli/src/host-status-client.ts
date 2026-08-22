@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type SelectedHostStatusResponse,
   selectedHostStatusResponseSchema
 } from "@hostdeck/contracts";
@@ -91,7 +92,7 @@ async function requestHostStatus(
   ) {
     throw invalidResponse();
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function sanitizeHostStatusApiError(
@@ -128,14 +129,6 @@ function invalidResponse() {
   return internalFailure(
     "HostDeck daemon returned invalid or uncorrelated host status."
   );
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(

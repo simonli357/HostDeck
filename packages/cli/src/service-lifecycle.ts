@@ -21,6 +21,7 @@ import {
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import type { SelectedHostStatusResponse } from "@hostdeck/contracts";
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import { probeCodexVersion } from "@hostdeck/server";
 import {
   assertHostDeckServiceManifestMatchesLayout,
@@ -962,7 +963,7 @@ async function prepareUninstallTransaction(
     hostDeck.load_state !== "not-found" ||
     codex.load_state !== "not-found";
   if (!hasOwnedArtifacts) return null;
-  return deepFreeze({
+  return deepFreezeExactData({
     active_selector: activeSelector,
     environment_sha256: environmentSha256,
     name: "hostdeck-service-transaction" as const,
@@ -1493,7 +1494,7 @@ async function readUninstallLifecycleResult(
   ) {
     throw lifecycleError("uninstall_invalid", "uninstall");
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     action: "uninstall" as const,
     api_state: "not_probed" as const,
     changed,
@@ -1779,7 +1780,7 @@ async function readLifecycleResult(
       apiState = "unreachable";
     }
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     action,
     api_state: apiState,
     changed,
@@ -2794,7 +2795,7 @@ async function inspectPublishedReleases(
 ): Promise<PublishedReleaseSet> {
   const root = context.layout.releases_dir;
   if (!existsNoFollow(root)) {
-    return deepFreeze({ manifests: [], selectors: [] });
+    return deepFreezeExactData({ manifests: [], selectors: [] });
   }
   assertOwnedDirectory(root, true);
   const entries = readdirSync(root, { withFileTypes: true }).sort((left, right) =>
@@ -2825,7 +2826,7 @@ async function inspectPublishedReleases(
   if (new Set(selectors).size !== selectors.length) {
     throw lifecycleError("install_invalid", "retention");
   }
-  return deepFreeze({ manifests, selectors });
+  return deepFreezeExactData({ manifests, selectors });
 }
 
 async function inspectUninstallPublishedReleases(
@@ -3022,7 +3023,7 @@ function updateUninstallTransactionPhase(
   if (transaction.operation !== "uninstall") {
     throw new TypeError("HostDeck service transaction operation is invalid.");
   }
-  const updated = deepFreeze({ ...transaction, phase });
+  const updated = deepFreezeExactData({ ...transaction, phase });
   writeAtomicRegularFile(path, renderTransaction(updated), 0o600);
   return updated;
 }
@@ -3106,7 +3107,7 @@ function readTransaction(path: string): LifecycleTransaction {
     ) {
       throw new TypeError("HostDeck service uninstall transaction is invalid.");
     }
-    const parsed = deepFreeze({
+    const parsed = deepFreezeExactData({
       active_selector: transaction.active_selector,
       environment_sha256: transaction.environment_sha256,
       name: "hostdeck-service-transaction" as const,
@@ -3147,7 +3148,7 @@ function readTransaction(path: string): LifecycleTransaction {
   ) {
     throw new TypeError("HostDeck service transaction identity is invalid.");
   }
-  const parsed = deepFreeze({
+  const parsed = deepFreezeExactData({
     name: "hostdeck-service-transaction" as const,
     next_selector: transaction.next_selector,
     operation: transaction.operation,
@@ -3561,14 +3562,6 @@ function defaultSleep(durationMs: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, durationMs);
   });
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function lifecycleError(

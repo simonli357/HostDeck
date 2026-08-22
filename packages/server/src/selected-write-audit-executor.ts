@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   clientOperationIdSchema,
+  deepFreezeExactData, 
   type SelectedAuditActor,
   type SelectedAuditEventRecord,
   type SelectedAuditTarget,
@@ -465,9 +466,9 @@ function parseExecutionInput<TResponse, TPreparedResponse>(
   );
   return Object.freeze({
     operationId,
-    actor: deepFreeze(actor),
+    actor: deepFreezeExactData(actor),
     action,
-    target: deepFreeze(target),
+    target: deepFreezeExactData(target),
     acceptedSummary,
     transition: values.transition as ParsedExecutionInput<TResponse, TPreparedResponse>["transition"],
     prepareResponse: values.prepare_response as ParsedExecutionInput<TResponse, TPreparedResponse>["prepareResponse"]
@@ -500,7 +501,7 @@ function parseWriteRecord(
     result.data.outcome,
     result.data.payload_summary
   );
-  return deepFreeze(result.data);
+  return deepFreezeExactData(result.data);
 }
 
 function incompleteSummaryForAction(
@@ -546,7 +547,7 @@ function parseWriteTrail(candidate: unknown, action: HostDeckSelectedWriteAuditA
   const records = parsed.data.records.map((record) => parseWriteRecord(record, action));
   const coherent = selectedAuditTrailSchema.safeParse({ ...parsed.data, records });
   if (!coherent.success) throw new TypeError();
-  return deepFreeze(coherent.data);
+  return deepFreezeExactData(coherent.data);
 }
 
 function acceptedAuditError(
@@ -669,14 +670,6 @@ function assertSafeDataTree(candidate: unknown): void {
     }
   };
   visit(candidate, 0);
-}
-
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
 }
 
 function increment(counters: MutableCounters, key: keyof MutableCounters): void {

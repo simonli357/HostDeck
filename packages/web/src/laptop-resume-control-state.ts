@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   selectedLaptopResumeSchema,
   selectedResumeMetadataResponseSchema,
   sessionIdSchema
@@ -218,7 +219,7 @@ export function createLaptopResumeControlController(
       copyState.phase !== "copying";
     const copyStatus = projectCopyStatus(copyState.phase);
 
-    return deepFreeze({
+    return deepFreezeExactData({
       visible: availability.visible,
       sheetOpen: sheetOpen && availability.visible,
       phase: statusValue.phase,
@@ -634,7 +635,7 @@ function parseCapture(
     throw new TypeError("HostDeck laptop-resume projection is invalid.");
   }
   const mobile = parsedMobile.data;
-  return deepFreeze({
+  return deepFreezeExactData({
     epoch,
     targetKey: target.targetKey,
     authorityKey,
@@ -730,7 +731,7 @@ function classifyReadFailure(error: unknown): LaptopResumeReadFailure {
   if (apiError !== null) return apiReadFailure(apiError);
   if (httpError !== null) return browserHttpReadFailure(httpError.reason);
   if (error instanceof HostDeckBrowserConnectionError) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "access_denied" as const,
       message: error.reason === "closed"
         ? "HostDeck closed before the laptop command was loaded. Reload to continue."
@@ -738,12 +739,12 @@ function classifyReadFailure(error: unknown): LaptopResumeReadFailure {
     });
   }
   if (error instanceof TypeError) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "failure" as const,
       message: "Laptop resume metadata failed strict validation."
     });
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "failure" as const,
     message: "Laptop resume metadata could not be loaded. Check the connection and try again."
   });
@@ -819,7 +820,7 @@ function readFailure(
   kind: LaptopResumeReadFailureKind,
   message: string
 ): LaptopResumeReadFailure {
-  return deepFreeze({ kind, message });
+  return deepFreezeExactData({ kind, message });
 }
 
 function failureLabel(kind: LaptopResumeReadFailureKind): string {
@@ -927,7 +928,7 @@ function loadingReadOperation(): LaptopResumeReadOperation {
 function failureReadOperation(
   failure: LaptopResumeReadFailure
 ): LaptopResumeReadOperation {
-  return deepFreeze({ phase: "failure" as const, failure });
+  return deepFreezeExactData({ phase: "failure" as const, failure });
 }
 
 function idleCopyState(): LaptopResumeCopyState {
@@ -1010,7 +1011,7 @@ function readExactObject<const Keys extends readonly string[]>(
 }
 
 function hiddenView(sessionId: SessionId): LaptopResumeControlView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     sheetOpen: false,
     phase: "hidden" as const,
@@ -1034,8 +1035,3 @@ function hiddenView(sessionId: SessionId): LaptopResumeControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

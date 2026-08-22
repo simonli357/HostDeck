@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  deepFreezeExactData, 
   type RemoteIngressAdmissionProof,
   remoteIngressAdmissionProofSchema,
   remoteIngressAuditSummarySchema
@@ -164,7 +165,7 @@ export function createRemoteIngressAdmissionProofRepository(
           "Remote admission proof did not commit exactly."
         );
       }
-      return deepFreeze({ before, after });
+      return deepFreezeExactData({ before, after });
     }
   ).immediate;
 
@@ -181,7 +182,7 @@ export function createRemoteIngressAdmissionProofRepository(
       const parsed = remoteIngressAdmissionProofSchema.safeParse(candidate);
       if (!parsed.success) throw invalidProof();
       try {
-        return proveTransaction(deepFreeze(parsed.data));
+        return proveTransaction(deepFreezeExactData(parsed.data));
       } catch (error) {
         throw sanitizeError(error);
       }
@@ -234,7 +235,7 @@ function readProof(
       "Persisted remote admission proof is invalid."
     );
   }
-  return deepFreeze(result.data);
+  return deepFreezeExactData(result.data);
 }
 
 function readLatestRemoteAudit(
@@ -332,10 +333,3 @@ function proofError(
   return new HostDeckRemoteIngressAdmissionProofRepositoryError(code, message);
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

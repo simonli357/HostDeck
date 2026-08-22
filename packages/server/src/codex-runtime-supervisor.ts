@@ -1,6 +1,7 @@
 import { basename, isAbsolute, normalize } from "node:path";
 import {
   assertResolvedResourceBudget,
+  deepFreezeExactData, 
   type ResourceBudget
 } from "@hostdeck/contracts";
 import {
@@ -370,7 +371,7 @@ class DefaultCodexRuntimeSupervisor
   }
 
   snapshot(): CodexRuntimeSupervisorSnapshot {
-    return deepFreeze({
+    return deepFreezeExactData({
       mode: this.config.mode,
       phase: this.phase,
       ownership: this.config.mode,
@@ -1631,12 +1632,3 @@ function containsControl(value: string): boolean {
   return false;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value as Record<string, unknown>)) {
-      deepFreeze(child);
-    }
-    Object.freeze(value);
-  }
-  return value;
-}

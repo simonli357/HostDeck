@@ -1,6 +1,7 @@
 import {
   type ApiErrorEnvelope,
   apiRouteErrorBodySchema,
+  deepFreezeExactData, 
   outputCursorSchema,
   type SelectedProjectionEvent,
   selectedProjectionEventSchema,
@@ -1517,7 +1518,7 @@ async function readApiErrorResponse(
     ) {
       throw new AttemptFailure("invalid_response", false, response.status);
     }
-    return deepFreeze(
+    return deepFreezeExactData(
       (parsed.value as { readonly error: ApiErrorEnvelope }).error
     );
   } finally {
@@ -1679,7 +1680,7 @@ function parseEventMessage(
   ) {
     throw new AttemptFailure("invalid_event", false);
   }
-  return deepFreeze(event);
+  return deepFreezeExactData(event);
 }
 
 function validateEventContinuity(
@@ -1889,13 +1890,3 @@ function zeroBytes(value: Uint8Array): void {
   }
 }
 
-function deepFreeze<Value>(value: Value, seen = new Set<object>()): Value {
-  if (value === null || typeof value !== "object" || seen.has(value)) {
-    return value;
-  }
-  seen.add(value);
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    deepFreeze(child, seen);
-  }
-  return Object.freeze(value);
-}

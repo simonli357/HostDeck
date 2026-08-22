@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type SkillsSnapshot,
   sessionIdSchema,
   skillsSnapshotSchema
@@ -174,7 +175,7 @@ export function createSkillsControlController(
     const unsupported =
       operation.phase === "failure" && operation.failure.kind === "unsupported";
 
-    return deepFreeze({
+    return deepFreezeExactData({
       visible: availability.visible,
       actionEnabled: availability.readEnabled,
       actionDisabledReason: availability.readReason,
@@ -504,7 +505,7 @@ function projectSnapshot(
     (count, skill) => count + (skill.enabled ? 1 : 0),
     0
   );
-  return deepFreeze({
+  return deepFreezeExactData({
     capture: {
       observedAt: snapshot.observed_at,
       runtimeVersion: snapshot.runtime_version,
@@ -564,27 +565,27 @@ function freezeSnapshot(
   ) {
     throw new TypeError("HostDeck Skills response target is invalid.");
   }
-  return deepFreeze(parsed);
+  return deepFreezeExactData(parsed);
 }
 
 function classifyReadFailure(error: unknown): SkillsControlFailure {
   const apiError = error instanceof HostDeckBrowserHttpError ? error.apiError : null;
   if (apiError !== null) {
     const unsupported = ["capability_unavailable", "incompatible_runtime"].includes(apiError.code);
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: unsupported ? "unsupported" as const : "failure" as const,
       message: skillsReadFailureMessage(apiError)
     });
   }
   if (error instanceof HostDeckBrowserConnectionError) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "failure" as const,
       message: error.reason === "closed"
         ? "HostDeck closed before Skills could be loaded. Reload to continue."
         : "Session access is not current. Refresh Session Detail before trying again."
     });
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "failure" as const,
     message: "Skills could not be loaded. Check the connection and try again."
   });
@@ -699,7 +700,7 @@ function loadingOperation(): SkillsControlOperation {
 }
 
 function failureOperation(failure: SkillsControlFailure): SkillsControlOperation {
-  return deepFreeze({ phase: "failure" as const, failure });
+  return deepFreezeExactData({ phase: "failure" as const, failure });
 }
 
 function parseCreateOptions(
@@ -773,7 +774,7 @@ function readExactObject<const Keys extends readonly string[]>(
 }
 
 function hiddenView(sessionId: SessionId): SkillsControlView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     actionEnabled: false,
     actionDisabledReason: "Session details are not available.",
@@ -794,8 +795,3 @@ function hiddenView(sessionId: SessionId): SkillsControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

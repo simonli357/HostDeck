@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   sessionIdParamsSchema,
   type UsageSnapshot,
   usageSnapshotSchema
@@ -108,7 +109,7 @@ async function requestUsage(
       "HostDeck daemon returned invalid managed-session usage data."
     );
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function sanitizeUsageApiError(error: ApiErrorEnvelope): ApiErrorEnvelope {
@@ -148,14 +149,6 @@ function usageErrorMessage(code: ApiErrorEnvelope["code"]): string {
     default:
       return "Usage request failed.";
   }
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(

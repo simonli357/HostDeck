@@ -2,6 +2,7 @@ import {
   type ApiErrorEnvelope,
   compareSelectedSessionListSortKeys,
   decodeSelectedSessionListCursor,
+  deepFreezeExactData, 
   type SelectedSessionListResponse,
   selectedSessionListCursorSchema,
   selectedSessionListDefaultPageSize,
@@ -108,7 +109,7 @@ async function requestSessionList(
   if (!parsed.success || !responseMatchesRequest(parsed.data, request)) {
     throw invalidResponse();
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function parseListInput(candidate: unknown): HostDeckSessionListClientInput {
@@ -213,14 +214,6 @@ function invalidResponse() {
   return internalFailure(
     "HostDeck daemon returned invalid or uncorrelated session-list data."
   );
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(

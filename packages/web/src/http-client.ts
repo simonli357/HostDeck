@@ -1,6 +1,7 @@
 import {
   type ApiErrorEnvelope,
   apiRouteErrorBodySchema,
+  deepFreezeExactData, 
   selectedCsrfGenerationHeaderName,
   selectedCsrfGenerationHeaderValueSchema,
   selectedCsrfTokenHeaderName,
@@ -273,7 +274,7 @@ export function createBrowserHttpClient(
           if (!parsed.ok) {
             throw failure(routeId, origin.transport, "invalid_response", response.status);
           }
-          return deepFreeze({
+          return deepFreezeExactData({
             status: response.status,
             data: parsed.value
           }) as BrowserHttpRouteResponse<RouteId>;
@@ -290,7 +291,7 @@ export function createBrowserHttpClient(
           origin.transport,
           "api_error",
           response.status,
-          deepFreeze(
+          deepFreezeExactData(
             (errorBody.value as { readonly error: ApiErrorEnvelope }).error
           )
         );
@@ -1096,11 +1097,3 @@ function messageForReason(reason: BrowserHttpFailureReason): string {
   }
 }
 
-function deepFreeze<Value>(value: Value, seen = new Set<object>()): Value {
-  if (value === null || typeof value !== "object" || seen.has(value)) return value;
-  seen.add(value);
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    deepFreeze(child, seen);
-  }
-  return Object.freeze(value);
-}

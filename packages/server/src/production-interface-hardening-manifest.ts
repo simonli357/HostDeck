@@ -1,3 +1,4 @@
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import { hostDeckSelectedApiRouteCompositionDescriptor } from "./selected-api-route-composition.js";
 import { selectedApiRouteManifest } from "./selected-api-route-manifest.js";
 
@@ -349,7 +350,7 @@ export const productionInterfaceHardeningCriteria = Object.freeze([
 ] as const);
 
 export function createIfcV1091ProductionInterfaceHardeningLedger(): Readonly<Record<string, unknown>> {
-  return deepFreeze({
+  return deepFreezeExactData({
     schema_version: 1,
     task: "IFC-V1-091",
     criteria: productionInterfaceHardeningCriteria,
@@ -411,10 +412,3 @@ function criterion(
   });
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const child of Object.values(value)) deepFreeze(child);
-  }
-  return value;
-}

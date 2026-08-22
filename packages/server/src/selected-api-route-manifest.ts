@@ -1,3 +1,4 @@
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import {
   type SelectedAuditAction,
   type SelectedOperationKind,
@@ -244,7 +245,7 @@ const localAdminUnlockedPolicy = policy(
   "requires_unlocked_host"
 );
 
-export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] = deepFreeze([
+export const selectedApiRouteManifest: readonly SelectedApiRouteManifestEntry[] = deepFreezeExactData([
   route({
     id: "health_liveness",
     family: "health",
@@ -865,8 +866,3 @@ function securityAudit(action: SelectedAuditAction): SelectedApiAuditContract {
   return { executor: "security_executor", action, catalog_state: "selected", catalog_owner_task: null };
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

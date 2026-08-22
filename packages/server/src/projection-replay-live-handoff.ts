@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   assertResolvedResourceBudget,
+  deepFreezeExactData, 
   outputCursorSchema,
   type ResourceBudget,
   type SelectedProjectionEvent,
@@ -609,7 +610,7 @@ function readReplayAttempt(
       throw new HostDeckProjectionHandoffError("replay_inconsistent", "Durable replay did not reach its captured high-water.");
     }
     for (const parsedEvent of page) {
-      const event = deepFreeze(parsedEvent);
+      const event = deepFreezeExactData(parsedEvent);
       if (event.type === "replay_boundary") {
         events.length = 0;
         wireBytes = 0;
@@ -878,7 +879,7 @@ function parseCommittedEvent(committed: unknown): SelectedProjectionEvent {
   if (!parsed.success) {
     throw new HostDeckProjectionHandoffError("replay_inconsistent", "Projection fanout emitted an invalid committed event.");
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function parseLiveSink(candidate: unknown): ProjectionHandoffLiveSink {
@@ -1013,8 +1014,3 @@ function isPromiseLike(candidate: unknown): candidate is PromiseLike<unknown> {
   );
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

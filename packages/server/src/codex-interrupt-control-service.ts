@@ -5,6 +5,7 @@ import {
 } from "@hostdeck/codex-adapter";
 import {
   codexVersionSchema,
+  deepFreezeExactData, 
   defaultResourceBudget,
   interruptOperationIntentSchema,
   isoTimestampSchema,
@@ -775,7 +776,7 @@ function progress(
       parsed.error
     );
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function parseOptions(candidate: unknown): ParsedOptions {
@@ -1022,10 +1023,3 @@ function bounded(message: string): string {
   return normalized.length <= 240 ? normalized : `${normalized.slice(0, 237)}...`;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const child of Object.values(value)) deepFreeze(child);
-  }
-  return value;
-}

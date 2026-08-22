@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type PlanControlSnapshot,
   type PlanMode,
   type PlanSelectionRequest,
@@ -287,7 +288,7 @@ export function projectPlanControl(input: Readonly<{
           : null
     : selectionReason(input.operation, data, availability, nonReplaceablePending);
 
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: availability.visible,
     actionEnabled: availability.readEnabled,
     actionDisabledReason: availability.readReason,
@@ -523,7 +524,7 @@ export function createPlanControlController(
       const requestController = new AbortController();
       const requestSequence = sequence;
       activeRequest = Object.freeze({ sequence: requestSequence, controller: requestController });
-      operation = deepFreeze({
+      operation = deepFreezeExactData({
         phase: "submitting" as const,
         operationId,
         mode,
@@ -545,7 +546,7 @@ export function createPlanControlController(
           return publish();
         }
         installSnapshot(parsed.data);
-        operation = deepFreeze({ phase: "result" as const, result, mode });
+        operation = deepFreezeExactData({ phase: "result" as const, result, mode });
         return publish();
       } catch (error) {
         if (closed || requestSequence !== sequence || !sheetOpen) return currentView;
@@ -687,7 +688,7 @@ function deriveStatus(
 
 function projectCurrent(data: PlanControlSnapshot): PlanControlCurrentView {
   if (data.current.state === "unknown") {
-    return deepFreeze({
+    return deepFreezeExactData({
       state: "unknown" as const,
       mode: null,
       label: "Unknown",
@@ -697,7 +698,7 @@ function projectCurrent(data: PlanControlSnapshot): PlanControlCurrentView {
       tone: "attention" as const
     });
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     state: "confirmed" as const,
     mode: data.current.mode,
     label: modeLabel(data.current.mode, data),
@@ -712,7 +713,7 @@ function projectPending(data: PlanControlSnapshot): PlanControlPendingView {
   const pending = data.pending;
   if (pending === null) throw new TypeError("HostDeck pending Plan projection is absent.");
   const phase = pendingStatus(pending.phase, pending.catalog_state === "available");
-  return deepFreeze({
+  return deepFreezeExactData({
     mode: pending.mode,
     label: modeLabel(pending.mode, data),
     phase: pending.phase,
@@ -729,7 +730,7 @@ function projectPending(data: PlanControlSnapshot): PlanControlPendingView {
 function projectExecution(data: PlanControlSnapshot): PlanControlExecutionView {
   const execution = data.execution;
   const projection = executionStatus(execution.state);
-  return deepFreeze({
+  return deepFreezeExactData({
     state: execution.state,
     stateLabel: projection.label,
     evidence: execution.evidence,
@@ -741,7 +742,7 @@ function projectExecution(data: PlanControlSnapshot): PlanControlExecutionView {
 }
 
 function projectModes(data: PlanControlSnapshot): readonly PlanControlModeOptionView[] {
-  return deepFreeze(
+  return deepFreezeExactData(
     data.modes.map((entry) => ({
       mode: entry.mode,
       name: entry.name,
@@ -1056,7 +1057,7 @@ function status(
 }
 
 function failure(input: Omit<PlanControlFailure, "mode"> & Readonly<{ mode?: PlanMode | null }>): PlanControlFailure {
-  return deepFreeze({ ...input, mode: input.mode ?? null });
+  return deepFreezeExactData({ ...input, mode: input.mode ?? null });
 }
 
 function idleOperation(): PlanControlOperation {
@@ -1068,7 +1069,7 @@ function loadingOperation(): PlanControlOperation {
 }
 
 function failureOperation(failureValue: PlanControlFailure): PlanControlOperation {
-  return deepFreeze({ phase: "failure" as const, failure: failureValue });
+  return deepFreezeExactData({ phase: "failure" as const, failure: failureValue });
 }
 
 function clearSelectableFailure(operation: PlanControlOperation): PlanControlOperation {
@@ -1078,7 +1079,7 @@ function clearSelectableFailure(operation: PlanControlOperation): PlanControlOpe
 }
 
 function freezeSnapshot(candidate: unknown): PlanControlSnapshot {
-  return deepFreeze(planControlSnapshotSchema.parse(candidate));
+  return deepFreezeExactData(planControlSnapshotSchema.parse(candidate));
 }
 
 function parseSessionId(candidate: unknown): SessionId {
@@ -1129,7 +1130,7 @@ function parseOperationIdFactory(candidate: unknown): () => string {
 }
 
 function hiddenView(sessionId: SessionId): PlanControlView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     actionEnabled: false,
     actionDisabledReason: "Session details are not available.",
@@ -1155,8 +1156,3 @@ function hiddenView(sessionId: SessionId): PlanControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

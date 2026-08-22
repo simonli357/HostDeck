@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   defaultRetentionPolicy,
   isoTimestampSchema,
   type ManagedSessionProjection,
@@ -133,7 +134,7 @@ export function createProductionProjectionAppendPort(
         retention_boundary_cursor:
           event.type === "replay_boundary" ? event.after : current.projection.retention_boundary_cursor
       };
-      const committed = deepFreeze(repository.appendEvent(record, nextProjection, parsed.expected_revision, retention));
+      const committed = deepFreezeExactData(repository.appendEvent(record, nextProjection, parsed.expected_revision, retention));
 
       try {
         await publish(committed);
@@ -195,7 +196,7 @@ export function createProductionProjectionContinuityPort(
         earliest_retained_cursor: cursor,
         retention_boundary_cursor: floor === 0 ? null : floor
       };
-      const committed = deepFreeze(
+      const committed = deepFreezeExactData(
         repository.replaceEventsWithBoundary(record, nextProjection, parsed.expected_revision)
       );
 
@@ -370,9 +371,3 @@ function assertExactKeys(candidate: Readonly<Record<string, unknown>>, expected:
   }
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  Object.freeze(value);
-  return value;
-}

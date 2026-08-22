@@ -1,5 +1,6 @@
 import {
   assertResolvedResourceBudget,
+  deepFreezeExactData, 
   outputCursorSchema,
   type ResourceBudget,
   type SelectedProjectionEvent,
@@ -520,7 +521,7 @@ function createStream(
         failStream("source_failed", null);
         return;
       }
-      const event = deepFreeze(parsed.data);
+      const event = deepFreezeExactData(parsed.data);
       cursor = event.cursor;
       if (event.cursor !== (acceptedLiveCursor ?? 0) + 1) {
         failStream("source_failed", event.cursor);
@@ -1491,16 +1492,6 @@ function isPromiseLike(candidate: unknown): candidate is PromiseLike<unknown> {
     (typeof candidate === "object" || typeof candidate === "function") &&
     typeof (candidate as { readonly then?: unknown }).then === "function"
   );
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    deepFreeze(child);
-  }
-  return Object.freeze(value);
 }
 
 function isDeepFrozenData(

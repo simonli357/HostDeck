@@ -1,3 +1,4 @@
+import { deepFreezeExactData } from "@hostdeck/contracts";
 export const releaseSecurityReviewCriterionIds = Object.freeze([
   "SPR-01",
   "SPR-02",
@@ -405,7 +406,7 @@ export const releaseSecurityReviewCriteria = Object.freeze([
 ] as const);
 
 export function createReleaseSecurityReviewLedger(): Readonly<Record<string, unknown>> {
-  return deepFreeze({
+  return deepFreezeExactData({
     schema_version: 1,
     task: "REL-V1-005",
     criteria: releaseSecurityReviewCriteria,
@@ -467,11 +468,3 @@ function criterion(
   });
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  Object.freeze(value);
-  for (const child of Object.values(value)) deepFreeze(child);
-  return value;
-}

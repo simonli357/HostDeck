@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type GoalControlSnapshot,
   type GoalMutationRequest,
   goalControlSnapshotSchema,
@@ -446,7 +447,7 @@ function resolveManagedTarget(
       throw goalHttpError(409, "stale_session", "Managed session is not current for goal control.", false);
     }
     return Object.freeze({
-      target: deepFreeze(
+      target: deepFreezeExactData(
         managedSessionTargetSchema.parse({
           type: "managed_session",
           session_id: mapping.id,
@@ -595,7 +596,7 @@ function parseGoalSnapshot(candidate: unknown): GoalControlSnapshot {
   const parsed = goalControlSnapshotSchema.safeParse(candidate);
   if (!parsed.success) throw new TypeError("Goal snapshot is invalid.");
   const uncertain = parsed.data.uncertain_mutation;
-  return deepFreeze(
+  return deepFreezeExactData(
     goalControlSnapshotSchema.parse({
       goal: parsed.data.goal,
       uncertain_mutation:
@@ -732,10 +733,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

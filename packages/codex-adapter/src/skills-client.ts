@@ -1,5 +1,6 @@
 import {
   absoluteCwdSchema,
+  deepFreezeExactData, 
   defaultResourceBudget,
   isoTimestampSchema,
   type RuntimeCompatibility,
@@ -160,7 +161,7 @@ class DefaultCodexSkillsClient implements CodexSkillsClient {
       );
     }
     const parsed = parseResponse(result, parsedInput.cwd, this.options);
-    return deepFreeze({
+    return deepFreezeExactData({
       runtime_version: runtimeVersion,
       connection_generation: generation,
       observed_at: parseClock(this.options.now()),
@@ -500,8 +501,3 @@ function adapterError(
   return new HostDeckCodexAdapterError(code, message, { outcome, retry_safe: retrySafe, cause });
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

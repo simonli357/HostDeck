@@ -1,3 +1,4 @@
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import { mobileWorkflowPaths } from "./copy-workflow-matrix.js";
 import {
   type MobileInteractionId,
@@ -175,7 +176,7 @@ export function createMobileDashboardPhysicalHardeningLedger(): Readonly<Record<
   const packageOnlyTransportStates = new Set<MobileStateTraceId>(
     mobileDashboardPackageOnlyTransportStateIds
   );
-  return deepFreeze({
+  return deepFreezeExactData({
     schema_version: 2,
     task: "FE-V1-090",
     decision: "DEC-028",
@@ -234,9 +235,3 @@ function evidence(
   return Object.freeze({ id, level, status, path });
 }
 
-function deepFreeze<T>(value: T): T {
-  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
-  Object.freeze(value);
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return value;
-}

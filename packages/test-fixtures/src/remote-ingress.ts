@@ -6,6 +6,7 @@ import type {
   RemoteProxyTrustDecision
 } from "@hostdeck/contracts";
 import {
+  deepFreezeExactData, 
   projectRemoteIngressPublicState,
   remoteIngressAuditSummarySchema,
   remoteIngressStateSchema,
@@ -20,7 +21,7 @@ export const remoteFixtureProfileKey = `sha256:${"1".repeat(64)}`;
 export const remoteFixtureOtherProfileKey = `sha256:${"2".repeat(64)}`;
 export const remoteFixtureSourceKey = `sha256:${"3".repeat(64)}`;
 
-export const remoteFixtureServeDescriptor = deepFreeze({
+export const remoteFixtureServeDescriptor = deepFreezeExactData({
   external_origin: remoteFixtureOrigin,
   https_port: 443,
   path: "/",
@@ -43,7 +44,7 @@ export interface RemoteProfileFixture {
   readonly profile: RemoteProfileObservation;
 }
 
-export const remoteProfileFixtures: readonly RemoteProfileFixture[] = deepFreeze([
+export const remoteProfileFixtures: readonly RemoteProfileFixture[] = deepFreezeExactData([
   profileFixture("profile_absent", "absent", "missing", remoteFixtureProfileKey, null),
   profileFixture("profile_stopped", "stopped", "match", remoteFixtureProfileKey, remoteFixtureProfileKey),
   profileFixture("profile_signed_out", "signed_out", "unknown", remoteFixtureProfileKey, null),
@@ -86,9 +87,9 @@ export interface RemoteIngressFixture {
   readonly state: RemoteIngressState;
 }
 
-const readyState = deepFreeze(remoteState());
+const readyState = deepFreezeExactData(remoteState());
 
-export const remoteIngressFixtures: readonly RemoteIngressFixture[] = deepFreeze([
+export const remoteIngressFixtures: readonly RemoteIngressFixture[] = deepFreezeExactData([
   ingressFixture("disabled", { intent: "disabled", availability: "disabled", admission: "closed" }),
   ingressFixture("disabled_cleanup_incomplete", {
     intent: "disabled",
@@ -182,7 +183,7 @@ export interface RemoteProxyFixture {
   readonly decision: RemoteProxyTrustDecision;
 }
 
-export const remoteProxyFixtures: readonly RemoteProxyFixture[] = deepFreeze([
+export const remoteProxyFixtures: readonly RemoteProxyFixture[] = deepFreezeExactData([
   proxyFixture("local_admitted", {
     decision: "admitted",
     provenance: {
@@ -224,7 +225,7 @@ export const remoteProxyFixtures: readonly RemoteProxyFixture[] = deepFreeze([
   rejectedProxyFixture("reject_unknown", "unknown_proxy_context")
 ]);
 
-export const remotePairingLinkFixture: RemotePairingLinkIntent = deepFreeze(
+export const remotePairingLinkFixture: RemotePairingLinkIntent = deepFreezeExactData(
   remotePairingLinkIntentSchema.parse({
     external_origin: remoteFixtureOrigin,
     claim_path: "/pair",
@@ -235,7 +236,7 @@ export const remotePairingLinkFixture: RemotePairingLinkIntent = deepFreeze(
   })
 );
 
-export const remoteIngressAuditFixtures: readonly RemoteIngressAuditSummary[] = deepFreeze([
+export const remoteIngressAuditFixtures: readonly RemoteIngressAuditSummary[] = deepFreezeExactData([
   remoteAudit({
     schema_version: 1,
     action: "remote_enable",
@@ -370,7 +371,7 @@ export const remoteIngressAuditFixtures: readonly RemoteIngressAuditSummary[] = 
 ]);
 
 export const readyRemoteIngressState = readyState;
-export const readyRemoteIngressPublicState = deepFreeze(projectRemoteIngressPublicState(readyState));
+export const readyRemoteIngressPublicState = deepFreezeExactData(projectRemoteIngressPublicState(readyState));
 
 export function remoteIngressFixtureById(id: RemoteIngressFixtureId): RemoteIngressFixture {
   const fixture = remoteIngressFixtures.find((candidate) => candidate.id === id);
@@ -513,8 +514,3 @@ function remoteAudit(value: RemoteIngressAuditSummary): RemoteIngressAuditSummar
   return remoteIngressAuditSummarySchema.parse(value);
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

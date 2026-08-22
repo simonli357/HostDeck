@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  deepFreezeExactData, 
   type RemoteIngressAuditSummary,
   type RemoteIngressObservationSnapshot,
   type RemoteIngressState,
@@ -87,7 +88,7 @@ export function parseObservation(
 ): RemoteIngressObservationSnapshot {
   const parsed = remoteIngressObservationSnapshotSchema.safeParse(candidate);
   if (!parsed.success) throw invalidModel();
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 export function serveDescriptor(
@@ -102,7 +103,7 @@ export function serveDescriptor(
     visibility: "private"
   });
   if (!parsed.success) throw invalidModel();
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 export function stateFromObservation(input: {
@@ -143,7 +144,7 @@ export function stateFromObservation(input: {
     observed_at: input.observation.observed_at,
     updated_at: input.updatedAt
   });
-  if (result.success) return deepFreeze(result.data);
+  if (result.success) return deepFreezeExactData(result.data);
   if (
     input.intent === "disabled" &&
     input.operationFailure === "cleanup_incomplete"
@@ -183,7 +184,7 @@ export function unconfiguredDisabledState(
     updated_at: updatedAt
   });
   if (!result.success) throw invalidModel();
-  return deepFreeze(result.data);
+  return deepFreezeExactData(result.data);
 }
 
 export function disabledCleanupState(
@@ -202,7 +203,7 @@ export function disabledCleanupState(
     reason: "cleanup_incomplete",
     updated_at: updatedAt
   });
-  if (result.success) return deepFreeze(result.data);
+  if (result.success) return deepFreezeExactData(result.data);
   const expectedProfileKey = before.profile.comparison.expected_profile_key;
   if (expectedProfileKey === null || before.expected_serve === null) {
     throw invalidModel();
@@ -232,7 +233,7 @@ export function disabledCleanupState(
     updated_at: updatedAt
   });
   if (!fallback.success) throw invalidModel();
-  return deepFreeze(fallback.data);
+  return deepFreezeExactData(fallback.data);
 }
 
 export function observationFromState(
@@ -257,7 +258,7 @@ export function observationFromState(
     failure,
     observed_at: state.observed_at ?? state.updated_at
   });
-  if (parsed.success) return deepFreeze(parsed.data);
+  if (parsed.success) return deepFreezeExactData(parsed.data);
   const fallback = remoteIngressObservationSnapshotSchema.safeParse({
     schema_version: 1,
     client: "available",
@@ -275,7 +276,7 @@ export function observationFromState(
     observed_at: state.observed_at ?? state.updated_at
   });
   if (!fallback.success) throw invalidModel();
-  return deepFreeze(fallback.data);
+  return deepFreezeExactData(fallback.data);
 }
 
 export function materiallyDifferent(
@@ -394,7 +395,7 @@ export function parseManagerResult(
     after: after === null ? null : after.data
   };
   if (!validManagerResultShape(result)) throw invalidModel();
-  return deepFreeze(result);
+  return deepFreezeExactData(result);
 }
 
 export function acceptedSummary(
@@ -583,7 +584,7 @@ function cleanupFallbackState(input: {
     updated_at: input.updatedAt
   });
   if (!result.success) throw invalidModel();
-  return deepFreeze(result.data);
+  return deepFreezeExactData(result.data);
 }
 
 function materialState(state: RemoteIngressState): Record<string, unknown> {
@@ -705,10 +706,3 @@ function invalidModel(): TypeError {
 
 const invalidModelMessage = "Remote ingress control model is invalid.";
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

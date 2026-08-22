@@ -1,5 +1,6 @@
 import {
   assertResolvedResourceBudget,
+  deepFreezeExactData, 
   defaultResourceBudget,
   hostDeckLoopbackOriginSchema,
   type RemoteIngressObservationSnapshot,
@@ -360,7 +361,7 @@ async function observe(
   });
   const parsed = remoteIngressObservationSnapshotSchema.safeParse(raw);
   if (!parsed.success) throw managerError("preflight_failed");
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 async function runMutation(
@@ -560,7 +561,7 @@ function result(
   if (!validShape) {
     throw new TypeError("Tailscale Serve manager produced an impossible result.");
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     action,
     outcome,
     serve_result: serveResult,
@@ -671,7 +672,7 @@ function parseMutationInput(input: TailscaleServeMutationInput): ParsedMutationI
   }
   return Object.freeze({
     expected_profile_key: profile.data,
-    expected_serve: deepFreeze(serve.data)
+    expected_serve: deepFreezeExactData(serve.data)
   });
 }
 
@@ -798,10 +799,3 @@ function managerErrorMessage(code: HostDeckTailscaleServeManagerError["code"]): 
   }
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value)) deepFreeze(child);
-    Object.freeze(value);
-  }
-  return value;
-}

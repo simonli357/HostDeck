@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type RuntimeCompatibility,
   runtimeCompatibilitySchema,
   type SelectedSessionStartResponse,
@@ -443,7 +444,7 @@ function parseResponse(candidate: unknown): SelectedSessionStartResponse {
   if (!parsed.success) {
     throw new TypeError("Session-start response is invalid.");
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function publicSessionStartFailure(code: ErrorCode): HostDeckHttpError {
@@ -531,10 +532,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

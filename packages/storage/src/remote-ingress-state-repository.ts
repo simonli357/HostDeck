@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  deepFreezeExactData, 
   type RemoteIngressState,
   remoteIngressStateSchema
 } from "@hostdeck/contracts";
@@ -155,7 +156,7 @@ export function createRemoteIngressStateRepository(
           "Remote ingress state did not commit exactly."
         );
       }
-      return deepFreeze({ before, after });
+      return deepFreezeExactData({ before, after });
     }
   ).immediate;
 
@@ -201,7 +202,7 @@ function prepareCompareAndSetInput(input: unknown): PreparedCompareAndSetInput {
   const result = remoteIngressStateSchema.safeParse(value.state);
   if (!result.success) throw invalidInput();
 
-  const state = deepFreeze(result.data);
+  const state = deepFreezeExactData(result.data);
   if (
     (expectedGeneration === null && state.generation !== 1) ||
     (expectedGeneration !== null &&
@@ -363,7 +364,7 @@ function readState(db: Database.Database): RemoteIngressState | null {
   });
   if (!result.success) throw invalidPersistedState();
 
-  const parsed = deepFreeze(result.data);
+  const parsed = deepFreezeExactData(result.data);
   if (!isDeepStrictEqual(row, stateToRow(parsed))) {
     throw invalidPersistedState();
   }
@@ -475,10 +476,3 @@ function sanitizeError(
   );
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

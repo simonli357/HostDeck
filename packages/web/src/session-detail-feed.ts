@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type ReplayBoundaryReason,
   type SelectedProjectionEvent,
   selectedEventPageMaxSize,
@@ -90,7 +91,7 @@ export function appendSessionDetailEvent(
   if (!parsed.success) {
     throw new TypeError("HostDeck Session Detail event is invalid.");
   }
-  const acceptedEvent = deepFreeze(parsed.data);
+  const acceptedEvent = deepFreezeExactData(parsed.data);
   if (acceptedEvent.session_id !== state.sessionId) {
     throw new TypeError("HostDeck Session Detail event target changed.");
   }
@@ -687,8 +688,3 @@ function equalExactData(left: unknown, right: unknown): boolean {
   );
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

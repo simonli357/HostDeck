@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
   assertResolvedResourceBudget,
+  deepFreezeExactData, 
   defaultResourceBudget,
   type RemoteIngressObservationSnapshot,
   type RemoteProfileObservation,
@@ -538,7 +539,7 @@ function parseConfiguredExpectation(input: TailscaleConfiguredObservationInput):
   if (!profileResult.success || (serveResult !== null && !serveResult.success)) {
     throw new TypeError("Tailscale configured observation input is invalid.");
   }
-  const expectedServe = serveResult === null ? null : deepFreeze(serveResult.data);
+  const expectedServe = serveResult === null ? null : deepFreezeExactData(serveResult.data);
   return Object.freeze({
     kind: "configured",
     key: `configured:${profileResult.data}:${JSON.stringify(expectedServe)}`,
@@ -780,7 +781,7 @@ function unknownProfile(
 function snapshot(input: unknown): RemoteIngressObservationSnapshot {
   const result = remoteIngressObservationSnapshotSchema.safeParse(input);
   if (!result.success) throw new HostDeckTailscaleReadCommandError("schema_invalid");
-  return deepFreeze(result.data);
+  return deepFreezeExactData(result.data);
 }
 
 function observedAt(now: () => Date): string {
@@ -855,14 +856,6 @@ function plainRecord(value: unknown): Readonly<Record<string, unknown>> | null {
   return prototype === Object.prototype || prototype === null
     ? (value as Readonly<Record<string, unknown>>)
     : null;
-}
-
-function deepFreeze<Value>(value: Value): Value {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value)) deepFreeze(child);
-    Object.freeze(value);
-  }
-  return value;
 }
 
 function commandErrorMessage(code: TailscaleReadCommandErrorCode): string {

@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type SelectedResumeMetadataResponse,
   type SelectedResumeParams,
   selectedResumeMetadataResponseSchema,
@@ -148,7 +149,7 @@ function invokeResumeReader(
   if (!parsed.success || parsed.data.session_id !== sessionId) {
     throw new HostDeckResumeRouteContractError();
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function mapResumeFailure(
@@ -197,14 +198,6 @@ function mapResumeFailure(
         status: 503
       });
   }
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactDataObject<const Key extends string>(

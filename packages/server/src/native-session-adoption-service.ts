@@ -5,6 +5,7 @@ import {
   HostDeckCodexNativeSessionError
 } from "@hostdeck/codex-adapter";
 import {
+  deepFreezeExactData, 
   type NativeCodexAdoptionSnapshot,
   type NativeSessionAdoptRequest,
   type NativeSessionDiscoveryRequest,
@@ -163,7 +164,7 @@ class DefaultNativeSessionAdministrationService
     const unmanaged = discovered.threads.filter(
       (thread) => !managedThreadIds.has(thread.thread_id)
     );
-    return deepFreeze(
+    return deepFreezeExactData(
       nativeSessionDiscoveryResponseSchema.parse({
         limit,
         threads: unmanaged.slice(0, limit),
@@ -252,7 +253,7 @@ class DefaultNativeSessionAdministrationService
       const resumed = await this.options.native.resume(request.thread_id, deadline);
       requireNativeDeadline(deadline);
       assertResumedIdentity(snapshot, resumed.thread);
-      return deepFreeze({
+      return deepFreezeExactData({
         history_turn_count: snapshot.turns.length,
         state: this.options.states.require(state.state.mapping.id)
       });
@@ -324,7 +325,7 @@ class DefaultNativeSessionAdministrationService
         current.mapping.codex_thread_id
       );
     }
-    return deepFreeze(
+    return deepFreezeExactData(
       nativeSessionUnmanageResponseSchema.parse({
         operation_id: request.operation_id,
         session_id: sessionId,
@@ -1037,10 +1038,3 @@ function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

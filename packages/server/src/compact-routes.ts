@@ -3,6 +3,7 @@ import {
   type CompactStartRequest,
   compactProgressResponseSchema,
   compactStartRequestSchema,
+  deepFreezeExactData, 
   type ManagedSessionTarget,
   managedSessionTargetSchema,
   type RuntimeCompatibility,
@@ -431,7 +432,7 @@ function resolveManagedTarget(
       throw compactHttpError(409, "operation_conflict", "Compaction requires a terminal or idle turn state.", true);
     }
     return Object.freeze({
-      target: deepFreeze(
+      target: deepFreezeExactData(
         managedSessionTargetSchema.parse({
           type: "managed_session",
           session_id: mapping.id,
@@ -528,7 +529,7 @@ function materializeCompactStart(
   ) {
     throw new TypeError("Compact start result is contradictory.");
   }
-  return deepFreeze(compactProgressResponseSchema.parse({ progress }));
+  return deepFreezeExactData(compactProgressResponseSchema.parse({ progress }));
 }
 
 function parseCompactResponse(candidate: unknown, target: ManagedSessionTarget | null): CompactProgressResponse {
@@ -542,8 +543,8 @@ function parseCompactResponse(candidate: unknown, target: ManagedSessionTarget |
   ) {
     throw new TypeError("Compact progress response changed the selected target.");
   }
-  if (progress === null || progress.error === null) return deepFreeze(parsed.data);
-  return deepFreeze(
+  if (progress === null || progress.error === null) return deepFreezeExactData(parsed.data);
+  return deepFreezeExactData(
     compactProgressResponseSchema.parse({
       progress: {
         ...progress,
@@ -568,7 +569,7 @@ function parseCompactProgress(candidate: unknown, target: ManagedSessionTarget):
   ) {
     throw new TypeError("Compact progress is invalid.");
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function requireSameAdmission(
@@ -727,10 +728,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

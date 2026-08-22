@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type ManagedSessionTarget,
   type ModelControlSnapshot,
   type ModelSelectionRequest,
@@ -441,7 +442,7 @@ function resolveManagedTarget(
       throw modelHttpError(409, "stale_session", "Managed session is not current for model control.", false);
     }
     return Object.freeze({
-      target: deepFreeze(
+      target: deepFreezeExactData(
         managedSessionTargetSchema.parse({
           type: "managed_session",
           session_id: mapping.id,
@@ -594,7 +595,7 @@ function runtimeAdmissionKey(runtime: RuntimeCompatibility): string {
 function parseModelSnapshot(candidate: unknown): ModelControlSnapshot {
   const parsed = modelControlSnapshotSchema.safeParse(candidate);
   if (!parsed.success) throw new TypeError("Model snapshot is invalid.");
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function mapModelErrorCode(error: HostDeckCodexModelControlError): ErrorCode {
@@ -692,10 +693,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

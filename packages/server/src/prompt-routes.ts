@@ -1,6 +1,7 @@
 import {
   codexThreadIdSchema,
   codexTurnIdSchema,
+  deepFreezeExactData, 
   managedSessionTargetSchema,
   type PromptDispatchResponse,
   type PromptSessionRequest,
@@ -443,7 +444,7 @@ function resolveManagedTarget(readSession: ReadSession, sessionId: string): Reso
     throw promptHttpError(409, "session_not_writable", "Managed session cannot accept a prompt now.", true);
   }
   return Object.freeze({
-    target: deepFreeze(
+    target: deepFreezeExactData(
       managedSessionTargetSchema.parse({
         type: "managed_session",
         session_id: mapping.id,
@@ -498,13 +499,13 @@ function parsePromptDispatchResult(candidate: unknown): z.infer<typeof promptDis
   const values = readExactDataObject(candidate, promptResultKeys, "Prompt dispatch result is invalid.");
   const parsed = promptDispatchResultSchema.safeParse(values);
   if (!parsed.success) throw new TypeError("Prompt dispatch result is invalid.");
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function parsePromptResponse(candidate: unknown): PromptDispatchResponse {
   const parsed = promptDispatchResponseSchema.safeParse(candidate);
   if (!parsed.success) throw new TypeError("Prompt dispatch response is invalid.");
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function promptFailureTransition(error: HostDeckCodexPromptControlError) {
@@ -624,10 +625,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

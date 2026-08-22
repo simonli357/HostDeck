@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import {
+  deepFreezeExactData, 
   hostDeckLoopbackOriginSchema,
   type RemoteProxyTrustDecision,
   type RequestIngressProvenance,
@@ -688,7 +689,7 @@ function rejectDecision(
 }
 
 function freezeDecision(value: RemoteProxyTrustDecision): RemoteProxyTrustDecision {
-  return deepFreeze(remoteProxyTrustDecisionSchema.parse(value));
+  return deepFreezeExactData(remoteProxyTrustDecisionSchema.parse(value));
 }
 
 function invalidHeaderAssessment(): RemoteProxyTrustDecision["headers"] {
@@ -881,8 +882,3 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

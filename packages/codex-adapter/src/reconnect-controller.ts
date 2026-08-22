@@ -1,5 +1,6 @@
 import {
   assertResolvedResourceBudget,
+  deepFreezeExactData, 
   type ResourceBudget,
   type RuntimeCompatibility,
   runtimeCompatibilitySchema,
@@ -464,7 +465,7 @@ class DefaultCodexRuntimeReconnectController implements CodexRuntimeReconnectCon
   }
 
   snapshot(): CodexReconnectSnapshot {
-    return deepFreeze({
+    return deepFreezeExactData({
       phase: this.phase,
       connection_state: this.connection.state,
       current_generation: this.connection.generation,
@@ -1465,15 +1466,8 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-function deepFreeze<T extends object>(value: T): T {
-  for (const child of Object.values(value)) {
-    if (child !== null && typeof child === "object" && !Object.isFrozen(child)) deepFreeze(child);
-  }
-  return Object.freeze(value);
-}
-
 function freezeCompatibility(candidate: unknown): RuntimeCompatibility {
-  return deepFreeze(runtimeCompatibilitySchema.parse(candidate));
+  return deepFreezeExactData(runtimeCompatibilitySchema.parse(candidate));
 }
 
 function abortableSleep(milliseconds: number, signal: AbortSignal): Promise<void> {

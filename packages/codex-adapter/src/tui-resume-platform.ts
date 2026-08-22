@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { spawn as spawnProcess } from "node:child_process";
 import { posix, win32 } from "node:path";
-import { codexThreadIdSchema } from "@hostdeck/contracts";
+import { codexThreadIdSchema, deepFreezeExactData } from "@hostdeck/contracts";
 import {
   type CodexAuthenticatedLoopbackWebSocketEndpoint,
   type CodexLocalEndpoint,
@@ -201,7 +201,7 @@ export function buildCodexPlatformTuiResumeCommand(
     const cwd = parseTargetPath(values.cwd, target, false);
 
     if (endpoint.kind === "unix_socket") {
-      return deepFreeze({
+      return deepFreezeExactData({
         target: "linux-x64" as const,
         endpoint,
         executable,
@@ -215,7 +215,7 @@ export function buildCodexPlatformTuiResumeCommand(
         credential_environment_variable: null
       });
     }
-    return deepFreeze({
+    return deepFreezeExactData({
       target: "windows-x64" as const,
       endpoint,
       executable,
@@ -753,12 +753,3 @@ function processContractInvalid(): HostDeckCodexPlatformTuiResumeError {
   );
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value as Record<string, unknown>)) {
-      deepFreeze(child);
-    }
-    Object.freeze(value);
-  }
-  return value;
-}

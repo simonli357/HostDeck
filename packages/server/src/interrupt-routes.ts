@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type InterruptRequest,
   type InterruptResponse,
   interruptRequestSchema,
@@ -251,7 +252,7 @@ export function createHostDeckInterruptRouteRegistration(
 
               let response: InterruptResponse;
               try {
-                response = deepFreeze(interruptResponseSchema.parse(progress));
+                response = deepFreezeExactData(interruptResponseSchema.parse(progress));
                 const current = resolveInterruptContinuity(
                   ports,
                   { session_id: target.session_id, turn_id: target.turn_id },
@@ -270,7 +271,7 @@ export function createHostDeckInterruptRouteRegistration(
               });
             },
             prepare_response(candidate) {
-              return deepFreeze(interruptResponseSchema.parse(candidate));
+              return deepFreezeExactData(interruptResponseSchema.parse(candidate));
             }
           });
           if (result.outcome !== "succeeded") throw publicInterruptFailure(result.error_code);
@@ -385,7 +386,7 @@ function resolveInterruptContinuity(
     );
   }
   return Object.freeze({
-    target: deepFreeze(
+    target: deepFreezeExactData(
       turnOperationTargetSchema.parse({
         type: "turn",
         session_id: managed.session_id,
@@ -518,7 +519,7 @@ function parseInterruptProgress(
   ) {
     throw new TypeError("Interrupt service progress is invalid.");
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function progressFailureTransition(progress: ReturnType<typeof selectedOperationProgressSchema.parse>) {
@@ -654,10 +655,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

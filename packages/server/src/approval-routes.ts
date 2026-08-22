@@ -2,6 +2,7 @@ import {
   type ApprovalResponseRequest,
   approvalOperationTargetSchema,
   approvalResponseRequestSchema,
+  deepFreezeExactData, 
   type ManagedSessionTarget,
   managedSessionTargetSchema,
   type PendingApproval,
@@ -312,7 +313,7 @@ export function createHostDeckApprovalRouteRegistration(
               });
             },
             prepare_response(candidate) {
-              return deepFreeze(pendingApprovalResponseSchema.parse(candidate));
+              return deepFreezeExactData(pendingApprovalResponseSchema.parse(candidate));
             }
           });
           if (result.outcome !== "succeeded") throw publicApprovalFailure(result.error_code);
@@ -508,7 +509,7 @@ function resolveManagedTarget(
       throw approvalHttpError(409, "stale_session", "Managed session is not current for approval control.", false);
     }
     return Object.freeze({
-      target: deepFreeze(
+      target: deepFreezeExactData(
         managedSessionTargetSchema.parse({
           type: "managed_session",
           session_id: mapping.id,
@@ -585,7 +586,7 @@ async function readApprovalList(
     throw approvalHttpError(500, "internal_error", "Approval list could not be read.", false);
   }
   try {
-    return deepFreeze(pendingApprovalListResponseSchema.parse({ target, approvals: candidate }));
+    return deepFreezeExactData(pendingApprovalListResponseSchema.parse({ target, approvals: candidate }));
   } catch {
     throw approvalHttpError(500, "internal_error", "Approval service returned an invalid list.", false);
   }
@@ -610,7 +611,7 @@ function materializeApprovalResponse(
   if (approval.state !== expectedState || approval.decision !== request.decision) {
     throw new TypeError("Approval terminal response contradicts the requested decision.");
   }
-  return deepFreeze(
+  return deepFreezeExactData(
     pendingApprovalResponseSchema.parse({
       operation_id: request.operation_id,
       requested_decision: request.decision,
@@ -630,7 +631,7 @@ function parseApproval(candidate: unknown, target: PendingApproval["target"]): P
   ) {
     throw new TypeError("Approval service result changed the exact request target.");
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function requireSameDecisionAdmission(
@@ -784,10 +785,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

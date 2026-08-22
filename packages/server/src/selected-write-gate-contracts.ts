@@ -1,6 +1,7 @@
 import {
   auditPayloadSummarySchema,
   clientOperationIdSchema,
+  deepFreezeExactData, 
   isoTimestampSchema,
   type SelectedAuditTarget,
   selectedAuditTargetSchema,
@@ -252,7 +253,7 @@ export function createHostDeckSelectedWriteMutation<
   const mutation: HostDeckSelectedWriteMutation<TAction, TValue> = Object.freeze({
     operation_id: operationId.data,
     action: values.action as TAction,
-    target: deepFreeze(target.data),
+    target: deepFreezeExactData(target.data),
     accepted_summary: summary,
     value: value as TValue
   });
@@ -366,7 +367,7 @@ export function createHostDeckSelectedWriteTargetResolution<TValue>(
     "Selected-write target resolution value is invalid."
   );
   const resolution: HostDeckSelectedWriteTargetResolution<TValue> = Object.freeze({
-    target: deepFreeze(target.data),
+    target: deepFreezeExactData(target.data),
     capability: values.capability as RuntimeCapability | null,
     value: value as TValue
   });
@@ -514,7 +515,7 @@ export function parseSelectedWriteAuditSummary(
       payload_summary: parsed.data
     });
     if (!security.success) throw new TypeError("Selected-write security summary is invalid.");
-    return deepFreeze(parsed.data);
+    return deepFreezeExactData(parsed.data);
   }
   const contract = selectedWriteSummaryContracts[action];
   if (contract === undefined) {
@@ -558,7 +559,7 @@ export function parseSelectedWriteAuditSummary(
       throw new TypeError("Selected-write goal summary is contradictory.");
     }
   }
-  return deepFreeze(summary);
+  return deepFreezeExactData(summary);
 }
 
 export function parseSelectedWriteAuditResult<TPreparedResponse>(
@@ -875,10 +876,3 @@ function cloneCanonicalData(candidate: unknown, message: string): unknown {
   }
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

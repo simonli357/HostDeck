@@ -3,6 +3,7 @@ import {
   type ApprovalResponseRequest,
   approvalProjectionEventSchema,
   approvalResponseRequestSchema,
+  deepFreezeExactData, 
   type PendingApproval,
   type PendingApprovalListResponse,
   pendingApprovalListResponseSchema,
@@ -397,7 +398,7 @@ export function createApprovalDecisionController(
     ) {
       throw new TypeError("HostDeck approval list changed the selected target.");
     }
-    list = deepFreeze(parsed);
+    list = deepFreezeExactData(parsed);
     listEpoch = requestEpoch;
     listEventFingerprint = eventFingerprint;
   };
@@ -425,7 +426,7 @@ export function createApprovalDecisionController(
     const expectedState = attempt.decision === "approve" ? "approved" : "denied";
     if (current.state === expectedState && current.decision === attempt.decision) {
       installTerminalOverride(terminalOverrides, attempt.requestId, current);
-      mutationState = deepFreeze({
+      mutationState = deepFreezeExactData({
         phase: "result" as const,
         handle: attempt.handle,
         decision: attempt.decision
@@ -448,7 +449,7 @@ export function createApprovalDecisionController(
     const sequence = readSequence;
     const requestEpoch = context.snapshot.epoch;
     const eventFingerprint = context.eventFingerprint;
-    readState = deepFreeze({ phase: "loading" as const, reason });
+    readState = deepFreezeExactData({ phase: "loading" as const, reason });
     publish();
 
     const promise = (async (): Promise<ApprovalDecisionView> => {
@@ -478,7 +479,7 @@ export function createApprovalDecisionController(
         ) {
           return currentView;
         }
-        readState = deepFreeze({ phase: "failure" as const, failure: classifyReadFailure(error) });
+        readState = deepFreezeExactData({ phase: "failure" as const, failure: classifyReadFailure(error) });
         return publish();
       } finally {
         if (activeRead?.sequence === sequence) activeRead = null;
@@ -507,7 +508,7 @@ export function createApprovalDecisionController(
     ) {
       return currentView;
     }
-    const attempt = deepFreeze({
+    const attempt = deepFreezeExactData({
       handle,
       requestId: record.requestId,
       decision,
@@ -526,7 +527,7 @@ export function createApprovalDecisionController(
       });
     } catch {
       confirmationHandle = null;
-      mutationState = deepFreeze({
+      mutationState = deepFreezeExactData({
         phase: "failure" as const,
         failure: decisionFailure(
           "known",
@@ -544,7 +545,7 @@ export function createApprovalDecisionController(
     const sequence = mutationSequence;
     const requestEpoch = context.snapshot.epoch;
     if (!fromConfirmation) confirmationHandle = null;
-    mutationState = deepFreeze({ phase: "submitting" as const, attempt, operationId });
+    mutationState = deepFreezeExactData({ phase: "submitting" as const, attempt, operationId });
     activeMutation = Object.freeze({ sequence, controller });
     publish();
 
@@ -570,7 +571,7 @@ export function createApprovalDecisionController(
         !correlateResponse(response.data, operationId, attempt)
       ) {
         confirmationHandle = null;
-        mutationState = deepFreeze({
+        mutationState = deepFreezeExactData({
           phase: "failure" as const,
           failure: unknownDecisionFailure(),
           attempt
@@ -579,14 +580,14 @@ export function createApprovalDecisionController(
       }
       installTerminalOverride(terminalOverrides, attempt.requestId, response.data.approval);
       confirmationHandle = null;
-      mutationState = deepFreeze({ phase: "result" as const, handle, decision });
+      mutationState = deepFreezeExactData({ phase: "result" as const, handle, decision });
       const result = publish();
       void runRead("terminal", true);
       return result;
     } catch (error) {
       if (closed || sequence !== mutationSequence) return currentView;
       confirmationHandle = null;
-      mutationState = deepFreeze({
+      mutationState = deepFreezeExactData({
         phase: "failure" as const,
         failure: classifyDecisionFailure(error),
         attempt
@@ -634,7 +635,7 @@ export function createApprovalDecisionController(
         const attempt = mutationState.phase === "submitting" ? mutationState.attempt : null;
         clearPrivateState();
         if (attempt !== null) {
-          mutationState = deepFreeze({
+          mutationState = deepFreezeExactData({
             phase: "failure" as const,
             failure: unknownDecisionFailure(),
             attempt: null
@@ -652,7 +653,7 @@ export function createApprovalDecisionController(
       ) {
         const attempt = mutationState.attempt;
         cancelMutation();
-        mutationState = deepFreeze({
+        mutationState = deepFreezeExactData({
           phase: "failure" as const,
           failure: unknownDecisionFailure(),
           attempt
@@ -737,7 +738,7 @@ export function createApprovalDecisionController(
       if (closed) return currentView;
       closed = true;
       clearPrivateState();
-      context = deepFreeze({
+      context = deepFreezeExactData({
         ...context,
         events: Object.freeze([]),
         eventFingerprint: "closed"
@@ -754,7 +755,7 @@ export function createApprovalDecisionController(
 
 function reconcileApprovalState(input: ReconciliationInput): ReconciliationResult {
   if (!input.availability.visible) {
-    return deepFreeze({
+    return deepFreezeExactData({
       records: [],
       confirmation: null,
       view: hiddenView(input.sessionId),
@@ -842,7 +843,7 @@ function reconcileApprovalState(input: ReconciliationInput): ReconciliationResul
     const submitting =
       input.mutationState.phase === "submitting" &&
       input.mutationState.attempt.handle === handle;
-    const view = deepFreeze({
+    const view = deepFreezeExactData({
       handle,
       eventOrder: eventGroup?.firstOrder ?? null,
       source,
@@ -869,7 +870,7 @@ function reconcileApprovalState(input: ReconciliationInput): ReconciliationResul
       disabledReason,
       statusDetail: approvalStatusDetail(state, grantScope, input.readState, input.mutationState, handle)
     });
-    records.push(deepFreeze({
+    records.push(deepFreezeExactData({
       requestId,
       baseline,
       baselineKey: baseline === null ? null : immutableApprovalKey(baseline),
@@ -894,7 +895,7 @@ function reconcileApprovalState(input: ReconciliationInput): ReconciliationResul
         confirmationSubmitting
       );
   const status = globalStatus(input, records, confirmation);
-  const view = deepFreeze({
+  const view = deepFreezeExactData({
     visible: true,
     sessionId: input.sessionId,
     targetLabel: input.availability.targetLabel,
@@ -910,7 +911,7 @@ function reconcileApprovalState(input: ReconciliationInput): ReconciliationResul
       input.readState.phase !== "loading",
     busy: input.readState.phase === "loading" || input.mutationState.phase === "submitting"
   });
-  return deepFreeze({ records, confirmation, view, nextExpiryMs });
+  return deepFreezeExactData({ records, confirmation, view, nextExpiryMs });
 }
 
 function groupEvents(events: readonly ApprovalEvent[]): Map<string, EventGroup> {
@@ -1084,7 +1085,7 @@ function confirmationView(
   if (item.risk === "normal" || item.grantScope !== "one_time") {
     throw new TypeError("HostDeck approval confirmation target is invalid.");
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     handle: item.handle,
     title: item.risk === "broad" ? "Approve broad request?" as const : "Approve elevated request?" as const,
     tone: item.risk === "broad" ? "danger" as const : "attention" as const,
@@ -1175,7 +1176,7 @@ function deriveAvailability(snapshot: BrowserConnectionSnapshot, sessionId: Sess
     snapshot.phase !== "access_limited" &&
     snapshot.phase !== "closed";
   if (!visible || detail === null) {
-    return deepFreeze({
+    return deepFreezeExactData({
       visible: false,
       targetLabel: null,
       threadId: null,
@@ -1209,7 +1210,7 @@ function deriveAvailability(snapshot: BrowserConnectionSnapshot, sessionId: Sess
   ) {
     writeReason = "Session activity continuity is not proven yet.";
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: true,
     targetLabel: detail.name,
     threadId: detail.codex_thread_id,
@@ -1303,7 +1304,7 @@ function installTerminalOverride(
   approval: PendingApproval
 ): void {
   overrides.delete(requestId);
-  overrides.set(requestId, deepFreeze(approval));
+  overrides.set(requestId, deepFreezeExactData(approval));
   while (overrides.size > maximumTerminalOverrides) {
     const oldest = overrides.keys().next().value as string | undefined;
     if (oldest === undefined) break;
@@ -1329,7 +1330,7 @@ function immutableApprovalKey(approval: PendingApproval): string {
 function classifyReadFailure(error: unknown): ApprovalFailure {
   if (error instanceof HostDeckBrowserHttpError && error.apiError !== null) {
     const unsupported = unsupportedApiCodes.has(error.apiError.code);
-    return deepFreeze({
+    return deepFreezeExactData({
       source: "read" as const,
       kind: unsupported ? "unsupported" as const : "known" as const,
       message: apiFailureMessage(error.apiError, "read"),
@@ -1338,7 +1339,7 @@ function classifyReadFailure(error: unknown): ApprovalFailure {
     });
   }
   if (error instanceof HostDeckBrowserConnectionError) {
-    return deepFreeze({
+    return deepFreezeExactData({
       source: "read" as const,
       kind: "known" as const,
       message: error.reason === "closed"
@@ -1348,7 +1349,7 @@ function classifyReadFailure(error: unknown): ApprovalFailure {
       requiresRefresh: true
     });
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     source: "read" as const,
     kind: "known" as const,
     message: "Current approval status could not be loaded. Check the connection and try again.",
@@ -1388,7 +1389,7 @@ function decisionFailure(
   retryable: boolean,
   requiresRefresh: boolean
 ): ApprovalFailure {
-  return deepFreeze({ source: "decision" as const, kind, message, retryable, requiresRefresh });
+  return deepFreezeExactData({ source: "decision" as const, kind, message, retryable, requiresRefresh });
 }
 
 function unknownDecisionFailure(): ApprovalFailure {
@@ -1452,10 +1453,10 @@ function parseContext(candidate: unknown, sessionId: SessionId): ParsedApprovalC
       throw new TypeError("HostDeck approval event context is invalid.");
     }
     previousCursor = parsed.data.cursor;
-    events.push(deepFreeze(parsed.data));
+    events.push(deepFreezeExactData(parsed.data));
   }
   const frozenEvents = Object.freeze(events);
-  return deepFreeze({
+  return deepFreezeExactData({
     snapshot: candidate.snapshot as BrowserConnectionSnapshot,
     events: frozenEvents,
     eventFingerprint: JSON.stringify(frozenEvents)
@@ -1550,7 +1551,7 @@ function status(
 }
 
 function hiddenView(sessionId: SessionId): ApprovalDecisionView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     sessionId,
     targetLabel: null,
@@ -1565,9 +1566,3 @@ function hiddenView(sessionId: SessionId): ApprovalDecisionView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  if (value instanceof Map || value instanceof Set) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

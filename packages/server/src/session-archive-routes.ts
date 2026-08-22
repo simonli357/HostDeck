@@ -1,6 +1,7 @@
 import {
   type ArchiveSessionRequest,
   archiveSessionRequestSchema,
+  deepFreezeExactData, 
   managedSessionTargetSchema,
   type RuntimeCompatibility,
   runtimeCompatibilitySchema,
@@ -439,7 +440,7 @@ function resolveManagedTarget(
     );
   }
   return Object.freeze({
-    target: deepFreeze(
+    target: deepFreezeExactData(
       managedSessionTargetSchema.parse({
         type: "managed_session",
         session_id: mapping.id,
@@ -586,7 +587,7 @@ function parseResponse(candidate: unknown): SelectedOperationDispatch {
   if (!parsed.success || parsed.data.state !== "accepted" || parsed.data.kind !== "archive") {
     throw new TypeError("Session-archive response is invalid.");
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function publicArchiveFailure(code: ErrorCode): HostDeckHttpError {
@@ -671,10 +672,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

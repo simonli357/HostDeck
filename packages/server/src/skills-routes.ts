@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  deepFreezeExactData, 
   type ManagedSessionTarget,
   managedSessionTargetSchema,
   type SkillsSnapshot,
@@ -215,7 +216,7 @@ function resolveManagedTarget(
     ) {
       throw new TypeError();
     }
-    return deepFreeze(
+    return deepFreezeExactData(
       managedSessionTargetSchema.parse({
         type: "managed_session",
         session_id: sessionId,
@@ -261,7 +262,7 @@ async function invokeSkillsList(
   ) {
     throw new HostDeckSkillsRouteContractError();
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function mapSkillsFailure(
@@ -374,14 +375,6 @@ function skillsHttpError(
     sessionId,
     status
   });
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactDataObject<const Key extends string>(

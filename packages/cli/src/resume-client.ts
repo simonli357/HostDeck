@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type SelectedResumeMetadataResponse,
   selectedResumeMetadataResponseSchema,
   selectedResumeParamsSchema
@@ -102,7 +103,7 @@ async function requestResumeMetadata(
       "HostDeck daemon returned invalid managed-thread resume metadata."
     );
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function sanitizeResumeApiError(error: ApiErrorEnvelope): ApiErrorEnvelope {
@@ -137,14 +138,6 @@ function resumeErrorMessage(code: ApiErrorEnvelope["code"]): string {
     default:
       return "Laptop resume metadata request failed.";
   }
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(

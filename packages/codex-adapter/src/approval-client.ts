@@ -2,6 +2,7 @@ import {
   codexItemIdSchema,
   codexThreadIdSchema,
   codexTurnIdSchema,
+  deepFreezeExactData, 
   defaultResourceBudget,
   isoTimestampSchema,
   type RuntimeCompatibility,
@@ -290,7 +291,7 @@ class DefaultCodexApprovalClient implements CodexApprovalClient {
     if (!parsed.success) {
       throw adapterError("invalid_protocol_message", "Codex approval request could not be normalized.", "not_sent", false, parsed.error);
     }
-    return deepFreeze(parsed.data);
+    return deepFreezeExactData(parsed.data);
   }
 
   async respond(input: CodexApprovalResponseInput): Promise<void> {
@@ -517,10 +518,3 @@ function adapterError(
   return new HostDeckCodexAdapterError(code, message, { outcome, retry_safe: retrySafe, ...(cause === undefined ? {} : { cause }) });
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const child of Object.values(value)) deepFreeze(child);
-  }
-  return value;
-}

@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type SelectedHostAccessMode,
   type SelectedHostStatusResponse,
   type SelectedReadinessResponse,
@@ -43,7 +44,7 @@ export interface CreateHostDeckHealthRouteRegistrationInput {
 const inputKeys = ["compatibility", "health"] as const;
 const noQuerySchema = z.object({}).strict();
 const registeredHealthServices = new WeakSet<object>();
-const livenessResponse = deepFreeze(
+const livenessResponse = deepFreezeExactData(
   selectedLivenessResponseSchema.parse({ status: "alive" })
 );
 
@@ -200,7 +201,7 @@ function readReadinessResponse(
 ): SelectedReadinessResponse {
   try {
     const local = Reflect.apply(health.localSnapshot, undefined, []);
-    return deepFreeze(
+    return deepFreezeExactData(
       selectedReadinessResponseSchema.parse(publicLocalHealth(local, false))
     );
   } catch {
@@ -228,7 +229,7 @@ function readHostStatusResponse(
     }
     if (local.mutation_admission !== "open") causes.push("host_not_ready");
 
-    return deepFreeze(
+    return deepFreezeExactData(
       selectedHostStatusResponseSchema.parse({
         local: publicLocalHealth(local, true),
         compatibility: projectHostDeckRuntimeCompatibilityStatus(
@@ -420,10 +421,3 @@ function contractFailure(): HostDeckHealthRouteContractError {
   return new HostDeckHealthRouteContractError();
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

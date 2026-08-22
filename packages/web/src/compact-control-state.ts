@@ -4,6 +4,7 @@ import {
   type CompactStartRequest,
   compactProgressResponseSchema,
   compactStartRequestSchema,
+  deepFreezeExactData, 
   sessionIdSchema
 } from "@hostdeck/contracts";
 import type { SessionId } from "@hostdeck/core";
@@ -233,7 +234,7 @@ export function createCompactControlController(
       operation.phase === "failure" && operation.failure.kind === "unsupported";
     const busy = operation.phase === "loading" || operation.phase === "submitting";
 
-    return deepFreeze({
+    return deepFreezeExactData({
       visible: availability.visible,
       actionEnabled: availability.readEnabled,
       actionDisabledReason: availability.readReason,
@@ -471,7 +472,7 @@ export function createCompactControlController(
         controller: requestController
       });
       confirmationOpen = false;
-      operation = deepFreeze({ phase: "submitting" as const, operationId });
+      operation = deepFreezeExactData({ phase: "submitting" as const, operationId });
       publish();
       try {
         const response = await Reflect.apply(port.start, undefined, [
@@ -695,7 +696,7 @@ function freezeResponse(
   ) {
     throw new HostDeckCompactOutcomeUnknownError();
   }
-  return deepFreeze(response);
+  return deepFreezeExactData(response);
 }
 
 function projectProgress(
@@ -703,7 +704,7 @@ function projectProgress(
   stale: boolean
 ): CompactProgressView {
   const projected = progressStatus(progress);
-  return deepFreeze({
+  return deepFreezeExactData({
     state: progress.state,
     label: projected.label,
     detail: projected.detail,
@@ -746,20 +747,20 @@ function classifyReadFailure(error: unknown): CompactControlFailure {
   const apiError = browserApiError(error);
   if (apiError !== null) {
     const unsupported = ["capability_unavailable", "incompatible_runtime"].includes(apiError.code);
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: unsupported ? "unsupported" as const : "read" as const,
       message: compactReadFailureMessage(apiError)
     });
   }
   if (error instanceof HostDeckBrowserConnectionError) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "read" as const,
       message: error.reason === "closed"
         ? "HostDeck closed before Compact progress could be loaded. Reload to continue."
         : "Session access is not current. Refresh Session Detail before trying again."
     });
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "read" as const,
     message: "Compact progress could not be loaded. Check the connection and try again."
   });
@@ -770,16 +771,16 @@ function classifyStartFailure(error: unknown): CompactControlFailure {
   const apiError = browserApiError(error);
   if (apiError !== null) {
     if (apiError.code === "operation_conflict") {
-      return deepFreeze({
+      return deepFreezeExactData({
         kind: "conflict" as const,
         message: "Current turn or Compact progress changed. Check progress before another action."
       });
     }
     if (ambiguousStartCodes.has(apiError.code)) return unknownStartFailure();
-    return deepFreeze({ kind: "start" as const, message: compactStartFailureMessage(apiError) });
+    return deepFreezeExactData({ kind: "start" as const, message: compactStartFailureMessage(apiError) });
   }
   if (error instanceof HostDeckBrowserConnectionError) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "start" as const,
       message: "Compact write access was not ready. Check current progress before trying again."
     });
@@ -788,7 +789,7 @@ function classifyStartFailure(error: unknown): CompactControlFailure {
     error instanceof HostDeckBrowserCsrfError &&
     ["client_contract", "not_ready", "bootstrap_unavailable"].includes(error.reason)
   ) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "start" as const,
       message: "Secure Compact access was not ready. Check current progress before trying again."
     });
@@ -803,7 +804,7 @@ function browserApiError(error: unknown): ApiErrorEnvelope | null {
 }
 
 function unknownStartFailure(): CompactControlFailure {
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "unknown" as const,
     message: "HostDeck will not resend this request. Check current Compact progress before any new attempt."
   });
@@ -1011,7 +1012,7 @@ function loadingOperation(): CompactControlOperation {
 }
 
 function failureOperation(failure: CompactControlFailure): CompactControlOperation {
-  return deepFreeze({ phase: "failure" as const, failure });
+  return deepFreezeExactData({ phase: "failure" as const, failure });
 }
 
 function parseCreateOptions(
@@ -1096,7 +1097,7 @@ function readExactObject<const Keys extends readonly string[]>(
 }
 
 function hiddenView(sessionId: SessionId): CompactControlView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     actionEnabled: false,
     actionDisabledReason: "Session details are not available.",
@@ -1123,8 +1124,3 @@ function hiddenView(sessionId: SessionId): CompactControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

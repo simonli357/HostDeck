@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type SelectedSessionStartResponse,
   type SelectedStartSessionRequest,
   selectedSessionStartResponseSchema,
@@ -104,7 +105,7 @@ async function requestStart(
   ) {
     throw invalidResponse();
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function sanitizeStartApiError(error: ApiErrorEnvelope): ApiErrorEnvelope {
@@ -153,14 +154,6 @@ function invalidResponse(): CliFailure {
   return internalFailure(
     "HostDeck daemon returned invalid managed-session start data."
   );
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(

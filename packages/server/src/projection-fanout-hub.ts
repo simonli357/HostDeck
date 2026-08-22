@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   isoTimestampSchema,
   outputCursorSchema,
   resourceBudgetDefinitionByKey,
@@ -452,7 +453,7 @@ function parseCommittedPublication(candidate: unknown): CommittedProjectionAppen
       "Committed projection event, projection, and revision contradict each other."
     );
   }
-  return deepFreeze({ event: event.data, projection: projection.data, revision });
+  return deepFreezeExactData({ event: event.data, projection: projection.data, revision });
 }
 
 function parseRevision(candidate: unknown): SelectedStateRevision {
@@ -508,12 +509,6 @@ function isDeepFrozen(candidate: unknown, seen = new WeakSet<object>()): boolean
   seen.add(candidate);
   if (!Object.isFrozen(candidate)) return false;
   return Object.values(candidate).every((child) => isDeepFrozen(child, seen));
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {

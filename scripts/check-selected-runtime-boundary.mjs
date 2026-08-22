@@ -102,6 +102,7 @@ const exactRootModules = new Map([
       "./csrf.js",
       "./device-listing.js",
       "./device-revocation.js",
+      "./exact-data-object.js",
       "./host-health.js",
       "./host-lock.js",
       "./host-platform.js",

@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   historicalSelectedNetworkAuditEventRecordSchema,
   isHistoricalSelectedNetworkAuditAction,
   remoteIngressAuditSummarySchema,
@@ -12,7 +13,6 @@ import {
   type SelectedAuditRepository
 } from "@hostdeck/storage";
 import {
-  deepFreeze,
   type InternalExecutorOptions,
   type ParsedExecutionInput,
   type ParsedTransition,
@@ -486,7 +486,7 @@ class DefaultSecurityMutationAuditExecutor {
       ? historicalSelectedNetworkAuditEventRecordSchema.safeParse(candidate)
       : selectedSecurityAuditEventRecordSchema.safeParse(candidate);
     if (!result.success) throw new TypeError("Security audit record construction failed.");
-    return deepFreeze(result.data);
+    return deepFreezeExactData(result.data);
   }
 }
 

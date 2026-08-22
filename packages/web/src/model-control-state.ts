@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type ModelCatalogEntry,
   type ModelControlSnapshot,
   type ModelSelectionRequest,
@@ -283,7 +284,7 @@ export function projectModelControl(input: Readonly<{
           : null
     : selectionReason(input.operation, data, availability, nonReplaceablePending);
 
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: availability.visible,
     actionEnabled: availability.readEnabled,
     actionDisabledReason: availability.readReason,
@@ -515,7 +516,7 @@ export function createModelControlController(
       const requestController = new AbortController();
       const requestSequence = sequence;
       activeRequest = Object.freeze({ sequence: requestSequence, controller: requestController });
-      operation = deepFreeze({
+      operation = deepFreezeExactData({
         phase: "submitting" as const,
         operationId,
         modelId,
@@ -538,7 +539,7 @@ export function createModelControlController(
           return publish();
         }
         installSnapshot(parsed.data);
-        operation = deepFreeze({ phase: "result" as const, result });
+        operation = deepFreezeExactData({ phase: "result" as const, result });
         return publish();
       } catch (error) {
         if (closed || requestSequence !== sequence || !sheetOpen) return currentView;
@@ -682,7 +683,7 @@ function deriveStatus(
 
 function projectCurrent(data: ModelControlSnapshot): ModelControlCurrentView {
   const model = data.models.find((candidate) => candidate.id === data.current.model_id);
-  return deepFreeze({
+  return deepFreezeExactData({
     label: model?.label ?? data.current.runtime_model,
     modelId: data.current.model_id,
     runtimeModel: data.current.runtime_model,
@@ -696,7 +697,7 @@ function projectPending(data: ModelControlSnapshot): ModelControlPendingView {
   if (pending === null) throw new TypeError("HostDeck pending model projection is absent.");
   const model = data.models.find((candidate) => candidate.id === pending.model_id);
   const phase = pendingStatus(pending.phase);
-  return deepFreeze({
+  return deepFreezeExactData({
     label: model?.label ?? pending.runtime_model,
     modelId: pending.model_id,
     effort: pending.reasoning_effort,
@@ -708,7 +709,7 @@ function projectPending(data: ModelControlSnapshot): ModelControlPendingView {
 }
 
 function projectModels(data: ModelControlSnapshot): readonly ModelControlModelOptionView[] {
-  return deepFreeze(
+  return deepFreezeExactData(
     data.models.map((model) => ({
       id: model.id,
       label: model.label,
@@ -722,7 +723,7 @@ function projectModels(data: ModelControlSnapshot): readonly ModelControlModelOp
 }
 
 function projectEfforts(model: ModelCatalogEntry): readonly ModelControlEffortOptionView[] {
-  return deepFreeze(
+  return deepFreezeExactData(
     model.reasoning_efforts.map((effort) => ({
       id: effort.id,
       label: humanizeIdentity(effort.id),
@@ -1050,7 +1051,7 @@ function failure(input: Omit<ModelControlFailure, "modelId" | "effort"> & Readon
   modelId?: string | null;
   effort?: string | null;
 }>): ModelControlFailure {
-  return deepFreeze({
+  return deepFreezeExactData({
     ...input,
     modelId: input.modelId ?? null,
     effort: input.effort ?? null
@@ -1066,7 +1067,7 @@ function loadingOperation(): ModelControlOperation {
 }
 
 function failureOperation(failureValue: ModelControlFailure): ModelControlOperation {
-  return deepFreeze({ phase: "failure" as const, failure: failureValue });
+  return deepFreezeExactData({ phase: "failure" as const, failure: failureValue });
 }
 
 function clearSelectableFailure(operation: ModelControlOperation): ModelControlOperation {
@@ -1076,7 +1077,7 @@ function clearSelectableFailure(operation: ModelControlOperation): ModelControlO
 }
 
 function freezeSnapshot(candidate: unknown): ModelControlSnapshot {
-  return deepFreeze(modelControlSnapshotSchema.parse(candidate));
+  return deepFreezeExactData(modelControlSnapshotSchema.parse(candidate));
 }
 
 function parseSessionId(candidate: unknown): SessionId {
@@ -1135,7 +1136,7 @@ function humanizeIdentity(value: string): string {
 }
 
 function hiddenView(sessionId: SessionId): ModelControlView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     actionEnabled: false,
     actionDisabledReason: "Session details are not available.",
@@ -1161,8 +1162,3 @@ function hiddenView(sessionId: SessionId): ModelControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

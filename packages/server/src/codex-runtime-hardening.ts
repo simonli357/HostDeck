@@ -1,5 +1,6 @@
 import { relative, resolve } from "node:path";
 import { codexBindingDescriptor } from "@hostdeck/codex-adapter";
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import { z } from "zod";
 import { runtimeHardeningDeterministicTests } from "./codex-runtime-hardening-manifest.js";
 import { parseRuntimeLifecycleAcceptanceEvidence } from "./codex-runtime-lifecycle-acceptance.js";
@@ -423,7 +424,7 @@ export function parseRuntimeHardeningEvidence(
   ) {
     throw new TypeError("Runtime hardening binding identity differs.");
   }
-  return deepFreeze(parsed);
+  return deepFreezeExactData(parsed);
 }
 
 function countVitestSuites(
@@ -440,10 +441,3 @@ function countVitestSuites(
   }, 0);
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const nested of Object.values(value)) deepFreeze(nested);
-    Object.freeze(value);
-  }
-  return value;
-}

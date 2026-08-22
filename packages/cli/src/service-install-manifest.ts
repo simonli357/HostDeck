@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { delimiter, isAbsolute, join, normalize, relative, sep } from "node:path";
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import {
   hostDeckCodexSystemdUnitName,
   hostDeckSystemdUnitName
@@ -165,7 +166,7 @@ export function resolveHostDeckServiceInstallLayout(
   ] as const) {
     assertSeparatePaths(left, right);
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     command_path: commandPath,
     config_root: configRoot,
     current_link: currentLink,
@@ -579,7 +580,7 @@ function validateManifest(candidate: unknown): HostDeckServiceInstallManifest {
   if (sha256(stableJson(unsigned)) !== manifestSha256) {
     throw new TypeError("HostDeck service install manifest hash is invalid.");
   }
-  return deepFreeze({ ...unsigned, manifest_sha256: manifestSha256 });
+  return deepFreezeExactData({ ...unsigned, manifest_sha256: manifestSha256 });
 }
 
 function exactRecord(
@@ -718,10 +719,3 @@ function stableJson(value: unknown): string {
   return serialized;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

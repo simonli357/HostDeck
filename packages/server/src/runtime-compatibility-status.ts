@@ -1,5 +1,6 @@
 import { codexBindingDescriptor } from "@hostdeck/codex-adapter";
 import {
+  deepFreezeExactData, 
   type SelectedHostCompatibilityStatus,
   type SelectedRuntimeCompatibilityRecord,
   selectedHostCompatibilityStatusSchema,
@@ -267,7 +268,7 @@ function project(
 ): SelectedHostCompatibilityStatus {
   const parsed = selectedHostCompatibilityStatusSchema.safeParse(candidate);
   if (!parsed.success) throw projectionFailure();
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function readExactFunction(
@@ -302,14 +303,3 @@ function projectionFailure(): TypeError {
   return new TypeError("Runtime compatibility status projection is contradictory.");
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (
-    candidate !== null &&
-    typeof candidate === "object" &&
-    !Object.isFrozen(candidate)
-  ) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

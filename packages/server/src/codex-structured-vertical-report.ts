@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import { z } from "zod";
 import {
   readCodexSmokePrivateJson,
@@ -186,7 +187,7 @@ export function parseStructuredVerticalReport(
   if (expectedCommit !== undefined && parsed.hostdeck_commit !== expectedCommit) {
     throw new TypeError("Structured vertical report commit does not match.");
   }
-  return deepFreeze(parsed);
+  return deepFreezeExactData(parsed);
 }
 
 export function requireStructuredVerticalReportPath(
@@ -227,10 +228,3 @@ export function readStructuredVerticalReport(
   );
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const nested of Object.values(value)) deepFreeze(nested);
-    Object.freeze(value);
-  }
-  return value;
-}

@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { buildCodexTuiResumeCommand } from "@hostdeck/codex-adapter";
 import {
+  deepFreezeExactData, 
   formatSelectedResumeLaunchCommand,
   type RuntimeCompatibility,
   runtimeCompatibilitySchema,
@@ -274,7 +275,7 @@ function readRuntime(
       { cause: parsed.error }
     );
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function materializeResponse(
@@ -375,7 +376,7 @@ function parseLaunch(candidate: unknown): SelectedResumeLaunch {
     executable: values.executable,
     args: values.args
   });
-  return deepFreeze(parsed);
+  return deepFreezeExactData(parsed);
 }
 
 function parseSessionId(
@@ -398,15 +399,7 @@ function parseResponse(candidate: unknown): SelectedResumeMetadataResponse {
       { cause: parsed.error }
     );
   }
-  return deepFreeze(parsed.data);
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
+  return deepFreezeExactData(parsed.data);
 }
 
 function readExactDataObject<const Key extends string>(

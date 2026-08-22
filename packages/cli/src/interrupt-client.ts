@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type InterruptRequest,
   type InterruptResponse,
   interruptRequestSchema,
@@ -105,7 +106,7 @@ async function requestInterrupt(
     ) {
       throw invalidResponse();
     }
-    return deepFreeze(parsed.data);
+    return deepFreezeExactData(parsed.data);
   } catch (error) {
     if (error instanceof CliFailure) throw error;
     throw invalidResponse();
@@ -159,12 +160,6 @@ function interruptErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session interrupt data.");
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(candidate: unknown): Readonly<Record<(typeof optionKeys)[number], unknown>> {

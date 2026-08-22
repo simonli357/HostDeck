@@ -2,6 +2,7 @@ import {
   type ApiErrorEnvelope,
   type ApprovalResponseRequest,
   approvalResponseRequestSchema,
+  deepFreezeExactData, 
   type PendingApprovalListResponse,
   type PendingApprovalResponse,
   pendingApprovalListResponseSchema,
@@ -133,7 +134,7 @@ async function requestApprovals(
     if (request === null) {
       const parsed = pendingApprovalListResponseSchema.safeParse(payload);
       if (!parsed.success || parsed.data.target.session_id !== sessionId) throw invalidResponse();
-      return deepFreeze(parsed.data);
+      return deepFreezeExactData(parsed.data);
     }
     const parsed = pendingApprovalResponseSchema.safeParse(payload);
     if (
@@ -145,7 +146,7 @@ async function requestApprovals(
     ) {
       throw invalidResponse();
     }
-    return deepFreeze(parsed.data);
+    return deepFreezeExactData(parsed.data);
   } catch (error) {
     if (error instanceof CliFailure) throw error;
     throw invalidResponse();
@@ -201,12 +202,6 @@ function approvalErrorMessage(code: ApiErrorEnvelope["code"]): string {
 
 function invalidResponse(): CliFailure {
   return internalFailure("HostDeck daemon returned invalid managed-session approval data.");
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(candidate: unknown): Readonly<Record<(typeof optionKeys)[number], unknown>> {

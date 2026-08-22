@@ -1,5 +1,6 @@
 import { spawn as spawnProcess } from "node:child_process";
 import {
+  deepFreezeExactData, 
   type SelectedResumeLaunch,
   selectedResumeLaunchSchema
 } from "@hostdeck/contracts";
@@ -129,7 +130,7 @@ function parseLaunch(candidate: unknown): SelectedResumeLaunch {
   if (!parsed.success) {
     throw internalFailure("Codex TUI resume launch descriptor is invalid.");
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function resumeStartFailure(cause: unknown): CliFailure {
@@ -140,14 +141,6 @@ function resumeStartFailure(cause: unknown): CliFailure {
     exitCode: cliExitCodes.apiError,
     cause
   });
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactOptions(

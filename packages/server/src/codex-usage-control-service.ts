@@ -5,6 +5,7 @@ import {
   type NormalizedCodexEvent
 } from "@hostdeck/codex-adapter";
 import {
+  deepFreezeExactData, 
   defaultResourceBudget,
   type ManagedSessionTarget,
   positiveSafeIntegerSchema,
@@ -187,7 +188,7 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
         snapshot.error
       );
     }
-    return deepFreeze(snapshot.data);
+    return deepFreezeExactData(snapshot.data);
   }
 
   observe(event: NormalizedCodexEvent, generationInput: unknown): boolean {
@@ -282,7 +283,7 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
     }
     this.threadById.set(
       event.thread_id,
-      Object.freeze({ observation: deepFreeze(parsed.data), sequence: event.sequence })
+      Object.freeze({ observation: deepFreezeExactData(parsed.data), sequence: event.sequence })
     );
     return true;
   }
@@ -397,7 +398,7 @@ class DefaultCodexUsageControlService implements CodexUsageControlService {
         parsed.success ? undefined : parsed.error
       );
     }
-    this.rateLimit = Object.freeze({ observation: deepFreeze(parsed.data), sequence: event.sequence });
+    this.rateLimit = Object.freeze({ observation: deepFreezeExactData(parsed.data), sequence: event.sequence });
   }
 
   private async readAccount(deadline: OperationDeadline): Promise<CodexAccountUsageRead> {
@@ -640,8 +641,3 @@ function bounded(message: string): string {
   return normalized.length <= 240 ? normalized : `${normalized.slice(0, 237)}...`;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

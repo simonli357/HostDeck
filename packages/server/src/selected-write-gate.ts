@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  deepFreezeExactData, 
   type SelectedAuditActor,
   type SelectedRequestAuthenticationContext,
   selectedAuditActorSchema
@@ -1069,7 +1070,7 @@ function auditActor(context: SelectedRequestAuthenticationContext): SelectedAudi
         }
   );
   if (!parsed.success) throw new TypeError("Selected-write audit actor is invalid.");
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function assertMutationMatchesManifest<TAction extends SelectedApiAuditAction>(
@@ -1264,10 +1265,3 @@ function increment(counters: MutableCounters, key: keyof MutableCounters): void 
   if (counters[key] < maxCounter) counters[key] += 1;
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

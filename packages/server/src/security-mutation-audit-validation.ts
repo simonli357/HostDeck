@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  deepFreezeExactData, 
   historicalSelectedNetworkAuditEventRecordSchema,
   isHistoricalSelectedNetworkAuditAction,
   isSelectedSecurityAuditAction,
@@ -257,14 +258,6 @@ export function proveTerminalTrail(
   }
 }
 
-export function deepFreeze<T>(input: T): T {
-  if (input !== null && typeof input === "object" && !Object.isFrozen(input)) {
-    for (const value of Object.values(input)) deepFreeze(value);
-    Object.freeze(input);
-  }
-  return input;
-}
-
 function parseValidationRecord(
   input: Omit<SecurityMutationAuditEventRecord, "at" | "id"> | Readonly<Record<string, unknown>>
 ): SecurityMutationAuditEventRecord {
@@ -280,7 +273,7 @@ function parseValidationRecord(
       ? historicalSelectedNetworkAuditEventRecordSchema.safeParse(candidate)
       : selectedSecurityAuditV1EventRecordSchema.safeParse(candidate);
   if (!result.success) throw new TypeError("Security audit data does not match its selected contract.");
-  return deepFreeze(result.data);
+  return deepFreezeExactData(result.data);
 }
 
 function parseSecurityTrail(input: unknown) {
@@ -298,7 +291,7 @@ function parseSecurityTrail(input: unknown) {
   });
   const coherent = selectedAuditTrailSchema.safeParse({ ...base.data, records });
   if (!coherent.success) throw new TypeError("Selected audit port returned an incoherent trail.");
-  return deepFreeze(coherent.data);
+  return deepFreezeExactData(coherent.data);
 }
 
 function assertSafeTrailTree(input: unknown): void {

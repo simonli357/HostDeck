@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  deepFreezeExactData, 
   isoTimestampSchema,
   isSelectedHostLocalHealthCauseValid,
   type RemoteIngressPublicState,
@@ -351,7 +352,7 @@ class DefaultHostDeckHostHealthService {
     const clonedState = clonePlainData(values.state, "invalid_update");
     const parsedState = remoteIngressPublicStateSchema.safeParse(clonedState);
     if (!parsedState.success) throw healthError("invalid_update");
-    const state = deepFreeze(parsedState.data);
+    const state = deepFreezeExactData(parsedState.data);
     const fingerprint: RemoteObservationFingerprint = Object.freeze({
       kind: "observed",
       state
@@ -918,10 +919,3 @@ function retryableHealthError(code: HostDeckHostHealthErrorCode): boolean {
   return code === "mutation_not_ready" || code === "mutation_state_changed";
 }
 
-function deepFreeze<T>(candidate: T): T {
-  if (candidate !== null && typeof candidate === "object" && !Object.isFrozen(candidate)) {
-    for (const value of Object.values(candidate)) deepFreeze(value);
-    Object.freeze(candidate);
-  }
-  return candidate;
-}

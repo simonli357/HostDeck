@@ -1,4 +1,5 @@
 import {
+  deepFreezeExactData, 
   type NativeSessionAdoptRequest,
   type NativeSessionAdoptResponse,
   type NativeSessionDiscoveryRequest,
@@ -193,7 +194,7 @@ export function createHostDeckNativeSessionRouteRegistration(
           }
           assertHostDeckRequestAuthenticationCurrent(request, authentication);
           requireReadyHost(health);
-          return deepFreeze(nativeSessionDiscoveryResponseSchema.parse(response));
+          return deepFreezeExactData(nativeSessionDiscoveryResponseSchema.parse(response));
         }
       );
 
@@ -279,7 +280,7 @@ export function createHostDeckNativeSessionRouteRegistration(
               }
             },
             prepare_response(candidate) {
-              return deepFreeze(nativeSessionAdoptResponseSchema.parse(candidate));
+              return deepFreezeExactData(nativeSessionAdoptResponseSchema.parse(candidate));
             }
           });
           if (result.outcome !== "succeeded") throw publicNativeFailure(result.error_code, "adopt");
@@ -376,11 +377,11 @@ export function createHostDeckNativeSessionRouteRegistration(
                   schema_version: 1 as const,
                   unmanaged: true as const
                 }),
-                response: deepFreeze(parsed.data)
+                response: deepFreezeExactData(parsed.data)
               });
             },
             prepare_response(candidate) {
-              return deepFreeze(nativeSessionUnmanageResponseSchema.parse(candidate));
+              return deepFreezeExactData(nativeSessionUnmanageResponseSchema.parse(candidate));
             }
           });
           if (result.outcome !== "succeeded") {
@@ -576,7 +577,7 @@ function adoptionResponse(
   }
   return Object.freeze({
     historyTurnCount: count as number,
-    response: deepFreeze(
+    response: deepFreezeExactData(
       nativeSessionAdoptResponseSchema.parse({
         operation_id: request.operation_id,
         session: projection.session
@@ -699,8 +700,3 @@ function applyNoStore(reply: FastifyReply): void {
   reply.header("pragma", "no-cache");
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

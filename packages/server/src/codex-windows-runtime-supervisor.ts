@@ -8,6 +8,7 @@ import {
 } from "@hostdeck/codex-adapter";
 import {
   assertResolvedResourceBudget,
+  deepFreezeExactData, 
   type ResourceBudget
 } from "@hostdeck/contracts";
 import {
@@ -446,7 +447,7 @@ class DefaultCodexWindowsRuntimeSupervisor
   }
 
   snapshot(): CodexWindowsRuntimeSupervisorSnapshot {
-    return deepFreeze({
+    return deepFreezeExactData({
       target: "windows-x64" as const,
       phase: this.phase,
       ownership: "owned_child" as const,
@@ -1486,12 +1487,3 @@ function containsControl(value: string): boolean {
   return false;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value as Record<string, unknown>)) {
-      deepFreeze(child);
-    }
-    Object.freeze(value);
-  }
-  return value;
-}

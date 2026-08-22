@@ -1,4 +1,5 @@
 import { basename, resolve } from "node:path";
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import { z } from "zod";
 
 const fullCommitSchema = z.string().regex(/^[0-9a-f]{40}$/u);
@@ -447,7 +448,7 @@ export function parseSupervisorScenarioEvidence(
     "supervisor"
   );
   requireCommit(parsed.hostdeck_commit, expectedCommit, "supervisor");
-  return deepFreeze(parsed);
+  return deepFreezeExactData(parsed);
 }
 
 export function createRuntimeLifecycleAcceptanceEvidence(
@@ -560,7 +561,7 @@ export function createRuntimeLifecycleAcceptanceEvidence(
       child_reports_remaining: cleanup.child_reports_remaining
     }
   };
-  return deepFreeze(
+  return deepFreezeExactData(
     parseEvidence(aggregateEvidenceSchema, evidence, "aggregate")
   );
 }
@@ -568,7 +569,7 @@ export function createRuntimeLifecycleAcceptanceEvidence(
 export function parseRuntimeLifecycleAcceptanceEvidence(
   candidate: unknown
 ): RuntimeLifecycleAcceptanceEvidence {
-  return deepFreeze(
+  return deepFreezeExactData(
     parseEvidence(aggregateEvidenceSchema, candidate, "aggregate")
   );
 }
@@ -630,10 +631,3 @@ function acceptanceError(message: string): TypeError {
   return new TypeError(message);
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const child of Object.values(value)) deepFreeze(child);
-    Object.freeze(value);
-  }
-  return value;
-}

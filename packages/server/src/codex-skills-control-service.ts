@@ -4,6 +4,7 @@ import {
   HostDeckCodexAdapterError
 } from "@hostdeck/codex-adapter";
 import {
+  deepFreezeExactData, 
   type ManagedSessionTarget,
   type SelectedOperationIntent,
   type SkillsSnapshot,
@@ -128,7 +129,7 @@ async function listSkills(
     );
   }
   requireRuntimeMatch(current, runtimeBefore.version);
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function readCurrentRuntime(skills: CodexSkillsClient): { readonly version: string; readonly generation: number } {
@@ -398,8 +399,3 @@ function bounded(message: string): string {
   return normalized.length <= 240 ? normalized : `${normalized.slice(0, 237)}...`;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

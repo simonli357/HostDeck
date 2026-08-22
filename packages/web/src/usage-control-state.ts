@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   sessionIdSchema,
   type UsageRateLimitWindow,
   type UsageSnapshot,
@@ -202,7 +203,7 @@ export function projectUsageControl(input: UsageControlProjectionInput): UsageCo
   const status = deriveStatus(input.operation, data, sheetOpen, availability, stale);
   const projectedData = authorizedCapture && data !== null ? projectSnapshot(data, stale) : null;
 
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: availability.visible,
     actionEnabled: availability.readEnabled,
     actionDisabledReason: availability.readReason,
@@ -495,7 +496,7 @@ function projectSnapshot(
   thread: UsageThreadView;
   rateLimits: UsageRateLimitsView;
 }> {
-  return deepFreeze({
+  return deepFreezeExactData({
     capture: {
       measuredAt: data.measured_at,
       runtimeVersion: data.runtime_version,
@@ -511,7 +512,7 @@ function projectAccount(data: UsageSnapshot): UsageAccountView {
   const summary = data.account.summary;
   const daily = data.account.daily_buckets;
   const visibleBuckets = daily === null ? [] : daily.slice(-visibleDailyBucketLimit);
-  return deepFreeze({
+  return deepFreezeExactData({
     metrics: [
       metric("Lifetime tokens", summary.lifetime_tokens),
       metric("Peak daily tokens", summary.peak_daily_tokens),
@@ -541,7 +542,7 @@ function projectThread(data: UsageSnapshot): UsageThreadView {
   if (data.thread.state === "not_observed") {
     return Object.freeze({ state: "not_observed" as const });
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     state: "observed" as const,
     observedAt: data.thread.observed_at,
     total: projectBreakdown(data.thread.total),
@@ -569,7 +570,7 @@ function projectRateLimits(data: UsageSnapshot): UsageRateLimitsView {
   if (data.rate_limits.state === "not_observed") {
     return Object.freeze({ state: "not_observed" as const });
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     state: "observed" as const,
     observedAt: data.rate_limits.observed_at,
     primary: projectRateWindow(data.rate_limits.primary),
@@ -628,7 +629,7 @@ function freezeSnapshot(
   if (!matchesCaptureTarget(parsed, snapshot, sessionId)) {
     throw new TypeError("HostDeck usage response target is invalid.");
   }
-  return deepFreeze(parsed);
+  return deepFreezeExactData(parsed);
 }
 
 function matchesCaptureTarget(
@@ -789,7 +790,7 @@ function failureOperation(
   kind: UsageControlFailure["kind"],
   message: string
 ): UsageControlOperation {
-  return deepFreeze({ phase: "failure" as const, failure: { kind, message } });
+  return deepFreezeExactData({ phase: "failure" as const, failure: { kind, message } });
 }
 
 function parseSessionId(candidate: unknown): SessionId {
@@ -827,7 +828,7 @@ function parsePort(candidate: unknown): UsageControlPort {
 }
 
 function hiddenView(sessionId: SessionId): UsageControlView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     actionEnabled: false,
     actionDisabledReason: "Session details are not available.",
@@ -847,8 +848,3 @@ function hiddenView(sessionId: SessionId): UsageControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

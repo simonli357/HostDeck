@@ -5,6 +5,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
+import { deepFreezeExactData } from "@hostdeck/contracts";
 import { secureHostDeckRegularFile } from "@hostdeck/storage";
 import { z } from "zod";
 
@@ -235,7 +236,7 @@ export function parseWindowsStructuredVerticalReport(
   ) {
     throw new TypeError("Windows structured vertical report commit does not match.");
   }
-  return deepFreeze(parsed);
+  return deepFreezeExactData(parsed);
 }
 
 export function requireWindowsStructuredVerticalReportPath(
@@ -303,10 +304,3 @@ export function readWindowsStructuredVerticalReport(
   return parseWindowsStructuredVerticalReport(decoded, expectedCommit);
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const nested of Object.values(value)) deepFreeze(nested);
-    Object.freeze(value);
-  }
-  return value;
-}

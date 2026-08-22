@@ -7,6 +7,7 @@ import {
 import {
   approvalResponseOperationIntentSchema,
   codexVersionSchema,
+  deepFreezeExactData, 
   defaultResourceBudget,
   isoTimestampSchema,
   type ManagedSessionTarget,
@@ -259,7 +260,7 @@ class DefaultCodexApprovalControlService implements CodexApprovalControlService 
     this.reconcileGeneration(this.activeRuntime().generation);
     await this.expireDue();
     this.requireTarget(target.session_id, target.codex_thread_id);
-    return deepFreeze(
+    return deepFreezeExactData(
       [...this.records.values()]
         .filter((record) => record.session_id === target.session_id && record.request.thread_id === target.codex_thread_id)
         .sort((left, right) =>
@@ -1087,7 +1088,7 @@ function parsePendingApproval(candidate: unknown): PendingApproval {
   if (!parsed.success) {
     throw approvalError("runtime_protocol_error", "protocol_error", "Approval state violates its selected contract.", "not_sent", false, parsed.error);
   }
-  return deepFreeze(parsed.data);
+  return deepFreezeExactData(parsed.data);
 }
 
 function parseGeneration(candidate: unknown): number {
@@ -1199,10 +1200,3 @@ function bounded(value: string): string {
   return normalized.length <= 240 ? normalized : `${normalized.slice(0, 237)}...`;
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.freeze(value);
-    for (const child of Object.values(value)) deepFreeze(child);
-  }
-  return value;
-}

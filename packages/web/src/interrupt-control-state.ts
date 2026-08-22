@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type InterruptRequest,
   interruptRequestSchema,
   interruptResponseSchema,
@@ -234,7 +235,7 @@ export function createInterruptControlController(
       sheetOpen
     });
 
-    return deepFreeze({
+    return deepFreezeExactData({
       visible: availability.visible,
       sheetOpen: sheetOpen && availability.visible,
       phase: statusValue.phase,
@@ -718,7 +719,7 @@ function validateSuccess(candidate: unknown, attempt: InterruptAttempt): Interru
   ) {
     throw new TypeError("HostDeck interrupt response target is invalid.");
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "confirmed_interrupted" as const,
     source: "api" as const,
     label: "Turn interrupted",
@@ -732,7 +733,7 @@ function resultFromObservation(
   observation: Extract<InterruptObservation, { readonly kind: "terminal" }>
 ): InterruptResultView {
   if (observation.state === "interrupted") {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "feed_interrupted" as const,
       source: "feed" as const,
       label: "Turn ended as interrupted",
@@ -742,7 +743,7 @@ function resultFromObservation(
     });
   }
   const failed = observation.state === "failed";
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "not_interrupted" as const,
     source: "feed" as const,
     label: failed ? "Turn failed" : "Turn completed",
@@ -760,7 +761,7 @@ function classifyAttemptFailure(error: unknown): InterruptResultView {
     apiError !== null &&
     ["permission_denied", "read_only", "host_locked", "invalid_origin", "insecure_transport"].includes(apiError.code)
   ) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "blocked" as const,
       source: "browser" as const,
       label: "Interrupt blocked",
@@ -777,7 +778,7 @@ function classifyAttemptFailure(error: unknown): InterruptResultView {
     error instanceof HostDeckBrowserConnectionError ||
     (error instanceof HostDeckBrowserCsrfError && ["authority_rejected", "not_ready"].includes(error.reason));
   if (authorityFailure) {
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "blocked" as const,
       source: "browser" as const,
       label: "Interrupt blocked",
@@ -790,7 +791,7 @@ function classifyAttemptFailure(error: unknown): InterruptResultView {
 }
 
 function outcomeUnknownResult(): InterruptResultView {
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "outcome_unknown" as const,
     source: "browser" as const,
     label: "Outcome not confirmed",
@@ -801,7 +802,7 @@ function outcomeUnknownResult(): InterruptResultView {
 }
 
 function inconsistentResult(): InterruptResultView {
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "inconsistent" as const,
     source: "browser" as const,
     label: "Interrupt state inconsistent",
@@ -812,7 +813,7 @@ function inconsistentResult(): InterruptResultView {
 }
 
 function setupFailureResult(): InterruptResultView {
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "blocked" as const,
     source: "browser" as const,
     label: "Secure interrupt setup unavailable",
@@ -1054,7 +1055,7 @@ function parseContext(candidate: unknown, sessionId: SessionId): InterruptContro
     throw new TypeError("HostDeck interrupt-control context is invalid.");
   }
   const events = value.events.map((event) =>
-    deepFreeze(selectedProjectionEventSchema.parse(event))
+    deepFreezeExactData(selectedProjectionEventSchema.parse(event))
   );
   let previous = -1;
   let boundarySeen = false;
@@ -1161,7 +1162,7 @@ function readExactObject<const Keys extends readonly string[]>(
 }
 
 function hiddenView(): InterruptControlView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     sheetOpen: false,
     phase: "hidden" as const,
@@ -1182,8 +1183,3 @@ function hiddenView(): InterruptControlView {
   });
 }
 
-function deepFreeze<Value>(value: Value): Value {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
-  return Object.freeze(value);
-}

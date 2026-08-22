@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import {
+  deepFreezeExactData, 
   type SelectedEventPageInput,
   type SelectedEventPageParams,
   type SelectedEventPageResponse,
@@ -362,7 +363,7 @@ function parseAndValidatePage(
     ) {
       throw corruptStorageFailure();
     }
-    return deepFreeze(page);
+    return deepFreezeExactData(page);
   }
 
   const crossesRetentionBoundary =
@@ -395,7 +396,7 @@ function parseAndValidatePage(
   ) {
     throw corruptStorageFailure();
   }
-  return deepFreeze(page);
+  return deepFreezeExactData(page);
 }
 
 function assertCursorNotFuture(
@@ -490,14 +491,6 @@ function unstableStorageFailure(): HostDeckHttpError {
     retryable: true,
     status: 500
   });
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
 }
 
 function readExactDataObject<const Key extends string>(

@@ -1,5 +1,6 @@
 import {
   type ApiErrorEnvelope,
+  deepFreezeExactData, 
   type NativeSessionAdoptRequest,
   type NativeSessionAdoptResponse,
   type NativeSessionDiscoveryResponse,
@@ -107,7 +108,7 @@ export function createHostDeckNativeSessionClient(
       ) {
         throw invalidResponse("adopt");
       }
-      return deepFreeze(parsed.data);
+      return deepFreezeExactData(parsed.data);
     },
 
     async discover(candidate: HostDeckNativeSessionDiscoveryInput) {
@@ -130,7 +131,7 @@ export function createHostDeckNativeSessionClient(
       ) {
         throw invalidResponse("discover");
       }
-      return deepFreeze(parsed.data);
+      return deepFreezeExactData(parsed.data);
     },
 
     async unmanage(candidate: HostDeckNativeSessionUnmanageRequest) {
@@ -155,7 +156,7 @@ export function createHostDeckNativeSessionClient(
       ) {
         throw invalidResponse("unmanage");
       }
-      return deepFreeze(parsed.data);
+      return deepFreezeExactData(parsed.data);
     }
   });
 }
@@ -353,8 +354,3 @@ function readExactDataObject<const Key extends string>(
   }
 }
 
-function deepFreeze<T>(value: T): T {
-  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreeze(child);
-  return Object.freeze(value);
-}

@@ -1,5 +1,6 @@
 import {
   clientOperationIdSchema,
+  deepFreezeExactData, 
   type PromptDispatchResponse,
   type PromptSessionRequest,
   promptDispatchResponseSchema,
@@ -238,7 +239,7 @@ export function projectPromptComposer(input: PromptComposerProjectionInput): Pro
     !outcomeUnknown &&
     !blocksSameText;
 
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: availability.visible,
     sessionId,
     targetLabel: availability.targetLabel,
@@ -367,7 +368,7 @@ export function createPromptComposerController(
       sequence += 1;
       const requestSequence = sequence;
       activeRequest = Object.freeze({ sequence: requestSequence, controller: requestController });
-      operation = deepFreeze({
+      operation = deepFreezeExactData({
         phase: "submitting" as const,
         operationId,
         submittedText,
@@ -398,9 +399,9 @@ export function createPromptComposerController(
           operation.phase === "submitting"
             ? operation.afterCursor
             : context.feed.lastCursor;
-        operation = deepFreeze({
+        operation = deepFreezeExactData({
           phase: "accepted" as const,
-          receipt: deepFreeze(parsed.data),
+          receipt: deepFreezeExactData(parsed.data),
           afterCursor
         });
         draft = "";
@@ -499,7 +500,7 @@ function deriveAvailability(
   ) {
     return unavailable(true, detail.name, "stream_unproven");
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: true,
     targetLabel: detail.name,
     enabled: true,
@@ -673,7 +674,7 @@ function classifyDispatchFailure(error: unknown, submittedText: string): PromptC
       return knownFailure("Prompt access changed. Refresh access before trying again.", false, submittedText);
     }
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     kind: "unknown" as const,
     message: "Prompt outcome is unknown. Reload and check session activity before sending again.",
     submittedText
@@ -725,7 +726,7 @@ function unavailable(
   targetLabel: string | null,
   cause: PromptComposerDisabledCause
 ): PromptAvailability {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible,
     targetLabel,
     enabled: false,
@@ -822,11 +823,11 @@ function knownFailure(
   retryable: boolean,
   submittedText: string
 ): PromptComposerKnownFailure {
-  return deepFreeze({ kind: "known" as const, message, retryable, submittedText });
+  return deepFreezeExactData({ kind: "known" as const, message, retryable, submittedText });
 }
 
 function failureOperation(failure: PromptComposerFailure): PromptComposerOperationState {
-  return deepFreeze({ phase: "failure" as const, failure });
+  return deepFreezeExactData({ phase: "failure" as const, failure });
 }
 
 function idleOperation(): PromptComposerOperationState {
@@ -864,7 +865,7 @@ function parseOperation(candidate: unknown): PromptComposerOperationState {
         ["phase", "operationId", "submittedText", "afterCursor"],
         operationError
       );
-      return deepFreeze({
+      return deepFreezeExactData({
         phase: "submitting" as const,
         operationId: parseOperationId(values.operationId),
         submittedText: parseSubmittedText(values.submittedText),
@@ -879,7 +880,7 @@ function parseOperation(candidate: unknown): PromptComposerOperationState {
       );
       const receipt = promptDispatchResponseSchema.safeParse(values.receipt);
       if (!receipt.success) throw new TypeError(operationError);
-      return deepFreeze({
+      return deepFreezeExactData({
         phase: "accepted" as const,
         receipt: receipt.data,
         afterCursor: parseCursor(values.afterCursor)
@@ -1100,7 +1101,7 @@ function parseFeed(candidate: unknown): SessionDetailFeedState {
   if (parseCursor(values.lastCursor) !== expectedCursor) {
     throw new TypeError(contextError);
   }
-  return deepFreeze({
+  return deepFreezeExactData({
     sessionId,
     events,
     acceptedCount: values.acceptedCount as number,
@@ -1129,7 +1130,7 @@ function parseFailure(candidate: unknown): PromptComposerFailure {
       ["kind", "message", "submittedText"],
       operationError
     );
-    return deepFreeze({
+    return deepFreezeExactData({
       kind: "unknown" as const,
       message: parseFailureMessage(exact.message),
       submittedText: parseSubmittedText(exact.submittedText)
@@ -1222,7 +1223,7 @@ function exactTargetSession(snapshot: BrowserConnectionSnapshot): string | null 
 }
 
 function hiddenView(sessionId: SessionId): PromptComposerView {
-  return deepFreeze({
+  return deepFreezeExactData({
     visible: false,
     sessionId,
     targetLabel: null,
@@ -1242,11 +1243,3 @@ function hiddenView(sessionId: SessionId): PromptComposerView {
   });
 }
 
-function deepFreeze<Value>(value: Value, seen = new Set<object>()): Value {
-  if (value === null || typeof value !== "object" || seen.has(value)) return value;
-  seen.add(value);
-  for (const child of Object.values(value as Record<string, unknown>)) {
-    deepFreeze(child, seen);
-  }
-  return Object.freeze(value);
-}
