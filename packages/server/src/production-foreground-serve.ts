@@ -1033,21 +1033,40 @@ function reportHttpIssue(
     }
   ) => void
 ): void {
-  report(
-    "http",
-    observation.framework_code === undefined
-      ? "internal_error"
-      : "framework_error",
-    {
-      // A constructor name is an identifier from our own or Node's type space, never
-      // caller data. `message` and `stack` are deliberately not read here.
+  // Every read below is defensive and every failure degrades to null, because reporting the
+  // issue AT ALL matters more than describing it. An earlier revision evaluated these as
+  // argument expressions, so a thrown accessor on the observation suppressed the report
+  // entirely and made a failure invisible - strictly worse than the counter this replaced.
+  let frameworkCode: string | null = null;
+  let hasFrameworkCode = false;
+  let detail = { error_class: null as string | null, framework_code: null as string | null, request_id: null as string | null };
+  try {
+    hasFrameworkCode = observation.framework_code !== undefined;
+    frameworkCode = boundedDiagnosticCode(observation.framework_code);
+    detail = {
       error_class: errorClassName(observation.error),
-      framework_code: observation.framework_code ?? null,
-      // Server-generated `req_<uuid>`; `requestIdHeader: false` means a caller cannot
-      // forge or influence it.
-      request_id: typeof observation.request_id === "string" ? observation.request_id : null
-    }
-  );
+      framework_code: frameworkCode,
+      request_id: boundedDiagnosticCode(observation.request_id)
+    };
+  } catch {
+    detail = { error_class: null, framework_code: null, request_id: null };
+  }
+  report("http", hasFrameworkCode ? "framework_error" : "internal_error", detail);
+}
+
+/**
+ * Accept only a bounded identifier-shaped token.
+ *
+ * `framework_code` reaches us from `fastifyErrorCode`, which returns `.code` off any object
+ * carrying a string `code`, so it is NOT guaranteed to be a Fastify `FST_ERR_*` constant.
+ * Unvalidated it could be arbitrary length and would be rendered straight into operator
+ * stderr, where exceeding `cli_response_max_bytes` replaces the operator's real failure with
+ * a limit error. Bounding it here is what makes the CLI renderer's promise true.
+ */
+function boundedDiagnosticCode(candidate: unknown): string | null {
+  if (typeof candidate !== "string") return null;
+  if (candidate.length === 0 || candidate.length > 96) return null;
+  return /^[A-Za-z0-9_$.:-]+$/u.test(candidate) ? candidate : null;
 }
 
 /**
@@ -1069,11 +1088,33 @@ export function hostDeckDiagnosticErrorClass(error: unknown): string | null {
   return errorClassName(error);
 }
 
+/**
+ * Resolve the class name of a thrown value, or null.
+ *
+ * The constructor is read from the PROTOTYPE, never from the value itself, so an own
+ * `constructor` property cannot spoof it - and an own `constructor` is trivially reachable,
+ * because `JSON.parse` preserves it (only `__proto__` is special-cased). The prototype's
+ * `constructor` must also be a real function, and the whole read is wrapped because a
+ * throwing accessor here must not suppress the report.
+ *
+ * Residual, stated plainly rather than claimed away: a caller who fully controls the thrown
+ * value can still present a genuine constructor whose `name` they chose, so up to 64
+ * identifier characters may be attacker-influenced. That is bounded and charset-limited, so
+ * it cannot break the output contract or smuggle a path, but it is not immunity.
+ */
 function errorClassName(error: unknown): string | null {
-  if (error === null || error === undefined) return null;
-  const name: unknown = (error as { constructor?: { name?: unknown } })?.constructor?.name;
-  if (typeof name !== "string" || name.length === 0 || name.length > 64) return null;
-  return /^[A-Za-z0-9_$]+$/u.test(name) ? name : null;
+  try {
+    if (error === null || typeof error !== "object") return null;
+    const prototype: unknown = Object.getPrototypeOf(error);
+    if (prototype === null || typeof prototype !== "object") return null;
+    const prototypeConstructor: unknown = (prototype as { constructor?: unknown }).constructor;
+    if (typeof prototypeConstructor !== "function") return null;
+    const name: unknown = (prototypeConstructor as { name?: unknown }).name;
+    if (typeof name !== "string" || name.length === 0 || name.length > 64) return null;
+    return /^[A-Za-z0-9_$]+$/u.test(name) ? name : null;
+  } catch {
+    return null;
+  }
 }
 
 function requireProcessExitObservation(

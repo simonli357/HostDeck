@@ -222,29 +222,54 @@ describe("IFC-V1-083 production foreground serve owner", () => {
     expect(recent.every((entry) => Object.isFrozen(entry))).toBe(true);
   });
 
-  it("accepts only identifier-shaped error class names", () => {
+  it("resolves a class name from the prototype and refuses every spoofing shape", () => {
     expect(hostDeckDiagnosticErrorClass(new TypeError("private /home/user/secret"))).toBe("TypeError");
     class HostDeckHttpError extends Error {}
     expect(hostDeckDiagnosticErrorClass(new HostDeckHttpError("x"))).toBe("HostDeckHttpError");
     expect(hostDeckDiagnosticErrorClass(null)).toBeNull();
     expect(hostDeckDiagnosticErrorClass(undefined)).toBeNull();
-    // A hostile prototype must not smuggle text into the record.
-    const hostile = Object.create({ constructor: { name: "/home/simonli/private path" } });
-    expect(hostDeckDiagnosticErrorClass(hostile)).toBeNull();
-    const oversized = Object.create({ constructor: { name: "A".repeat(200) } });
-    expect(hostDeckDiagnosticErrorClass(oversized)).toBeNull();
+    expect(hostDeckDiagnosticErrorClass("not an error")).toBeNull();
+
+    // Every spoof below is IDENTIFIER-SHAPED on purpose. An earlier revision of this test
+    // used payloads containing "/" or a space or 200 characters, which the charset and
+    // length rules rejected on their own, so it passed without ever exercising the
+    // mechanism it claimed to cover. These payloads pass the charset rule and must be
+    // rejected by reading the constructor off the prototype instead of the value.
+    const inheritedSpoof = Object.create({ constructor: { name: "home_simonli_private_path" } });
+    expect(hostDeckDiagnosticErrorClass(inheritedSpoof)).toBeNull();
+
+    const ownSpoof = Object.assign(new Error("x"), { constructor: { name: "db_password_hunter2" } });
+    expect(hostDeckDiagnosticErrorClass(ownSpoof)).toBe("Error");
+
+    // JSON.parse preserves an own `constructor`; only `__proto__` is special-cased.
+    const parsedSpoof: unknown = JSON.parse('{"constructor":{"name":"attacker_chosen_token"}}');
+    expect(hostDeckDiagnosticErrorClass(parsedSpoof)).toBe("Object");
+
+    const proxySpoof = new Proxy(
+      {},
+      { get: (_target, property) => (property === "constructor" ? { name: "etc_passwd_leak" } : undefined) }
+    );
+    // The get trap is never consulted: the prototype read returns Object.prototype, so the
+    // spoof is defeated and the truthful class is reported instead of the attacker's text.
+    expect(hostDeckDiagnosticErrorClass(proxySpoof)).toBe("Object");
+
+    // A non-identifier payload must still be rejected.
     expect(hostDeckDiagnosticErrorClass(Object.create({ constructor: { name: "Evil Name" } }))).toBeNull();
     expect(hostDeckDiagnosticErrorClass(Object.create(null))).toBeNull();
-    expect(hostDeckDiagnosticErrorClass("not an error")).toBe("String");
-    // A Proxy whose constructor getter returns attacker-chosen text must not smuggle it.
-    const proxy = new Proxy(
-      {},
-      { get: (_target, property) => (property === "constructor" ? { name: "/etc/passwd leak" } : undefined) }
-    );
-    expect(hostDeckDiagnosticErrorClass(proxy)).toBeNull();
-    // An error whose message carries a private path must contribute only its class name.
-    const withPath = new TypeError("ENOENT open '/home/simonli/private/secret'");
-    expect(hostDeckDiagnosticErrorClass(withPath)).toBe("TypeError");
+  });
+
+  it("never lets a throwing accessor suppress the report", () => {
+    // Regression guard. Reading the class name used to be an argument expression, so a
+    // throwing `constructor` accessor propagated out before report() ran: the issue was
+    // never counted and the failure became invisible - worse than the counter this replaced.
+    const hostile = new Error("x");
+    Object.defineProperty(hostile, "constructor", {
+      get() {
+        throw new Error("suppressed");
+      }
+    });
+    expect(() => hostDeckDiagnosticErrorClass(hostile)).not.toThrow();
+    expect(hostDeckDiagnosticErrorClass(hostile)).toBe("Error");
   });
 
   it("records a bounded non-reflecting diagnostic for every reported issue", async () => {

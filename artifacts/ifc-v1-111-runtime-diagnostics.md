@@ -46,13 +46,41 @@ Each record carries only values that are already safe to retain:
 | --- | --- | --- |
 | `sequence` | monotonic counter | ours |
 | `source`, `code` | existing issue vocabulary | already a closed set |
-| `error_class` | `error.constructor.name`, filtered | an identifier from our own or Node's type space |
-| `framework_code` | Fastify `FST_ERR_*` | a framework constant, not caller data |
+| `error_class` | the PROTOTYPE's constructor name, filtered | an own `constructor` cannot spoof it |
+| `framework_code` | Fastify `FST_ERR_*`, validated | bounded to 96 identifier characters |
 | `request_id` | `genReqId` `req_<uuid>` | server-generated; `requestIdHeader: false` means a caller cannot set it |
 
-`error.message` and `error.stack` are never read. `errorClassName` additionally requires the
-name to match `^[A-Za-z0-9_$]+$` and be at most 64 characters, so hostile text cannot ride in
-through a constructor name.
+`error.message` and `error.stack` are never read.
+
+Three corrections came out of adversarial review of the first implementation, and all three
+were real:
+
+- **The class-name guard was weaker than claimed.** It read `error.constructor.name` off the
+  VALUE, so an own `constructor` spoofed it — and an own `constructor` is trivially reachable,
+  since `JSON.parse` preserves it (only `__proto__` is special-cased). The charset rule
+  permits underscores, so `Object.create({constructor: {name: "home_simonli_private_path"}})`
+  returned that string verbatim. It now reads the constructor from the prototype and requires
+  it to be a function. Residual, stated rather than claimed away: a caller who fully controls
+  the thrown value can still present a genuine constructor whose name they chose, so up to 64
+  identifier characters may be influenced. That is bounded and cannot carry a path or break
+  the output contract, but it is not immunity.
+- **`framework_code` had no validation at all.** `fastifyErrorCode` returns `.code` off any
+  object carrying a string `code`, so it is not guaranteed to be a Fastify constant, and it
+  was rendered raw into operator stderr. An oversized value would exceed
+  `cli_response_max_bytes` and trip `assertCliOutput`, replacing the operator's real failure
+  with a limit error — precisely what the CLI renderer claims to prevent. It is now bounded to
+  96 identifier characters.
+- **The first version could suppress the evidence it existed to record.** The class-name read
+  was an argument expression to `report(...)`, so a throwing `constructor` accessor propagated
+  before `report` ran: the counter never incremented, no record was appended, and the throw
+  was swallowed by `observeInternalFailure`. A caller shaping the thrown value could make
+  their own failures invisible — strictly worse than the counter this replaced. Detail
+  extraction is now wrapped, and `report` is always called.
+
+The first round of tests passed for the wrong reason and are replaced. Every hostile payload
+in them contained a `/`, a space, or 200 characters, so the charset and length rules rejected
+them without the spoofing mechanism ever being exercised. The current tests use
+identifier-shaped payloads that pass those rules.
 
 Capacity is 32, trimmed on every append by `appendBoundedDiagnostic`.
 
@@ -100,6 +128,8 @@ operator's real failure with a rendering error. A regression covers exactly that
   `request_id` is what makes a record correlatable.
 - No route is recorded, because the observation seam does not carry one. Adding it would need
   a contract change to `HostDeckInternalErrorObservation`.
-- The three adversarial verification agents commissioned for this diff all failed with a
-  transient API error, so the claims above rest on the direct tests and measurements listed,
-  not on an independent review.
+- Adversarial review of the first implementation confirmed five findings, three of which were
+  defects in this change rather than in its description. They are corrected above and covered
+  by regressions. The privacy lens separately confirmed that `request_id`, `sequence`,
+  `source` and `code` hold up, that no `error.message` or `error.stack` is read anywhere, and
+  that nothing reaches a file, a route, the dashboard, or the systemd journal.
