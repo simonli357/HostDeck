@@ -513,6 +513,13 @@ function killOwnedProcessGroup(
   }
 }
 
+// A SIGKILLed process group is normally reaped in milliseconds, but reaping competes with
+// every other runnable task on the host. Two seconds was tight enough that ordinary load on
+// a busy workstation produced a false `cleanup_failed` for a group that had in fact exited.
+// The poll below exits the instant the group is gone, so a larger bound costs nothing on the
+// happy path and only delays how quickly a genuinely stuck group is reported.
+const ownedProcessGroupSettleMs = 10_000;
+
 async function settleOwnedProcessGroup(pid: number): Promise<boolean> {
   if (!isProcessGroupAlive(pid)) return true;
   try {
@@ -520,7 +527,7 @@ async function settleOwnedProcessGroup(pid: number): Promise<boolean> {
   } catch (error) {
     if (!isErrno(error, "ESRCH")) return false;
   }
-  const deadline = Date.now() + 2_000;
+  const deadline = Date.now() + ownedProcessGroupSettleMs;
   while (Date.now() <= deadline) {
     if (!isProcessGroupAlive(pid)) return true;
     await new Promise((resolve) => setTimeout(resolve, 10));
